@@ -9,6 +9,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<script src="tracker-filler-data.js?v=20260903"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   window.addEventListener('load',function(){ navigator.serviceWorker.register('tracker-sw.js').catch(function(){}); });
@@ -209,7 +210,10 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版'};
 var STYPE_NAME={'manga-adapt':'漫改','tv-original':'TV原创','semi-original':'半原创','unknown':'未分类'};
-function sTypeOf(s){ return s.type||fgType(s.title)||'unknown'; }
+var VALID_TYPES={'manga-adapt':1,'tv-original':1,'semi-original':1,'unknown':1};
+/* 删减信息预定义 */
+var CENSOR_INFO={'one piece':{'censored':true,'note':'部分内容被删减/修改','platforms':['爱奇艺','腾讯','B站']},'naruto':{'censored':true,'note':'部分内容被删减','platforms':['爱奇艺','腾讯']},'bleach':{'censored':true,'note':'部分内容被删减','platforms':['腾讯']}};
+function sTypeOf(s){ var t=s.type; return VALID_TYPES[t] ? t : (fgType(s.title)||'unknown'); }
 var showTypeF='all';
 function setShowType(t){ showTypeF=t; renderFilter(); renderList(); }
 function jumpShowType(t){ showTypeF=t; backList(); }
@@ -314,7 +318,15 @@ function renderInternalLib(){
   var cats={all:'全部'};
   INTERNAL_SHOWS.forEach(function(s){cats[s.type]=(cats[s.type]||0)+1;});
   var types=['all'];
-  Object.keys(cats).sort().forEach(function(t){ if(t!=='all') types.push(t); });
+  var typeOrder=['manga-adapt','tv-original','semi-original','unknown'];
+  Object.keys(cats).forEach(function(t){ if(t!=='all') types.push(t); });
+  types=types.sort(function(a,b){
+    if(a==='all') return -1; if(b==='all') return 1;
+    var ia=typeOrder.indexOf(a), ib=typeOrder.indexOf(b);
+    if(ia>=0&&ib>=0) return ia-ib;
+    if(ia>=0) return -1; if(ib>=0) return 1;
+    return a.localeCompare(b);
+  });
   document.getElementById('filters').innerHTML=types.map(function(t,i){
     var count=t==='all'?INTERNAL_SHOWS.length:cats[t];
     return '<button class="fbtn'+(i===0?' on':'')+'" onclick="filterInternal(\''+t+'\')">'+(t==='all'?'全部':t)+' <span style="opacity:.5">'+count+'</span></button>';
@@ -742,6 +754,22 @@ async function doBgmSearch(){
   }
 }
 /* ==== Filler Guide 校准模块 ==== */
+/* 热门长篇中文名 → AFG slug 手工别名 */
+var FG_ALIAS = {
+  '海贼王':'one-piece','航海王':'one-piece',
+  '火影忍者':'naruto','火影忍者疾风传':'naruto-shippuden',
+  '死神':'bleach','境·界':'bleach',
+  '龙珠':'dragon-ball','龙珠z':'dragon-ball-z',
+  '犬夜叉':'inuyasha',
+  '钢之炼金术师':'fullmetal-alchemist-brotherhood',
+  '钢之炼金术师fa':'fullmetal-alchemist-brotherhood',
+  '妖精的尾巴':'fairy-tail','银魂':'gintama',
+  '进击的巨人':'attack-on-titan','咒术回战':'jujutsu-kaisen',
+  '鬼灭之刃':'demon-slayer','我的英雄学院':'my-hero-academia',
+  '东京喰种':'tokyo-ghoul','七大罪':'nanatsu-no-taizai',
+  '排球少年':'haikyuu','青之驱魔师':'blue-exorcist'
+};
+
 function fgParseFills(html){
   /* 严格解析: "N. (时长) 标题 *Filler | *Mixed Canon | *Canon" */
   var text = html.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&#\d+;/g,' ').replace(/\s+/g,' ');
@@ -773,18 +801,27 @@ function fgFmt(arr){
 function fgSlug(title){
   return String(title||'').toLowerCase().replace(/[’'":]/g,'').replace(/[^\w\u4e00-\u9fa5]+/g,'-').replace(/^-+|-+$/g,'');
 }
-async function fgFetchOne(title){
-  /* AFG 路径: /animes/<slug>，slug 把标题转小写 + 横线（已知 OP=one-piece、naruto=naruto、bleach=bleach） */
-  var url = 'https://www.animefillerguide.com/animes/' + fgSlug(title);
-  try {
-    var r = await _bget(url);
-    if (r && r.status && r.status >= 400) throw new Error('HTTP ' + r.status);
-    var body = (r && (r.body || r.text || (typeof r === 'string' ? r : ''))) || '';
-    if (!body || body.length < 10000) throw new Error('响应过小或被拦截');
-    var p = fgParseFills(body);
-    if (!p.filler.length && !p.mixed.length) throw new Error('未解析到 Filler/Mixed 集');
-    return { ok: true, title: title, url: url, filler: p.filler, mixed: p.mixed, canon: p.canon.length, at: Date.now() };
-  } catch (e) { return { ok: false, title: title, url: url, err: e.message }; }
+function fgLookupLocal(s){
+  /* 本地灌水库（Anime Filler Guide 离线快照）查表，零网络依赖 */
+  var ds = window.AFG_FILLER || {};
+  var alias = FG_ALIAS[String(s.title || '').toLowerCase()] || null;
+  var cands = [];
+  if (alias) cands.push(alias);
+  cands.push(fgSlug(s.title), fgSlug(s.nameJp));
+  for (var i = 0; i < cands.length; i++) {
+    if (ds[cands[i]]) return { slug: cands[i], data: ds[cands[i]] };
+  }
+  return null;
+}
+async function fgFetchOne(show){
+  var hit = fgLookupLocal(show);
+  if (hit) {
+    return { ok: true, title: show.title,
+      url: 'https://www.animefillerguide.com/anime/' + hit.slug + '/',
+      filler: hit.data.f || [], mixed: hit.data.m || [],
+      canon: 0, at: Date.now(), src: hit.data.t || hit.slug };
+  }
+  return { ok: false, title: show.title, err: '本地灌水库未收录《' + (show.nameJp || show.title) + '》（收录 268 部长篇）' };
 }
 async function fgCalibrate(showsList){
   toast('正在校准 Filler Guide 数据…');
@@ -794,7 +831,7 @@ async function fgCalibrate(showsList){
   for (var i = 0; i < showsList.length; i++) {
     var s = showsList[i];
     if (cache[s.title] && Date.now() - cache[s.title].at < 7 * 86400e3) { results.push(cache[s.title]); continue; }
-    var r = await fgFetchOne(s.title);
+    var r = await fgFetchOne(s);
     results.push(r);
     if (r.ok) { cache[s.title] = r; try { localStorage.setItem('at_fg_cache', JSON.stringify(cache)); } catch (e) {} }
   }
@@ -818,8 +855,8 @@ async function fgOneShow(){
     if (!confirm('《' + s.title + '》是半原创番，灌水校准可能不准确，继续？')) return;
   }
   toast('查询中…');
-  var r = await fgFetchOne(s.title);
-  if (!r.ok) { toast('匹配失败：' + r.err + '\n（番名太偏门，或网络不可达）'); return; }
+  var r = await fgFetchOne(s);
+  if (!r.ok) { toast('匹配失败：' + r.err'); return; }
   fgApplyTo(s, r); save(); renderDetail();
   toast('已校准《' + s.title + '》：Filler ' + r.filler.length + ' 集、Mixed ' + r.mixed.length + ' 集');
 }
@@ -837,6 +874,10 @@ function fgClearCache(){
 }
 
 /* ---- 番剧类型分类 ---- */
+function getCensorship(title){
+  var slug=(title||'').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g,'-');
+  return CENSOR_INFO[slug]||null;
+}
 function fgType(title){
   var t=(title||'').toLowerCase();
   /* TV 原创：无原作，纯原创动画 */
@@ -867,6 +908,8 @@ function bgmTok(){ return (localStorage.getItem('at_bgm_token')||'').trim(); }
 
 function fCnt(s){ /* 列表行灌水角标 */
   if (!s.filler && !s.mixed) return '';
+  var censor = getCensorship(s.title);
+  return '<span class="fcnt" title="Filler Guide 校准：Filler ' + cnt(s.filler) + ' 集 / Mixed ' + cnt(s.mixed) + ' 集' + (censor?' · ⚠ '+esc(censor.note):'') + '">灌水 ' + (cnt(s.filler) + cnt(s.mixed)) + '</span>' + (censor?'<span class="fcnt" title="'+esc(censor.note)+'" style="color:#a8552f">⚠删减</span>':'');
   var cnt = function (str) { if (!str) return 0; var n = 0; str.split(',').forEach(function (x) { if (x.indexOf('-') >= 0) { var p = x.split('-').map(Number); n += (p[1] - p[0] + 1); } else n += 1; }); return n; };
   var f = cnt(s.filler), m = cnt(s.mixed);
   var badge = '<span class="fcnt" title="Filler Guide 校准：Filler ' + f + ' 集 / Mixed ' + m + ' 集' + (f + m === 0 ? '（该番是 TV 原创或校准无果）' : '') + '">灌水 ' + (f + m) + '</span>';
@@ -990,7 +1033,7 @@ async function bgmAttach(sid,btn){
     if(!ded.length) throw new Error('该条目没有可用剧集');
     var coverUrl=(det.images&&det.images.common)||'';
     try{ coverUrl=await cacheCover(coverUrl,true); }catch(e2){}
-    addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid });
+    addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, type: fgType(det.name_cn||det.name||'bgm'+sid) });
   }catch(e){
     btn.disabled=false; btn.textContent='添加';
     document.getElementById('srMsg').textContent='拉取失败：'+e.message+'——稍后重试，或先浏览内置库（☰）';
@@ -999,6 +1042,10 @@ async function bgmAttach(sid,btn){
 function addShow(item){
   item.sid=safeSid(item.sid);
   if(bySid(item.sid)){ toast('已在片单里了'); return; }
+  // 自动推断并保存类型
+  if(!item.type || !VALID_TYPES[item.type]){
+    item.type = fgType(item.title);
+  }
   shows.push(item); save();
   document.getElementById('srMsg').textContent='';
   document.getElementById('srList').innerHTML='';
