@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>隐私政策 · 追迹 AniTracker</title>
+<style>
+  :root { --bg:#faf8f4; --ink:#2b2722; --muted:#8a8377; --gold:#b08d4f; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:24px 20px 60px; background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.8; max-width:720px; margin-inline:auto;
+  }
+  h1 { font-family:Georgia,"Noto Serif SC",serif; font-size:30px; letter-spacing:6px; margin:18px 0 2px; }
+  .sub { color:var(--muted); font-size:12px; letter-spacing:3px; margin-bottom:26px; }
+  h2 { font-size:16px; margin:30px 0 8px; padding-left:10px; border-left:3px solid var(--gold); }
+  p, li { color:#4a453d; }
+  ul { padding-left:20px; }
+  .card { background:#fff; border:1px solid #eee7db; border-radius:14px; padding:18px 20px; margin:14px 0; }
+  .muted { color:var(--muted); font-size:13px; }
+  .hl { color:var(--gold); font-weight:600; }
+  .foot { margin-top:40px; color:var(--muted); font-size:12px; text-align:center; }
+</style>
+</head>
+<body>
+  <h1>追迹</h1>
+  <div class="sub">ANITRACKER · 隐私政策</div>
+
+  <div class="card">
+    <b>一句话版本</b>：追迹<span class="hl">不收集、不上传、不分享</span>你的任何个人数据。你的所有追番记录只存在你自己的设备（浏览器 LocalStorage）和你自己配置的云端（WebDAV）里。
+  </div>
+
+  <h2>1. 我们收集什么</h2>
+  <p>追迹没有服务器、没有账号系统、没有统计埋点。<span class="hl">我们不收集任何数据</span>——没有姓名、邮箱、设备号、位置、使用记录。</p>
+
+  <h2>2. 数据存在哪里</h2>
+  <ul>
+    <li><b>追番片单、进度标记、设置</b>：仅保存在你设备浏览器的 LocalStorage 中，清除浏览器数据会一并删除。</li>
+    <li><b>云端同步（可选功能）</b>：仅当你主动配置了<strong>自己的</strong> WebDAV 地址（如 Alist / 坚果云）时，片单才会以 <code>tracker-sync.json</code> 形式同步到该地址。凭据只混淆存储在本机，追迹开发者无法访问。</li>
+    <li><b>Bangumi 同步（可选功能）</b>：仅当你主动粘贴自己的 Bangumi 访问令牌时，标记才会经你的浏览器直连 <code>api.bgm.tv</code> 写入你的 Bangumi 账号。令牌只保存在本机。</li>
+  </ul>
+
+  <h2>3. 第三方服务</h2>
+  <p>以下请求均由<strong>你的浏览器直接发起</strong>给对方，不经过追迹的任何中间服务器（追迹也没有中间服务器）：</p>
+  <ul>
+    <li><b>Bangumi (api.bgm.tv)</b>：搜索番剧、拉取剧集列表、（可选）同步收藏状态。</li>
+    <li><b>封面图片缓存</b>：番剧封面图按需加载，可能经由公共图片代理获取。</li>
+  </ul>
+  <p class="muted">这些网站各自有自己的隐私政策，追迹不向它们提交你设备之外的任何信息。</p>
+
+  <h2>4. 权限</h2>
+  <p>追迹不申请任何设备权限（不读通讯录、不定位、不推送）。</p>
+
+  <h2>5. 未成年人</h2>
+  <p>追迹不面向特定年龄群体收集信息，也不收集任何信息，天然适用于所有年龄段。</p>
+
+  <h2>6. 政策变更</h2>
+  <p>若未来版本引入任何数据收集行为，将在应用内显著位置先行告知并更新本页。</p>
+
+  <div class="foot">最后更新：2026-09-03 · 追迹 AniTracker</div>
+</body>
+</html>

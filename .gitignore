@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.py
+*.log
+*.txt
+*.html
+.trash/
+.github/
+!README.md
+!privacy.html
+!ani-tracker.html
+!tracker-manifest.webmanifest
+!tracker-sw.js
+!tracker-icon-512.png
+!tracker-filler-data.js
