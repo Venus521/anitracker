@@ -1,6 +1,6 @@
 /* AniTracker SW — HTML network-first（更新即达），同源静态 cache-first，跨域 API 永不缓存 */
 var CACHE='anitracker-v1';
-var PRECACHE=['./ani-tracker.html','./tracker-manifest.webmanifest'];
+var PRECACHE=['./index.html','./ani-tracker.html','./tracker-manifest.webmanifest'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(PRECACHE); }).then(function(){ return self.skipWaiting(); }));
 });

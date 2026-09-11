@@ -60,6 +60,16 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .strow{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0 14px}
 .st{background:none;border:1px solid var(--line);border-radius:20px;padding:8px 16px;font-size:12px;color:var(--muted);min-height:36px}
 .st.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.partrow{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch}
+.partrow::-webkit-scrollbar{height:0}
+.part{flex:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:7px 12px;min-width:96px;max-width:150px;text-align:left;cursor:pointer}
+.part .pn{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.5px}
+.part .pt{font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.part .py{font-size:10px;color:var(--muted);margin-top:2px}
+.part.on{border-color:var(--accent);background:var(--accent-soft)}
+.part.miss{opacity:.55;border-style:dashed}
+.parthead{display:flex;justify-content:space-between;align-items:center;margin:0 0 2px}
+.parthead span{font-size:11px;letter-spacing:2px;color:var(--muted)}
 .fcnt{display:inline-block;background:repeating-linear-gradient(45deg,transparent 0 4px,#f4e7c5 4px 8px);color:#7a5a2a;font-size:10px;padding:2px 6px;border-radius:8px;margin-left:4px;border:1px solid #d8b878;vertical-align:middle}
 .type-tag{display:inline-block;font-size:10px;padding:2px 5px;border-radius:10px;margin-left:4px;vertical-align:middle;font-weight:600}
 .type-tag.tv-original{background:#fce8e8;color:#a8552f;border:1px solid #f0c4b4}
@@ -108,6 +118,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .panel h3{font-family:var(--serif);font-weight:400;font-size:18px;margin:0 0 16px}
 .panel input{width:100%;border:none;border-bottom:1px solid var(--line);background:none;padding:10px 2px;font-size:14px;color:var(--ink);outline:none;margin-bottom:2px}
 .panel label{display:block;font-size:11px;letter-spacing:1px;color:var(--muted);margin:14px 0 2px}
+.panel select{width:100%;border:none;border-bottom:1px solid var(--line);background:none;padding:10px 2px;font-size:14px;color:var(--ink);outline:none;margin-bottom:2px}
 .panel .row2{display:flex;gap:8px;margin-top:18px}
 .panel .row2 button{flex:1;border-radius:10px;padding:13px;font-size:14px}
 .b1{background:var(--ink);color:var(--bg);border:none;font-weight:500}
@@ -145,6 +156,8 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       <div style="display:flex;gap:10px">
         <button class="topbtn" onclick="openSync()" aria-label="同步设置">⇅</button>
         <button class="topbtn" onclick="showAdd()" aria-label="添加番剧">＋</button>
+        <button class="topbtn" onclick="randomPlay()" aria-label="随机播放" title="随机挑一部（在看/想看）">🎲</button>
+        <button onclick="markMangaAdaptDone()" title="一键把全部漫改标记为看完" style="border:none;background:var(--accent-soft);color:var(--accent);border-radius:14px;height:34px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">漫改✓</button>
       </div>
     </div>
     <div class="filter" id="filters"></div>
@@ -162,7 +175,10 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       </div>
     </div>
     <div class="strow" id="dStatus"></div>
+    <div id="dParts"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 10px">
+      <button class="ty" onclick="playInPortal()" style="border-color:var(--accent);color:var(--accent);font-weight:600">▶ 去门户播放</button>
+      <button class="ty" onclick="openSeries()">🎬 整合季度</button>
       <button class="ty" onclick="bgmPullProgress()">⟳ 拉取Bangumi进度</button>
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
       <button class="ty" onclick="fgOneShow()" id="btnFgCalibrate">📐 灌水校准</button>
@@ -182,7 +198,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   <div id="vAdd" style="display:none">
     <button class="back" onclick="backList()">← 返回</button>
     <div class="searchrow">
-      <input id="qKw" placeholder="搜索番剧名…（Bangumi）" style="caret-color:var(--accent)"/>
+      <input id="qKw" placeholder="搜索番剧名…（Bangumi）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doBgmSearch();}"/>
       <button onclick="doBgmSearch()">搜索</button>
     </div>
     <div id="srMsg" class="msg"></div>
@@ -463,6 +479,34 @@ async function addInternal(id){
   renderList();
 }
 
+/* 一键把全部漫改标记为看完 */
+function markMangaAdaptDone(){
+  var shows=rd(LS.shows,[]);
+  var n=0;
+  shows.forEach(function(s){
+    if(sTypeOf(s)==='manga-adapt' && (s.status||'watching')!=='done'){
+      s.status='done'; s.updAt=Date.now(); n++;
+    }
+  });
+  if(n){ wr(LS.shows,shows); renderList(); toast('已把 '+n+' 部漫改标记为看完'); }
+  else toast('没有需要标记的漫改（或全部已看完）');
+}
+
+/* ---------- 随机播放 ---------- */
+function randomPlay(){
+  var all=rd(LS.shows,[]);
+  if(!all.length){ toast('片单还是空的'); return; }
+  var cand=all.filter(function(s){ var st=s.status||'watching'; return st==='watching'||st==='want'; });
+  var pool=cand.length?cand:all;
+  var pick=pool[Math.floor(Math.random()*pool.length)];
+  if(!pick||!pick.sid){ toast('所选条目缺少标识，无法打开'); return; }
+  openDetail(pick.sid);
+  toast('随机到《'+(pick.title||'')+'》'+(cand.length?'':'（无在看/想看，已从全部随机）'));
+}
+function playInPortal(){
+  var s=bySid(curSid); if(!s) return;
+  location.href='/search/?q='+encodeURIComponent(s.title||'');
+}
 function renderList(){
   renderFilter();
   var list=shows.filter(function(s){ return (curFilter==='all'||(s.status||'watching')===curFilter)&&(showTypeF==='all'||sTypeOf(s)===showTypeF); })
@@ -491,7 +535,7 @@ function renderList(){
     return '<div class="show">'+
       '<img src="'+esc(s.cover||'')+'" onerror="this.style.opacity=.25" onclick="openDetail(\''+esc(String(s.sid))+'\')"/>'+
       '<div class="info" onclick="openDetail(\''+esc(String(s.sid))+'\')">'+
-        '<div class="t">'+esc(s.title)+'</div>'+fCnt(s)+
+        '<div class="t">'+esc(s.title)+'</div>'+fCnt(s)+(s.parts&&s.parts.length>1?'<span class="type-tag unknown" style="background:var(--accent-soft);color:var(--accent);border-color:var(--accent)">共 '+s.parts.length+' 部分</span>':'')+
         '<div class="s">'+stypePill(s)+' · '+ST_NAME[s.status||'watching']+' · '+s.total+' 集'+(s.year?' · '+s.year:'')+'</div>'+
         '<div class="prog"><i style="width:'+p+'%"></i></div>'+
         '<div class="num"><b>'+w+'</b> <span style="font-size:12px;color:var(--muted)">已看 / '+s.total+'</span></div>'+
@@ -539,6 +583,7 @@ function renderDetail(){
     '<div class="stat"><b>'+cr+'</b><span>回看</span></div>'+
     '<div class="stat"><b>'+un+'</b><span>未看</span></div>'+
     '<div class="stat"><b>'+pct(s)+'%</b><span>进度</span></div>';
+  renderParts();
   renderHist(s);
   renderGrid();
   /* 下一集按钮 */
@@ -720,37 +765,97 @@ function showAdd(){
 var BAPI='https://api.bgm.tv/v0';
 var _directState=null;
 function _bget(u,opt){
+  opt=opt||{}; opt.headers=opt.headers||{};
+  if(u.indexOf('api.bgm.tv')>=0 && !opt.headers.Authorization){ var _tk=bgmTok(); if(_tk){ opt.headers=Object.assign({},opt.headers,{'Authorization':'Bearer '+_tk}); } }
   var attempt=function(base,ms){
     var c=new AbortController(); var t=setTimeout(function(){ c.abort(); },ms);
     return fetch(base+u,Object.assign({signal:c.signal},opt||{})).then(function(r){ clearTimeout(t);
       if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); },function(e){ clearTimeout(t); throw e; });
   };
-  if(_directState===false) return attempt('https://proxy.cors.sh/',12000);
+  var PROXIES=['https://proxy.cors.sh/','https://api.codetabs.com/v1/proxy/?'];
+  if(_directState===false){
+    var p0=Promise.reject(new Error('skip-direct'));
+    PROXIES.forEach(function(b){ p0=p0.catch(function(){ return attempt(b,12000); }); });
+    return p0;
+  }
   return attempt('',3000).catch(function(e1){
     if(e1.name==='TypeError'||e1.name==='AbortError') _directState=false;
-    return attempt('https://proxy.cors.sh/',12000).catch(function(){ throw e1; });
+    var p1=Promise.reject(e1);
+    PROXIES.forEach(function(b){ p1=p1.catch(function(){ return attempt(b,12000); }); });
+    return p1;
   });
+}
+/* 同名/异名分组：搜其中一个叫法，会把同组所有叫法都搜一遍再合并去重。
+   解决「海贼王 / 航海王 / one piece 互相搜不到」和「多季作品只出前几条」。
+   想加新作直接往下面数组里加一组即可。 */
+var SEARCH_ALIAS_GROUPS = [
+  ['海贼王','航海王','ONE PIECE','one piece','海贼王 真人版'],
+  ['瑞克和莫蒂','Rick and Morty','rick and morty'],
+  ['火影忍者','NARUTO','naruto','火影忍者 疾风传'],
+  ['死神','BLEACH','bleach','境·界'],
+  ['进击的巨人','Attack on Titan','attack on titan'],
+  ['鬼灭之刃','Demon Slayer','demon slayer'],
+  ['咒术回战','Jujutsu Kaisen','jujutsu kaisen'],
+  ['我的英雄学院','My Hero Academia','my hero academia'],
+  ['间谍过家家','SPY×FAMILY','spy family'],
+  ['葬送的芙莉莲','Frieren','frieren'],
+  ['龙珠','Dragon Ball','dragon ball','七龙珠'],
+  ['银魂','Gintama','gintama'],
+  ['名侦探柯南','Detective Conan','detective conan'],
+  ['蜡笔小新','Crayon Shin-chan','crayon shin-chan'],
+  ['海绵宝宝','SpongeBob','spongebob'],
+  ['辛普森一家','The Simpsons','the simpsons'],
+  ['老友记','Friends','friends','フレンズ','六人行']
+];
+function searchVariants(kw){
+  var raw=String(kw||'').trim(); if(!raw) return [raw];
+  var k=raw.toLowerCase(), out=[raw];
+  for(var i=0;i<SEARCH_ALIAS_GROUPS.length;i++){
+    var g=SEARCH_ALIAS_GROUPS[i], hit=false;
+    for(var j=0;j<g.length;j++){ if(String(g[j]).toLowerCase()===k){ hit=true; break; } }
+    if(hit){ for(var m=0;m<g.length;m++){ if(out.indexOf(g[m])<0) out.push(g[m]); } break; }
+  }
+  return out.slice(0,4);
 }
 async function doBgmSearch(){
   var kw=document.getElementById('qKw').value.trim();
   var msg=document.getElementById('srMsg'), list=document.getElementById('srList');
   if(!kw){ msg.textContent='先输入番名'; return; }
+  if(!bgmTok()){
+    msg.innerHTML='未配置 Bangumi token —— 点右上角 <b>⇅</b> 按钮，按卡片引导粘贴 access_token 即可实时搜索（Bangumi 官方强制鉴权，不填搜不到任何番剧/真人剧）';
+    try{ if(!document.querySelector('.syncwrap')) openSync(); }catch(e){}
+    return;
+  }
   pushSearchHist(kw); renderSearchHist();
   msg.textContent='搜索中…'; list.innerHTML='';
+  var vs=searchVariants(kw);
+  var seen={}, order=[];
   try{
-    var r=await _bget(BAPI+'/search/subjects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:kw,filter:{type:[2]}})});
-    var items=(r.data||[]).slice(0,10);
-    if(!items.length){ msg.textContent='没搜到，换个关键词试试，或浏览内置库（☰ 里 302 部离线可用）'; return; }
-    msg.textContent='找到 '+items.length+' 条 · 点「添加」自动拉取全集';
+    for(var i=0;i<vs.length;i++){
+      var r=null;
+      try{
+        /* type 2=动画, 6=三次元(真人剧/电视剧/电影) —— 两者都搜，真人剧也能加 */
+        r=await _bget(BAPI+'/search/subjects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:vs[i],filter:{type:[2,6]}})});
+      }catch(e){ r=null; }
+      var arr=(r&&r.data)||[];
+      for(var j=0;j<arr.length;j++){
+        var s=arr[j]; if(!s||!s.id||seen[s.id]) continue;
+        seen[s.id]=1; order.push(s);
+      }
+    }
+    var items=order.slice(0,60);
+    if(!items.length){ msg.textContent='没搜到，换个关键词或别名试试（如「海贼王」→「ONE PIECE」「进击的巨人」→「Attack on Titan」）'; return; }
+    msg.textContent='找到 '+items.length+' 条'+(vs.length>1?('（已合并 '+vs.length+' 种叫法）'):'')+' · 点「添加」自动拉取全集';
     list.innerHTML=items.map(function(s){
+      var tlab=(s.type===6?'真人':(s.type===2?'动画':''));
       return '<div class="sr">'+
         '<img src="'+esc((s.images&&s.images.common)||'')+'" onerror="this.style.opacity=.25"/>'+
-        '<div class="i"><div class="t">'+esc(s.name_cn||s.name)+'</div>'+
+        '<div class="i"><div class="t">'+esc(s.name_cn||s.name)+(tlab?' <span style="font-size:10px;color:var(--muted);font-weight:400">'+tlab+'</span>':'')+'</div>'+
         '<div class="m">'+esc(s.name||'')+(s.date?' · '+String(s.date).slice(0,4):'')+' · '+((s.eps||s.total_episodes||'?')+' 集')+'</div></div>'+
         '<button onclick="bgmAttach('+s.id+',this)">添加</button></div>';
     }).join('');
   }catch(e){
-    msg.textContent='Bangumi 连接失败（当前网络不可达）——稍后重试，或先浏览内置库（☰ 里 302 部离线可用）';
+    msg.textContent='Bangumi 连接失败（当前网络不可达）——请检查网络后重试';
   }
 }
 /* ==== Filler Guide 校准模块 ==== */
@@ -856,7 +961,7 @@ async function fgOneShow(){
   }
   toast('查询中…');
   var r = await fgFetchOne(s);
-  if (!r.ok) { toast('匹配失败：' + r.err'); return; }
+  if (!r.ok) { toast('匹配失败：' + r.err); return; }
   fgApplyTo(s, r); save(); renderDetail();
   toast('已校准《' + s.title + '》：Filler ' + r.filler.length + ' 集、Mixed ' + r.mixed.length + ' 集');
 }
@@ -1033,7 +1138,7 @@ async function bgmAttach(sid,btn){
     if(!ded.length) throw new Error('该条目没有可用剧集');
     var coverUrl=(det.images&&det.images.common)||'';
     try{ coverUrl=await cacheCover(coverUrl,true); }catch(e2){}
-    addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, type: fgType(det.name_cn||det.name||'bgm'+sid) });
+    addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, bgmId:String(sid), type: fgType(det.name_cn||det.name||'bgm'+sid) });
   }catch(e){
     btn.disabled=false; btn.textContent='添加';
     document.getElementById('srMsg').textContent='拉取失败：'+e.message+'——稍后重试，或先浏览内置库（☰）';
@@ -1056,30 +1161,352 @@ function addShow(item){
 
 /* ---------- WebDAV 同步 ---------- */
 function openSync(){ syncOpen(); }
+async function syncFromPortal(box){
+  var m=box?box.querySelector('#syMsg'):null;
+  function note(t,ok){ if(m){ m.textContent=t; m.style.color=ok?'#7a9a6a':'var(--danger)'; } else toast(t); }
+  note('正在从门户拉取 B站追番…', true);
+  var all=[];
+  try{
+    for(var pn=1; pn<=30; pn++){
+      var r=await fetch('/bili/api/follow?pn='+pn, {cache:'no-store'});
+      var j=await r.json();
+      if(!j.ok){ note('门户接口失败：'+(j.msg||'未登录B站或网络异常'), false); return; }
+      var items=(j.anime||[]).concat(j.tv||[]);
+      if(!items.length) break;
+      all=all.concat(items);
+      if((j.totalAnime||0)+(j.totalTv||0) && all.length >= (j.totalAnime||0)+(j.totalTv||0)) break;
+    }
+  }catch(e){ note('拉取异常：'+(e.message||e), false); return; }
+  if(!all.length){ note('门户暂无 B站追番记录（请先登录B站并在门户追番）', false); return; }
+  var seen={}; shows.forEach(function(s){ if(s.sid) seen['s:'+s.sid]=1; if(s.title) seen['t:'+dbNormTitle(s.title)]=1; });
+  var added=0, dup=0;
+  all.forEach(function(b){
+    var sid=String(b.season_id||''); var title=(b.title||'').trim();
+    if(!sid && !title) return;
+    if((sid&&seen['s:'+sid])||(title&&seen['t:'+dbNormTitle(title)])){ dup++; return; }
+    if(sid) seen['s:'+sid]=1; if(title) seen['t:'+dbNormTitle(title)]=1;
+    shows.push({ sid:sid, title:title, cover:b.cover||'', status:'watching', type:fgType(title), source:'B站追番(门户)', addedAt:Date.now(), updAt:Date.now() });
+    added++;
+  });
+  if(added){ save(); renderList(); }
+  note('已从门户导入 '+added+' 部'+(dup?('，'+dup+' 部已存在跳过'):''), true);
+}
+/* ---------- 多季度整合与切换 ---------- */
+var PART_KIND_NAME={tv:'季度',movie:'剧场版',ova:'OVA',sp:'特别篇',other:'其他'};
+function partLabel(p){
+  if(p.kind==='tv') return p.seasonNo?('第'+p.seasonNo+'季'):'TV';
+  return PART_KIND_NAME[p.kind]||'其他';
+}
+/* 渲染详情页顶部的季度/剧场版切换条 */
+function renderParts(){
+  var box=document.getElementById('dParts'); if(!box) return;
+  var s=bySid(curSid); if(!s) return;
+  var parts=s.parts||[];
+  if(parts.length<2){ box.innerHTML=''; return; }
+  var cur=s.curPart||parts[0].bgmId;
+  box.innerHTML='<div class="parthead"><span>季度 / 剧场版 / OVA</span>'+
+      '<a href="javascript:;" onclick="openSeries()" style="font-size:11px;color:var(--accent);text-decoration:none">重新整合</a></div>'+
+    '<div class="partrow">'+parts.map(function(p){
+      var own=!!bySid(p.sid);
+      return '<button class="part'+(String(p.bgmId)===String(cur)?' on':'')+(own?'':' miss')+'" onclick="switchPart(\''+esc(String(p.bgmId))+'\')" title="'+esc(p.name+' '+(p.year||''))+(own?'':'（未加入片单）')+'">'+
+        '<div class="pn">'+esc(partLabel(p))+'</div>'+
+        '<div class="pt">'+esc(p.name)+'</div>'+
+        '<div class="py">'+esc((p.year||'?')+(p.eps?(' · '+p.eps+'集'):'')+(own?' · 已加':''))+'</div>'+
+      '</button>';
+    }).join('')+'</div>';
+}
+/* 点某个季度：片单里已有就切过去；没有就现抓详情加进来再切（B站那种体验） */
+async function switchPart(bgmId){
+  var s=bySid(curSid); if(!s) return;
+  var parts=s.parts||[];
+  var p=parts.filter(function(x){ return String(x.bgmId)===String(bgmId); })[0];
+  if(!p){ toast('找不到该部分'); return; }
+  var own=bySid(p.sid);
+  if(own){
+    var back=curSid;
+    curSid=own.sid;
+    if(!own.parts) own.parts=parts, own.curPart=bgmId, own.seriesRoot=s.seriesRoot||s.sid;
+    else own.curPart=bgmId;
+    renderDetail(); window.scrollTo(0,0);
+    toast('已切到《'+own.title+'》');
+    return;
+  }
+  toast('正在加入《'+p.name+'》…');
+  try{
+    var det=await _bget(BAPI+'/subjects/'+bgmId);
+    var epsAll=[];
+    try{
+      var epj=await _bget(BAPI+'/episodes?subject_id='+bgmId+'&limit=100&offset=0');
+      epsAll=(epj.data||[]).map(function(e){ return {s:e.sort||e.ep||e.id, t:e.name_cn||e.name||('第'+e.sort+'集'), type:'canon'}; });
+    }catch(e5){}
+    if(!epsAll.length){
+      var tot=parseInt(det.total_episodes||det.eps||0,10)||0;
+      for(var i=1;i<=tot;i++) epsAll.push({s:i,t:'第 '+i+' 集',type:'canon'});
+    }
+    var newSid=String(det.id);
+    if(bySid(newSid)) newSid='bgm'+newSid;
+    var cover='';
+    try{ cover=(det.images&&(det.images.large||det.images.common))||''; if(cover) cover=await cacheCover(cover,true); }catch(e6){}
+    shows.push({
+      sid:newSid, title:det.name_cn||det.name||p.name, nameJp:det.name||'',
+      cover:cover, year:String(det.date||'').slice(0,4), total:epsAll.length, eps:epsAll,
+      statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(),
+      source:'Bangumi #'+det.id, type:fgType(det.name_cn||det.name||''),
+      bgmId:String(det.id), seriesRoot:s.seriesRoot||s.sid,
+      parts:parts, curPart:bgmId
+    });
+    s.parts=parts; s.seriesRoot=s.seriesRoot||s.sid;
+    save();
+    curSid=newSid;
+    renderDetail(); window.scrollTo(0,0);
+    toast('《'+(det.name_cn||det.name)+'》已加入并切换');
+  }catch(e){ toast('加入失败：'+(e.message||e)+'（Bangumi 需要网络/代理）'); }
+}
+/* 打开整合面板：按 Bangumi 条目自动找齐同系列的所有季/剧场版/OVA */
+async function openSeries(){
+  var s=bySid(curSid); if(!s){ toast('先进详情页'); return; }
+  var old=document.getElementById('seriesMask'); if(old) old.remove();
+  var wrap=document.createElement('div'); wrap.id='seriesMask'; wrap.className='mask';
+  var box=document.createElement('div'); box.className='panel';
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">整合季度</h3>'+
+    '<button onclick="window.__closeSeries()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<div class="mini">自动把《'+esc(s.title)+'》同系列的所有季度、剧场版、OVA 收成一条，并在详情页里切换。</div>'+
+    '<label>BANGUMI 条目 ID（留空用片单里记的）</label><input id="srBgmId" value="'+esc(String(s.bgmId||''))+'" placeholder="如 225328"/>'+
+    '<div class="msg" id="srSeriesMsg"></div>'+
+    '<div id="srSeriesList"></div>'+
+    '<div class="row2"><button class="b2" onclick="window.__closeSeries()">取消</button><button class="b1" id="srGo">开始整合</button></div>';
+  wrap.appendChild(box); document.body.appendChild(wrap);
+  function escClose(e){ if(e.key==='Escape') window.__closeSeries(); }
+  window.__closeSeries=function(){ document.removeEventListener('keydown',escClose); if(wrap&&wrap.parentNode) wrap.remove(); };
+  wrap.addEventListener('click',function(e){ if(e.target===wrap) window.__closeSeries(); });
+  document.addEventListener('keydown',escClose);
+  var msg=function(t,ok){ var el=box.querySelector('#srSeriesMsg'); el.textContent=t; el.style.color=ok?'#7a9a6a':'var(--danger)'; };
+  box.querySelector('#srGo').onclick=function(){ doIntegrate(box,msg); };
+  if(s.bgmId) doIntegrate(box,msg);
+}
+/* 从标题提取系列基名（去掉季/剧场版/OVA/年份等标记） */
+function seriesBase(t){
+  if(!t) return '';
+  var x=String(t);
+  x=x.replace(/\s*[（(][^）)]*[)）]\s*/g,'');
+  x=x.replace(/\s*(第\s*[0-9一二三四五六七八九十]+\s*[季期部]\s*篇?|剧场版|动画电影|电影版|ova|oad|特别篇|总集篇|番外|外传|ova版)\s*/gi,'');
+  x=x.replace(/\s*\d{4}\s*$/,'');
+  return x.replace(/\s+/g,' ').trim();
+}
+function cnNum(s){ var d={'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}; var n=0; for(var i=0;i<s.length;i++){ n=d[s[i]]||n; } return n||0; }
+/* 由标题推断部分类型与季号 */
+function classifyPart(t){
+  var x=String(t||'');
+  if(/剧场版|动画电影|电影版|劇場版|movie/i.test(x)) return {kind:'movie',seasonNo:0};
+  if(/\bova\b|oad|ova版/i.test(x)) return {kind:'ova',seasonNo:0};
+  if(/特别篇|总集篇|番外|外传|\bsp\b/i.test(x)) return {kind:'sp',seasonNo:0};
+  var m=x.match(/第\s*([0-9]+)\s*季/); if(m) return {kind:'tv',seasonNo:parseInt(m[1],10)};
+  var m2=x.match(/第\s*([一二三四五六七八九十]+)\s*季/); if(m2) return {kind:'tv',seasonNo:cnNum(m2[1])};
+  var m3=x.match(/s\s*(\d+)/i); if(m3) return {kind:'tv',seasonNo:parseInt(m3[1],10)};
+  var m4=x.match(/第\s*([0-9]+)\s*期/); if(m4) return {kind:'tv',seasonNo:parseInt(m4[1],10)};
+  return {kind:'tv',seasonNo:0};
+}
+async function doIntegrate(box,msg){
+  var s=bySid(curSid); if(!s){ msg('先进详情页'); return; }
+  var id=(box.querySelector('#srBgmId').value||'').replace(/\D/g,'');
+  var baseTitle=seriesBase(s.title||s.nameJp||'');
+  if(!id && !baseTitle){ msg('先填一个 Bangumi 条目 ID，或在片单里保留剧名'); return; }
+  msg('正在检索同系列（直连 Bangumi）…',true);
+  try{
+    var results=[]; var seen={};
+    if(id){
+      try{ var det=await _bget(BAPI+'/subjects/'+id); if(det&&det.id){ if(!seen[det.id]){ seen[det.id]=1; results.push(det); } if(!baseTitle&&(det.name_cn||det.name)) baseTitle=seriesBase(det.name_cn||det.name); } }catch(e){}
+    }
+    if(baseTitle){
+      var variants=searchVariants(baseTitle).concat([baseTitle]);
+      for(var v=0; v<variants.length; v++){
+        try{
+          var r=await _bget(BAPI+'/search/subjects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:variants[v],filter:{type:[2,6]}})});
+          var arr=(r&&r.data)||[];
+          for(var k=0;k<arr.length;k++){ var it=arr[k]; if(!it||!it.id||seen[it.id]) continue; seen[it.id]=1; results.push(it); }
+        }catch(e){}
+      }
+    }
+    if(!results.length){ msg('没搜到同系列条目（Bangumi 需要网络 / 代理）'); return; }
+    var baseN=dbNormTitle(baseTitle);
+    var parts=results.filter(function(d){
+      var t=dbNormTitle(d.name_cn||d.name||''); if(!baseN) return true;
+      return t.indexOf(baseN)>=0 || baseN.indexOf(t)>=0;
+    }).map(function(d){
+      var t=d.name_cn||d.name||''; var cl=classifyPart(t);
+      var cover=(d.images&&(d.images.common||d.images.large))||'';
+      return { bgmId:String(d.id), name:t, nameJp:d.name||'', year:String(d.date||'').slice(0,4),
+               eps:parseInt(d.total_episodes||d.eps||0,10)||0, kind:cl.kind, seasonNo:cl.seasonNo,
+               role:'', cover:cover, score:(d.rating&&d.rating.score)||d.score||0,
+               sid: bySid('bgm'+d.id)?('bgm'+d.id):(bySid(String(d.id))?String(d.id):String(d.id)) };
+    });
+    if(!parts.length){ msg('没找到同系列成员'); return; }
+    s.parts=parts; s.seriesRoot=s.seriesRoot||s.sid; s.bgmId=s.bgmId||id;
+    if(!s.cover && parts[0] && parts[0].cover) s.cover=parts[0].cover;
+    s.curPart=s.curPart||id||parts[0].bgmId;
+    save();
+    var tv=parts.filter(function(p){ return p.kind==='tv'; }).length;
+    var mv=parts.filter(function(p){ return p.kind==='movie'; }).length;
+    var ov=parts.filter(function(p){ return p.kind==='ova'||p.kind==='sp'; }).length;
+    msg('找到 '+parts.length+' 个部分：'+tv+' 个季度 / '+mv+' 个剧场版 / '+ov+' 个 OVA·特别篇。已在详情页顶部生成切换条。',true);
+    box.querySelector('#srSeriesList').innerHTML=parts.map(function(p){
+      var own=!!bySid(p.sid);
+      return '<div class="tiny" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)">'+
+        '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(partLabel(p))+' · '+esc(p.name)+'</span>'+
+        '<span style="flex:none;color:'+(own?'#7a9a6a':'var(--muted)')+'">'+esc(p.year||'')+(own?' ✓已加':' 未加')+'</span></div>';
+    }).join('');
+    renderDetail();
+  }catch(e){ msg('请求失败：'+(e.message||e)); }
+}
+
+/* 标题归一：用于豆瓣 / Bangumi / 门户之间的去重比对 */
+function dbNormTitle(t){
+  return String(t||'').toLowerCase()
+    .replace(/[\s·・:：\-—~～!！?？.,，、'"“”‘’()（）\[\]【】]/g,'')
+    .replace(/[0-9]+$/,'');
+}
+async function syncFromDouban(box){
+  var m=box?box.querySelector('#dbMsg'):null;
+  function note(t,ok){ if(m){ m.textContent=t; m.style.color=ok?'#7a9a6a':'var(--danger)'; } else toast(t); }
+  var ckEl=box?box.querySelector('#syDbCookie'):null;
+  var cookie=ckEl?ckEl.value.trim():'';
+  var scope=(box&&box.querySelector('#syDbScope'))?box.querySelector('#syDbScope').value:'tv';
+  try{
+    var st={ok:false,logged:false};
+    try{ st=await fetch('/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }); }catch(e){ st={ok:false,logged:false}; }
+    if(cookie){
+      note('正在验证豆瓣 cookie…', true);
+      var c=await fetch('/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookie:cookie})}).then(function(r){ return r.json(); });
+      if(!c.ok){ note('连接失败：'+(c.msg||'未知错误'), false); return; }
+      if(ckEl) ckEl.value='';
+      note('豆瓣已连接（uid '+(c.uid||'')+'），正在拉取标记…', true);
+    } else if(!st.ok||!st.logged){
+      note('未检测到本机网关：请点「导入导出文件」用豆瓣导出数据离线导入（无需 cookie）', false);
+      if(ckEl) ckEl.focus();
+      return;
+    } else {
+      note('豆瓣已连接（uid '+(st.uid||'')+'），正在拉取标记…', true);
+    }
+    var u='/hub/api/db/pull?limit=300'+(scope!=='all'?'&type='+scope:'');
+    var j=await fetch(u,{cache:'no-store'}).then(function(r){ return r.json(); });
+    if(!j.ok){ note('拉取失败：'+(j.msg||'未知错误'), false); return; }
+    var items=j.items||[];
+    if(!items.length){ note('没抓到条目——cookie 可能过期了，请重新粘贴一次', false); return; }
+    var smap={do:'watching',collect:'done',wish:'want'};
+    var added=0,upd=0,dup=0;
+    items.forEach(function(d){
+      var title=(d.title||'').trim(); if(!title) return;
+      var stt=smap[d.status]||'watching';
+      var cur=shows.find(function(s){ return String(s.dbId||'')===String(d.subjectId); });
+      if(!cur) cur=shows.find(function(s){ return dbNormTitle(s.title)===dbNormTitle(title); });
+      if(cur){
+        if(!cur.dbId) cur.dbId=d.subjectId;
+        if(!cur.cover&&d.pic) cur.cover=d.pic;
+        if(!cur.year&&d.year) cur.year=d.year;
+        if(cur.status!==stt){ cur.status=stt; cur.updAt=Date.now(); upd++; } else dup++;
+        return;
+      }
+      shows.push({
+        sid:'db'+d.subjectId, title:title, nameJp:d.origTitle||'',
+        cover:d.pic||'', year:d.year||'', total:0, eps:[], statuses:{},
+        status:stt, rating:d.rating||0,
+        genres:d.genres||[], isAnime:!!d.isAnime, dbId:d.subjectId,
+        type:fgType(title), ep:d.ep||0,
+        source:'豆瓣'+(d.isAnime?'·动画':'·真人'),
+        addedAt:Date.now(), updAt:Date.now()
+      });
+      added++;
+    });
+    if(added||upd){ save(); renderList(); }
+    note('豆瓣同步完成：新增 '+added+' · 状态更新 '+upd+' · 无变化 '+dup+(j.truncated?'（条目多，只取了最近 300 条）':''), true);
+  }catch(e){ note('同步异常：'+(e.message||e), false); }
+}
+/* 自包含：导入豆瓣导出文件（JSON 数组 或 CSV：标题,状态,年份,评分），无需网关/cookie */
+function importDoubanFile(box,ev){
+  var f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  var m=box?box.querySelector('#dbMsg'):null;
+  function note(t,ok){ if(m){ m.textContent=t; m.style.color=ok?'#7a9a6a':'var(--danger)'; } else toast(t); }
+  var rd2=new FileReader();
+  rd2.onload=function(){
+    try{
+      var text=String(rd2.result||''); var rows=[];
+      var trimmed=text.trim();
+      if(trimmed.charAt(0)==='['||trimmed.charAt(0)==='{'){
+        var arr=JSON.parse(trimmed); if(!Array.isArray(arr)) arr=[arr];
+        arr.forEach(function(d){ if(d&&(d.title||d.name||d.书名||d.名称)) rows.push({title:String(d.title||d.name||d.书名||d.名称||''), year:String(d.year||d.年份||'').slice(0,4), status:String(d.status||d.状态||''), rating:parseFloat(d.rating||d.评分||0)||0}); });
+      } else {
+        var lines=text.split(/\r?\n/);
+        for(var i=0;i<lines.length;i++){ var ln=lines[i].trim(); if(!ln) continue; var c=ln.split(','); rows.push({title:(c[0]||'').trim(), year:(c[1]||'').trim().slice(0,4), status:(c[2]||'').trim(), rating:parseFloat(c[3])||0}); }
+      }
+      if(!rows.length){ note('文件里没解析出条目', false); return; }
+      var smap={wish:'want',do:'watching',collect:'done',想看:'want',在看:'watching',看过:'done'};
+      var added=0,upd=0,dup=0;
+      rows.forEach(function(d){
+        var title=d.title.trim(); if(!title) return;
+        var stt=smap[d.status]||'watching';
+        var cur=shows.find(function(s){ return dbNormTitle(s.title)===dbNormTitle(title); });
+        if(cur){ if(cur.status!==stt){ cur.status=stt; cur.updAt=Date.now(); upd++; } else dup++; return; }
+        shows.push({ sid:'db'+Date.now()+Math.floor(Math.random()*1e4), title:title, nameJp:'', cover:'', year:d.year, total:0, eps:[], statuses:{}, status:stt, rating:d.rating, genres:[], isAnime:false, type:fgType(title), addedAt:Date.now(), updAt:Date.now(), source:'豆瓣·导入' });
+        added++;
+      });
+      if(added||upd){ save(); renderList(); }
+      note('豆瓣文件导入完成：新增 '+added+' · 状态更新 '+upd+' · 无变化 '+dup, true);
+    }catch(e){ note('导入失败：'+(e.message||e), false); }
+  };
+  rd2.readAsText(f,'utf-8');
+}
 function syncOpen(){
   var old=document.getElementById('syncMask'); if(old) old.remove();
   var cfg=rd(LS.cfg,null);
   var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask';
   var box=document.createElement('div'); box.className='panel';
   var last=rd('tr_synclast',null);
-  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">同步</h3><button onclick="document.getElementById(\'syncMask\').remove()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
-    '<div class="mini">通过 WebDAV 把片单同步到云端（推荐 Alist），手机和电脑互通。<br/>密码仅混淆存本机。</div>'+
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">同步</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<div class="mini"><b style="color:var(--ink)">无需服务器也能用：</b>用下方「🏠 同步门户追番」把 B站追番导入本机，或用「导出 / 导入」做本地备份。云同步见下方（可选）。</div>'+
+    '<div class="divi"></div>'+
+    '<div class="mini">WebDAV 云同步（可选·需自备 Alist / WebDAV 服务器）：手机和电脑互通，密码仅混淆存本机。</div>'+
     '<label>WEBDAV 地址</label><input id="syUrl" placeholder="http://192.168.1.5:5244/dav/animhub"/>'+
     '<label>账号</label><input id="syUser"/>'+
     '<label>密码（应用专用）</label><input id="syPass" type="password"/>'+
     '<div class="msg" id="syMsg"></div>'+
     '<div class="row2"><button class="b2" id="syTest">测试连接</button><button class="b1" id="sySave">保存并同步</button></div>'+
     '<div class="divi"></div>'+
-    '<div class="mini"><b style="color:var(--ink)">Bangumi 账号同步</b>：粘贴 access_token 后，标记单集/改状态会自动同步到 bgm.tv 收藏（需番剧为 Bangumi 添加）。token 获取：bgm.tv → 设置 → API 访问令牌。</div>'+
-    '<label>BANGUMI ACCESS_TOKEN</label><input id="syBgm" type="password" placeholder="粘贴 access_token"/>'+
+    '<div style="background:rgba(122,154,106,.10);border:1px solid rgba(122,154,106,.45);border-radius:10px;padding:10px 12px;margin-bottom:8px">'+
+      '<div style="font-weight:700;color:var(--ink);margin-bottom:6px">🔑 怎么拿到 Bangumi Token（实时搜动画/真人剧必须）</div>'+
+      '<ol style="margin:0 0 6px 18px;padding:0;color:var(--muted);font-size:13px;line-height:1.75">'+
+        '<li>浏览器打开 <a href="https://bgm.tv/settings" target="_blank" rel="noopener" style="color:var(--accent)">bgm.tv/settings</a>（先登录你的账号）</li>'+
+        '<li>页面里找「<b style="color:var(--ink)">个人令牌 / API 访问令牌</b>」一栏</li>'+
+        '<li>点「<b style="color:var(--ink)">生成新的令牌</b>」并复制那串长字符串</li>'+
+        '<li>粘到下面输入框 → 点「保存Token」→「测试账号」验证</li>'+
+      '</ol>'+
+      '<div style="font-size:12px;color:var(--danger)">⚠️ 不填 token 搜不到任何番剧/真人剧（Bangumi 官方强制鉴权）。token 只存在本机浏览器，不上传。</div>'+
+    '</div>'+
+    '<div class="mini"><b style="color:var(--ink)">Bangumi 账号同步</b>：粘贴 access_token 后，标记单集/改状态会自动同步到 bgm.tv 收藏（需番剧为 Bangumi 添加）。</div>'+
+    '<label>BANGUMI ACCESS_TOKEN（在上方引导下获取后粘贴）</label><input id="syBgm" type="password" placeholder="粘贴 access_token"/>'+
     '<div class="row2"><button class="b2" id="syBgmTest">测试账号</button><button class="b3" id="syBgmSave">保存Token</button></div>'+
     '<div class="msg" id="bgmTestMsg"></div>'+
     '<div class="divi"></div>'+
     '<div class="mini" style="margin-bottom:10px">不依赖 WebDAV 的本地备份：</div>'+
     '<div class="row2"><button class="b2" id="syExport">⬇ 导出全部数据</button><button class="b2" id="syImport">⬆ 导入数据</button></div>'+
     '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
+    '<div class="divi"></div>'+
+    '<div class="mini"><b style="color:var(--ink)">从门户同步 B站追番</b>：经统一门户网关(/bili/api/follow)拉取你 B站已追的番剧与剧集，合并进本片单（按 sid/标题去重）。需先在门户登录 B站。</div>'+
+    '<div class="row2"><button class="b1" id="syPortal">🏠 同步门户追番</button></div>'+
+    '<div class="divi"></div>'+
+    '<div class="mini"><b style="color:var(--ink)">豆瓣同步</b>：两种用法——① 有本机网关时填 cookie 实时拉取；② 无网关时点「导入导出文件」，用豆瓣账号设置里导出的数据离线导入。动画和真人剧都收。</div>'+
+    '<label>豆瓣 COOKIE（未连接时填一次）</label><input id="syDbCookie" type="password" placeholder="登录 douban.com → F12 → 网络 → 复制请求里的 Cookie"/>'+
+    '<label>导入范围</label><select id="syDbScope"><option value="tv">只看剧集（番剧＋真人剧，推荐）</option><option value="all">全部（含电影）</option></select>'+
+    '<div class="msg" id="dbMsg"></div>'+
+    '<div class="row2"><button class="b2" id="syDbConn">连接豆瓣</button><button class="b1" id="syDbPull">🍊 同步豆瓣标记</button><button class="b2" id="syDbImport">📂 导入导出文件</button></div>'+
+    '<input type="file" id="syDbFile" accept=".json,.csv,.txt" style="display:none"/>'+
+    '<div class="divi"></div>'+
+    '<div class="row2"><button class="b2" onclick="window.__closeSync()" style="width:100%">完成</button></div>'+
     (last?'<div class="tiny" style="margin-top:12px">上次同步：'+esc(last.at)+'（上传 '+last.res.up+' / 下载 '+last.res.down+'）</div>':'');
   wrap.appendChild(box); document.body.appendChild(wrap);
+  function escClose(e){ if(e.key==='Escape') window.__closeSync(); }
+  window.__closeSync=function(){ document.removeEventListener('keydown',escClose); if(wrap&&wrap.parentNode) wrap.remove(); };
+  wrap.addEventListener('click',function(e){ if(e.target===wrap) window.__closeSync(); });
+  document.addEventListener('keydown',escClose);
   if(cfg){ box.querySelector('#syUrl').value=cfg.url||''; box.querySelector('#syUser').value=cfg.user||''; box.querySelector('#syPass').value=cfg._p||''; }
   box.querySelector('#syBgm').value=bgmTok();
   box.querySelector('#syBgmTest').onclick=function(){
@@ -1096,6 +1523,18 @@ function syncOpen(){
     var m2=box.querySelector('#bgmTestMsg'); m2.textContent=tk?'已保存——标记进度将自动同步到 Bangumi':'已清除'; m2.style.color='#7a9a6a';
   };
   var msg=function(t,ok){ var el=box.querySelector('#syMsg'); el.textContent=t; el.style.color=ok?'#7a9a6a':'var(--danger)'; };
+  box.querySelector('#syPortal').onclick=function(){ syncFromPortal(box); };
+  box.querySelector('#syDbConn').onclick=function(){ syncFromDouban(box); };
+  box.querySelector('#syDbPull').onclick=function(){ var ce=box.querySelector('#syDbCookie'); if(ce) ce.value=''; syncFromDouban(box); };
+  box.querySelector('#syDbImport').onclick=function(){ box.querySelector('#syDbFile').click(); };
+  box.querySelector('#syDbFile').addEventListener('change',function(ev){ importDoubanFile(box,ev); });
+  (function(){ /* 打开面板时显示豆瓣连接状态 */
+    var dm=box.querySelector('#dbMsg');
+    fetch('/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(s){
+      if(s.ok&&s.logged) dm.textContent='豆瓣已连接（uid '+s.uid+'）——直接点「同步豆瓣标记」即可';
+      else dm.textContent='豆瓣未连接，请在上方粘贴 cookie';
+    }).catch(function(){ dm.textContent='豆瓣未连接（本机网关未启动）'; });
+  })();
   function form(){ return { url:box.querySelector('#syUrl').value.trim().replace(/\/+$/,''), user:box.querySelector('#syUser').value.trim(), pass:box.querySelector('#syPass').value }; }
   box.querySelector('#syTest').onclick=function(){
     var f=form(); if(!f.url||!f.user){ msg('先填地址和账号'); return; }
@@ -1108,7 +1547,7 @@ function syncOpen(){
     var f=form(); if(!f.url||!f.user){ msg('先填地址和账号'); return; }
     wr(LS.cfg,{url:f.url,user:f.user,pass:btoa(f.pass||'')});
     msg('已保存，开始同步…',true);
-    setTimeout(function(){ wrap.remove(); syncRun(false); },200);
+    setTimeout(function(){ window.__closeSync(); syncRun(false); },200);
   };
   box.querySelector('#syExport').onclick=function(){ downloadBackup(); };
   box.querySelector('#syImport').onclick=function(){ box.querySelector('#syFile').click(); };

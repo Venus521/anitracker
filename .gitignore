@@ -8,6 +8,7 @@ dist/
 .github/
 !README.md
 !privacy.html
+!index.html
 !ani-tracker.html
 !tracker-manifest.webmanifest
 !tracker-sw.js
