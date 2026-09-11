@@ -1161,6 +1161,8 @@ function addShow(item){
 
 /* ---------- WebDAV 同步 ---------- */
 function openSync(){ syncOpen(); }
+/* 网关基址：页面本身由网关(:3000)服务时用相对路径，其余（本机8089/8766、GitHub Pages）直连本机网关 */
+var GW=(function(){ try{ if(location.port==='3000') return ''; }catch(e){} return 'http://localhost:3000'; })();
 async function syncFromPortal(box){
   var m=box?box.querySelector('#syMsg'):null;
   function note(t,ok){ if(m){ m.textContent=t; m.style.color=ok?'#7a9a6a':'var(--danger)'; } else toast(t); }
@@ -1168,7 +1170,7 @@ async function syncFromPortal(box){
   var all=[];
   try{
     for(var pn=1; pn<=30; pn++){
-      var r=await fetch('/bili/api/follow?pn='+pn, {cache:'no-store'});
+      var r=await fetch(GW+'/bili/api/follow?pn='+pn, {cache:'no-store'});
       var j=await r.json();
       if(!j.ok){ note('门户接口失败：'+(j.msg||'未登录B站或网络异常'), false); return; }
       var items=(j.anime||[]).concat(j.tv||[]);
@@ -1373,10 +1375,10 @@ async function syncFromDouban(box){
   var scope=(box&&box.querySelector('#syDbScope'))?box.querySelector('#syDbScope').value:'tv';
   try{
     var st={ok:false,logged:false};
-    try{ st=await fetch('/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }); }catch(e){ st={ok:false,logged:false}; }
+    try{ st=await fetch(GW+'/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }); }catch(e){ st={ok:false,logged:false}; }
     if(cookie){
       note('正在验证豆瓣 cookie…', true);
-      var c=await fetch('/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookie:cookie})}).then(function(r){ return r.json(); });
+      var c=await fetch(GW+'/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookie:cookie})}).then(function(r){ return r.json(); });
       if(!c.ok){ note('连接失败：'+(c.msg||'未知错误'), false); return; }
       if(ckEl) ckEl.value='';
       note('豆瓣已连接（uid '+(c.uid||'')+'），正在拉取标记…', true);
@@ -1387,7 +1389,7 @@ async function syncFromDouban(box){
     } else {
       note('豆瓣已连接（uid '+(st.uid||'')+'），正在拉取标记…', true);
     }
-    var u='/hub/api/db/pull?limit=300'+(scope!=='all'?'&type='+scope:'');
+    var u=GW+'/hub/api/db/pull?limit=300'+(scope!=='all'?'&type='+scope:'');
     var j=await fetch(u,{cache:'no-store'}).then(function(r){ return r.json(); });
     if(!j.ok){ note('拉取失败：'+(j.msg||'未知错误'), false); return; }
     var items=j.items||[];
@@ -1530,7 +1532,7 @@ function syncOpen(){
   box.querySelector('#syDbFile').addEventListener('change',function(ev){ importDoubanFile(box,ev); });
   (function(){ /* 打开面板时显示豆瓣连接状态 */
     var dm=box.querySelector('#dbMsg');
-    fetch('/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(s){
+    fetch(GW+'/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(s){
       if(s.ok&&s.logged) dm.textContent='豆瓣已连接（uid '+s.uid+'）——直接点「同步豆瓣标记」即可';
       else dm.textContent='豆瓣未连接，请在上方粘贴 cookie';
     }).catch(function(){ dm.textContent='豆瓣未连接（本机网关未启动）'; });
