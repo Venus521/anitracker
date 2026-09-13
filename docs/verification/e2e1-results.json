@@ -1,0 +1,137 @@
+[
+ {
+  "name": "迁移：canon 默认值被清除",
+  "pass": true,
+  "extra": "{\"hasCanonType\":false,\"ep2type\":null,\"semiKept\":\"semi\"}"
+ },
+ {
+  "name": "迁移：semi 显式值保留",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "来源筛选条存在",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "列表含覆盖信息",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "详情标签混用可见",
+  "pass": true,
+  "extra": "[\"原作改编\",\"原作改编\",\"TV原创\",\"半原创\",\"原作改编\",\"TV原创\",\"TV原创\",\"TV原创\"]"
+ },
+ {
+  "name": "来源覆盖行正确",
+  "pass": true,
+  "extra": "来源覆盖：原作 7 · TV原创 4 · 半原创 1 · 未判定 0来源标注 ›"
+ },
+ {
+  "name": "下一集默认=第3集",
+  "pass": true,
+  "extra": "▶ 标记下一集：第 3 集 · 原创特别篇 【动画原创】"
+ },
+ {
+  "name": "标注编辑器打开",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "手动标注写入 e.src",
+  "pass": true,
+  "extra": "{\"src\":\"filler\",\"chip9\":\"TV原创\"}"
+ },
+ {
+  "name": "标签即时更新为 TV原创",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "编辑器恢复自动（清除人工标注）",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "隐藏TV原创：提示行=已隐藏4集",
+  "pass": true,
+  "extra": "已隐藏 4 集（TV原创/半原创） · 恢复全部显示"
+ },
+ {
+  "name": "隐藏TV原创：下一集=第4集",
+  "pass": true,
+  "extra": "▶ 标记下一集：第 4 集 · 半原创过渡集"
+ },
+ {
+  "name": "筛选状态刷新后保留",
+  "pass": true,
+  "extra": "[\"✓ 隐藏 TV原创\",\"✓ 隐藏 半原创\"]"
+ },
+ {
+  "name": "双重隐藏：已隐藏5集",
+  "pass": true,
+  "extra": "已隐藏 5 集（TV原创/半原创） · 恢复全部显示"
+ },
+ {
+  "name": "双重隐藏：下一集=第5集",
+  "pass": true,
+  "extra": "▶ 标记下一集：第 5 集 · 第5集"
+ },
+ {
+  "name": "统计按可见集（已看2/未看5）",
+  "pass": true,
+  "extra": "[\"2已看\",\"0回看\",\"5未看\",\"29%进度\"]"
+ },
+ {
+  "name": "被隐藏≠已看（第3集保持未标记）",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "一键恢复显示全部",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "未校准番：全部未判定",
+  "pass": true,
+  "extra": "[\"未判定\"]"
+ },
+ {
+  "name": "纯原创番：全部TV原创",
+  "pass": true,
+  "extra": "[\"TV原创\"]"
+ },
+ {
+  "name": "批量补齐：AFG 命中写入",
+  "pass": true,
+  "extra": "32,49,64-109,128-137,147-148,168-189,204"
+ },
+ {
+  "name": "批量补齐：报告已生成",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "批量补齐：报告弹窗展示",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "回归：添加页可打开/返回",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "回归：历史记录保留(2条)",
+  "pass": true,
+  "extra": "{\"addVisible\":true,\"histLen\":2,\"listVisible\":true}"
+ },
+ {
+  "name": "无页面级 JS 错误",
+  "pass": true,
+  "extra": ""
+ }
+]

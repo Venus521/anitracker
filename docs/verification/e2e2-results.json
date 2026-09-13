@@ -1,0 +1,117 @@
+[
+ {
+  "name": "同步入口一次点击可达",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "Bangumi 绑定状态（/me 模拟）",
+  "pass": true,
+  "extra": "已绑定：tester · 上次同步：暂无"
+ },
+ {
+  "name": "版本对齐 ✓（页面=服务端 2.3.0）",
+  "pass": true,
+  "extra": "页面 v2.3.0 · 服务端 v2.3.0 ✓ 一致"
+ },
+ {
+  "name": "详情已打开(curSid=901)",
+  "pass": true,
+  "extra": "901"
+ },
+ {
+  "name": "拉取补标 ep3",
+  "pass": true,
+  "extra": "{\"ep3\":\"watched\",\"ep4\":null,\"ok\":2,\"fail\":0}"
+ },
+ {
+  "name": "未误标 ep4",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "台账 成功且无失败",
+  "pass": true,
+  "extra": "{\"ep3\":\"watched\",\"ep4\":null,\"ok\":2,\"fail\":0}"
+ },
+ {
+  "name": "单集自动推送写台账",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "整番推送=只推差集[1002]",
+  "pass": true,
+  "extra": "[{\"episode_id\":[1002],\"type\":2}]"
+ },
+ {
+  "name": "台账 undo=1 集",
+  "pass": true,
+  "extra": "{\"ok\":1,\"fail\":0,\"undoN\":1}"
+ },
+ {
+  "name": "回滚请求=恢复为0",
+  "pass": true,
+  "extra": "{\"sid\":\"901\",\"body\":{\"episode_id\":[1002],\"type\":0}}"
+ },
+ {
+  "name": "远端已恢复(1002=0)",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "推送全部：补差[1002]",
+  "pass": true,
+  "extra": "[{\"episode_id\":[1002],\"type\":2}]"
+ },
+ {
+  "name": "连续两次推送：第二次零写入（幂等）",
+  "pass": true,
+  "extra": "[]"
+ },
+ {
+  "name": "本地标记不重不漏 1,2,3,5",
+  "pass": true,
+  "extra": "1,2,3,5"
+ },
+ {
+  "name": "远端=本地(1001,1002,1003,1005)",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "拉取全部：1成功1失败(500)",
+  "pass": true,
+  "extra": "[\"测试混合番|ok\",\"测试未校准番|触发接口限流（已自动重试，仍失败请稍后再试）\"]"
+ },
+ {
+  "name": "台账可展开明细",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "失败重试后 902 补标 ep1",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "401：台账给出“凭据失效”恢复指引",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "无旧路径残留（无双跑）",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "请求拦截生效（>10 次被模拟）",
+  "pass": true,
+  "extra": "seen=47 mocked=47"
+ },
+ {
+  "name": "无页面级 JS 错误",
+  "pass": true,
+  "extra": ""
+ }
+]
