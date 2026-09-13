@@ -1,6 +1,6 @@
-/* AniTracker SW — HTML network-first（更新即达），同源静态 cache-first，跨域 API 永不缓存 */
-var CACHE='anitracker-v1';
-var PRECACHE=['./index.html','./ani-tracker.html','./tracker-manifest.webmanifest'];
+/* AniTracker SW v3 — 同源资源全部 network-first（更新即达，失败回退缓存）；跨域不缓存 */
+var CACHE='anitracker-v3';
+var PRECACHE=['./index.html','./tracker-manifest.webmanifest'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(PRECACHE); }).then(function(){ return self.skipWaiting(); }));
 });
@@ -13,16 +13,10 @@ self.addEventListener('fetch',function(e){
   var url=new URL(e.request.url);
   if(e.request.method!=='GET') return;
   if(url.origin!==location.origin) return;
-  var isHTML=e.request.destination==='document'||/\.html?$/.test(url.pathname);
-  if(isHTML){
-    e.respondWith(fetch(e.request).then(function(res){
-      var cp=res.clone(); caches.open(CACHE).then(function(c){ c.put(e.request,cp); }); return res;
-    }).catch(function(){ return caches.match(e.request); }));
-  } else {
-    e.respondWith(caches.match(e.request).then(function(hit){
-      return hit||fetch(e.request).then(function(res){
-        var cp=res.clone(); caches.open(CACHE).then(function(c){ c.put(e.request,cp); }); return res;
-      });
-    }));
-  }
+  e.respondWith(
+    fetch(e.request).then(function(res){
+      try{ if(res&&res.status===200){ var cp=res.clone(); caches.open(CACHE).then(function(c){ c.put(e.request,cp); }); } }catch(err){}
+      return res;
+    }).catch(function(){ return caches.match(e.request); })
+  );
 });
