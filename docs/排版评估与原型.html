@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>追迹 · 排版评估与重设计规格</title>
+<style>
+:root{
+  --bg:#faf8f4; --card:#ffffff; --ink:#17150f; --muted:#8a8377; --line:#e8e3d9;
+  --accent:#b08d4f; --accent-soft:#f2e9d8; --danger:#a8552f;
+  --serif:Georgia,'Source Han Serif SC','Noto Serif SC','Songti SC',serif;
+  --sans:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+  --fs-display:44px; --fs-h1:34px; --fs-h2:26px; --fs-h3:20px;
+  --fs-lg:16px; --fs-body:14px; --fs-meta:12px; --fs-micro:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.75 var(--sans)}
+.page{max-width:920px;margin:0 auto;padding:64px 48px 96px}
+.kicker{font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin:0 0 20px}
+h1{font-family:var(--serif);font-weight:400;font-size:var(--fs-display);line-height:1.2;margin:0 0 16px}
+.lede{font-size:var(--fs-lg);color:var(--muted);margin:0;max-width:64ch;line-height:1.6}
+.meta{font-size:var(--fs-meta);color:var(--muted);letter-spacing:.04em;margin:32px 0 0;padding-top:20px;border-top:1px solid var(--line)}
+.meta b{color:var(--ink);font-weight:600}
+.badge{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 12px;font-size:12px;font-weight:600}
+section{margin:64px 0 0}
+.secno{font-family:var(--serif);font-size:12px;color:var(--accent);letter-spacing:.16em}
+h2{font-family:var(--serif);font-weight:400;font-size:var(--fs-h2);line-height:1.35;margin:8px 0 8px}
+.rule{height:1px;background:var(--line);margin:16px 0 24px}
+h3{font-size:var(--fs-h3);font-weight:600;margin:32px 0 12px}
+p{margin:0 0 16px}
+ul{margin:0 0 16px;padding-left:20px}
+li{margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 24px}
+th{font-size:10px;letter-spacing:.1em;color:var(--muted);text-align:left;font-weight:600;padding:8px 10px;border-bottom:1px solid var(--ink)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.num,th.num{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dot{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:6px;vertical-align:1px}
+.d0{background:var(--danger)} .d1{background:var(--accent)} .d2{background:#7a9a6a}
+code{font-family:var(--mono);font-size:12px;background:var(--accent-soft);padding:1px 6px;border-radius:4px}
+@media (max-width:600px){td.num,th.num{white-space:normal;word-break:break-word}}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:8px 0 24px}
+.cols2>*{min-width:0}
+@media (max-width:720px){.cols2{grid-template-columns:1fr}.page{padding:40px 20px 64px}}
+.metric{border:1px solid var(--line);background:var(--card);padding:20px;border-radius:12px}
+.metric .from{font-size:12px;color:var(--muted)}
+.metric .arrow{font-size:12px;color:var(--accent);margin:4px 0}
+.metric .to{font-family:var(--serif);font-size:20px}
+.tspec{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 20px;margin:0 0 16px}
+.trow{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:none}
+.tlabel{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.tsample{overflow:hidden;white-space:nowrap;min-width:0}
+.s-display{font:400 var(--fs-display)/1.2 var(--serif)}
+.s-h1{font:400 var(--fs-h1)/1.25 var(--serif)}
+.s-h2{font:400 var(--fs-h2)/1.35 var(--serif)}
+.s-h3{font:600 var(--fs-h3)/1.5 var(--sans)}
+.s-lg{font:400 var(--fs-lg)/1.6 var(--sans)}
+.s-body{font:400 var(--fs-body)/1.75 var(--sans)}
+.s-meta{font:400 var(--fs-meta)/1.7 var(--sans)}
+.s-micro{font:400 var(--fs-micro)/1.6 var(--sans);letter-spacing:.06em}
+.spbars{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:20px;margin:0 0 24px}
+.spbar{display:flex;align-items:center;gap:12px;margin:0 0 8px}
+.spbar i{display:block;height:8px;background:var(--accent);border-radius:2px}
+.spbar span{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:44px}
+.rscale{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 24px}
+.rsq{width:64px;height:64px;border:1px solid var(--line);background:var(--card);display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ph{border:1px solid var(--line);border-radius:16px;background:var(--bg);padding:12px;max-width:320px}
+.ph + .ph{margin-top:0}
+.ph .phbar{display:flex;justify-content:space-between;align-items:center;padding:6px 4px 12px}
+.ph .brand{font-family:var(--serif);font-size:20px}
+.ph .syncbtn{height:28px;padding:0 12px;border:1px solid var(--ink);border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:4px;background:none}
+.ph .chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 10px}
+.chip{height:28px;padding:0 12px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;background:var(--card)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+.ph .row{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 8px;min-height:64px}
+.ph .cover{width:44px;height:62px;border-radius:4px;background:linear-gradient(160deg,#e8e3d9,#d8d0c0);flex:none}
+.ph .rtitle{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph .rmeta{font-size:12px;color:var(--muted)}
+.ph .rnum{margin-left:auto;text-align:right;font-family:var(--serif);font-size:20px;font-variant-numeric:tabular-nums}
+.ph .rnum small{display:block;font-family:var(--sans);font-size:10px;color:var(--muted)}
+.lbl{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:4px;border:1px solid var(--line);font-size:10px;background:var(--card)}
+.lbl.canon{color:#2d6a9f;border-color:#c3d8ee}
+.lbl.filler{color:#a8552f;border-color:#e8c8b0}
+.lbl.semi{color:#c07b2d;border-color:#ecd5ae}
+.lbl.unknown{color:var(--muted);border-style:dashed}
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:0 0 12px}
+.stat{background:var(--card);padding:12px 8px;text-align:center}
+.stat b{display:block;font-family:var(--serif);font-weight:400;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:10px;color:var(--muted);letter-spacing:.08em}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:40px 16px;text-align:center;color:var(--muted);font-size:12px}
+.err{border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:12px;padding:10px 12px;background:#fff}
+.griddemo{position:relative;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:0 0 24px}
+.griddemo .colsbg{position:absolute;inset:0;border-radius:12px;background-image:repeating-linear-gradient(to right,rgba(176,141,79,.10) 0 1px,transparent 1px calc(25% - 1px));background-size:25% 100%;pointer-events:none}
+.griddemo .gdinner{padding:20px;position:relative}
+.gdrow{display:flex;gap:16px;align-items:center;margin-bottom:12px}
+.gdrow:last-child{margin-bottom:0}
+.gdbox{height:16px;background:var(--accent-soft);border-radius:4px}
+.gdcols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-size:10px;color:var(--muted);text-align:center}
+.screens{display:grid;grid-template-columns:repeat(2,1fr);gap:24px}
+@media (max-width:720px){.screens{grid-template-columns:1fr}.page{padding:40px 20px 64px}}
+.screen{min-width:0}
+.screen .cap{font-size:12px;color:var(--muted);margin:8px 0 0;display:flex;justify-content:space-between}
+.mock{border:1px solid var(--line);border-radius:16px;background:var(--bg);padding:12px}
+.mock .mini{font-size:10px;color:var(--muted);letter-spacing:.1em;padding:2px 2px 8px}
+.mock .title{font-family:var(--serif);font-size:26px;line-height:1.35;padding:0 2px}
+.mock .meta2{font-size:12px;color:var(--muted);padding:2px 2px 10px}
+hr.hair{border:none;border-top:1px solid var(--line);margin:12px 0}
+.long{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;line-height:1.75}
+.kv{margin:0 0 6px;font-size:12px;color:var(--muted)}
+.kv b{color:var(--ink);font-weight:600}
+.colophon{margin-top:80px;padding-top:16px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);letter-spacing:.06em;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.note{font-size:12px;color:var(--muted);border-left:2px solid var(--accent);padding-left:12px;margin:0 0 24px}
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="kicker">AniTracker 追迹 · 排版评估与重设计规格 · 2026-09-14</p>
+  <h1>排版评估与重设计</h1>
+  <p class="lede">先审计、后重设计：把散落的 19 种字号、32 种间距、12 种圆角与 0 个断点，收敛为一套可量化的瑞士网格体系（4pt 基准 / 刻度锁定 / 左对齐纪律 / 单强调色），并逐屏给出试排原型。</p>
+  <div class="meta">判定 <span class="badge">需体系级重设计</span> ｜ 方法：脚本审计 + 规格对照 ｜ 覆盖：R1/R3/R5/R9/R11 全部高优先级差距 ｜ 状态：设计稿（未替换运行中应用）</div>
+
+  <section>
+    <div class="secno">01 — 结论摘要</div>
+    <h2>三个数字看差距</h2>
+    <div class="rule"></div>
+    <div class="cols2">
+      <div class="metric"><div class="from">字号：19 种取值，含 19 处内联直写</div><div class="arrow">▼ 收敛为</div><div class="to">8 级刻度：44/34/26/20/16/14/12/10</div></div>
+      <div class="metric"><div class="from">间距：32 种取值（6/10/14 与孤立值混用）</div><div class="arrow">▼ 收敛为</div><div class="to">11 级刻度：4 的倍数至 80</div></div>
+      <div class="metric"><div class="from">响应式：0 个媒体查询，全屏宽单列</div><div class="arrow">▼ 收敛为</div><div class="to">3 档断点：≤559 / 560–879 / ≥880</div></div>
+      <div class="metric"><div class="from">圆角：12 种；行高：7 种散值；排版令牌：0 个</div><div class="arrow">▼ 收敛为</div><div class="to">圆角 5 级 · 行高配对绑定 · 全量入 :root</div></div>
+    </div>
+    <p class="note">判定依据：5 项 P0 需求「不满足」且均属体系缺失（无法逐处微调收敛）。重设计只换骨架（刻度/网格/组件规则），不换皮肤（沿用暖色与字体对）。</p>
+  </section>
+
+  <section>
+    <div class="secno">02 — 现状审计（证据）</div>
+    <h2>量化结果精选</h2>
+    <div class="rule"></div>
+    <table>
+      <tr><th>类别</th><th>取值数</th><th>高频样例</th><th>结论</th></tr>
+      <tr><td>字号</td><td class="num">19</td><td class="num">11px×18 · 12px×15 · 13px×13 · 10px×11</td><td>无刻度，密度偏小</td></tr>
+      <tr><td>行高</td><td class="num">7</td><td class="num">1 / 1.35 / 1.5 / 1.7 / 1.75 / 1.8 / 1.9</td><td>未与字号绑定</td></tr>
+      <tr><td>圆角</td><td class="num">12</td><td class="num">10×8 · 8×6 · 9×4 · 6×3 · 14×3 · 22×3</td><td>观感不统一</td></tr>
+      <tr><td>间距</td><td class="num">32</td><td class="num">8×30 · 10×28 · 6×22 · 12×21 · 2×17</td><td>弱节奏、难预测</td></tr>
+      <tr><td>断点</td><td class="num">0</td><td class="num">仅 max-width:560px 单列</td><td>无响应式演进</td></tr>
+      <tr><td>色彩/字体令牌</td><td class="num">9 + 2</td><td class="num">--ink/--accent/… ；衬线 + 无衬线双栈</td><td><span class="dot d2"></span>保留</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="secno">03 — 差距矩阵</div>
+    <h2>逐条判级（R1–R13）</h2>
+    <div class="rule"></div>
+    <table>
+      <tr><th style="width:64px">判级</th><th>需求</th><th>要点</th></tr>
+      <tr><td><span class="dot d0"></span>不满足</td><td>R1 字号刻度</td><td>19 种取值 + 内联直写</td></tr>
+      <tr><td><span class="dot d0"></span>不满足</td><td>R3 间距节奏</td><td>32 种取值，非 4 倍数混用</td></tr>
+      <tr><td><span class="dot d0"></span>不满足</td><td>R5 圆角纪律</td><td>12 种取值</td></tr>
+      <tr><td><span class="dot d0"></span>不满足</td><td>R9 响应式</td><td>0 断点</td></tr>
+      <tr><td><span class="dot d0"></span>不满足</td><td>R11 可维护性</td><td>排版令牌 0 项</td></tr>
+      <tr><td><span class="dot d1"></span>部分满足</td><td>R2 / R4 / R6 / R7 / R8 / R10</td><td>有基础但规则未锁定</td></tr>
+      <tr><td><span class="dot d2"></span>满足</td><td>R12 兼容性能</td><td>系统字体栈、无外链</td></tr>
+      <tr><td>N/A</td><td>R13 导出</td><td>应用无导出（非目标）</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="secno">04 — 重设计体系</div>
+    <h2>字号与行高（实测样张）</h2>
+    <div class="rule"></div>
+    <div class="tspec">
+      <div class="trow"><div class="tlabel">display 44 / 1.2 · 衬线</div><div class="tsample s-display">追迹 AniTracker 1192</div></div>
+      <div class="trow"><div class="tlabel">h1 34 / 1.25 · 衬线</div><div class="tsample s-h1">集级来源与同步中心</div></div>
+      <div class="trow"><div class="tlabel">h2 26 / 1.35 · 衬线</div><div class="tsample s-h2">测试混合番 · 原作 7 · TV原创 4</div></div>
+      <div class="trow"><div class="tlabel">h3 20 / 1.5 · 600</div><div class="tsample s-h3">同步记录 · 最近 15 条</div></div>
+      <div class="trow"><div class="tlabel">lg 16 / 1.6</div><div class="tsample s-lg">数据存在本机浏览器；绑定后启用免绑定搜索。</div></div>
+      <div class="trow"><div class="tlabel">body 14 / 1.75</div><div class="tsample s-body">正文：每集单独标注，原作改编 / TV原创 / 半原创 / 未判定 可以混用。</div></div>
+      <div class="trow"><div class="tlabel">meta 12 / 1.7</div><div class="tsample s-meta">共 12 集 · 已看 2 · 未看 5 · 在线搜索暂不可用</div></div>
+      <div class="trow"><div class="tlabel">micro 10 / 1.6 · +0.06em</div><div class="tsample s-micro">来源覆盖 · 同步台账 · 版本 v2.4.0</div></div>
+    </div>
+
+    <h3>间距刻度（4 的倍数）</h3>
+    <div class="spbars">
+      <div class="spbar"><span>4</span><i style="width:8px"></i></div>
+      <div class="spbar"><span>8</span><i style="width:16px"></i></div>
+      <div class="spbar"><span>12</span><i style="width:24px"></i></div>
+      <div class="spbar"><span>16</span><i style="width:32px"></i></div>
+      <div class="spbar"><span>20</span><i style="width:40px"></i></div>
+      <div class="spbar"><span>24</span><i style="width:48px"></i></div>
+      <div class="spbar"><span>32</span><i style="width:64px"></i></div>
+      <div class="spbar"><span>40</span><i style="width:80px"></i></div>
+      <div class="spbar"><span>48</span><i style="width:96px"></i></div>
+      <div class="spbar"><span>64</span><i style="width:128px"></i></div>
+      <div class="spbar"><span>80</span><i style="width:160px"></i></div>
+    </div>
+
+    <h3>圆角刻度（4 级 + 胶囊）</h3>
+    <div class="rscale">
+      <div class="rsq" style="border-radius:4px">4</div>
+      <div class="rsq" style="border-radius:8px">8</div>
+      <div class="rsq" style="border-radius:12px">12</div>
+      <div class="rsq" style="border-radius:16px">16</div>
+      <div class="rsq" style="border-radius:999px">999</div>
+    </div>
+
+    <h3>网格与对齐（4 列演示）</h3>
+    <div class="griddemo">
+      <div class="colsbg"></div>
+      <div class="gdinner">
+        <div class="gdrow"><span class="gdbox" style="flex:1"></span><span class="gdbox" style="flex:2"></span><span class="gdbox" style="flex:1;background:none;border:1px dashed var(--line)"></span></div>
+        <div class="gdrow"><span class="gdbox" style="flex:1"></span><span class="gdbox" style="flex:4;background:var(--card);border:1px solid var(--line)"></span><span class="gdbox" style="flex:1"></span></div>
+        <div class="gdcols"><span>列1</span><span>列2</span><span>列3</span><span>列4</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="secno">05 — 关键页面试排</div>
+    <h2>列表 / 详情 / 同步中心 / 搜索（按新体系）</h2>
+    <div class="rule"></div>
+    <div class="screens">
+      <div class="screen">
+        <div class="mock">
+          <div class="phbar"><span class="brand">追迹</span><span class="syncbtn">⇅ 同步</span></div>
+          <div class="chips"><span class="chip on">全部</span><span class="chip">在看</span><span class="chip">想看</span><span class="chip">看完</span></div>
+          <div class="chips"><span class="chip on">隐藏 TV原创</span><span class="chip on">隐藏 半原创</span><span class="chip">恢复全部显示</span></div>
+          <div class="row"><span class="cover"></span><div style="min-width:0;flex:1"><div class="rtitle" title="测试混合番">测试混合番</div><div class="rmeta">原作改编 · 在看 · 共 12 集 · 2020</div><div class="rmeta" style="font-size:10px">原作 7 · TV原创 4 · 半原创 1 · 未判定 0</div></div><div class="rnum">2<small>已看 / 7</small></div></div>
+          <div class="row"><span class="cover"></span><div style="min-width:0;flex:1"><div class="rtitle" title="这是一个特别特别长的测试番剧标题用来验证文字溢出与截断行为">这是一个特别特别长的测试番剧标题用来验证文字溢出与截断行为</div><div class="rmeta">未分类 · 在看 · 共 26 集</div><div class="rmeta" style="font-size:10px">未判定 26</div></div><div class="rnum">0<small>已看 / 26</small></div></div>
+        </div>
+        <div class="cap"><span>列表页 · 筛选与覆盖信息</span><span>560 容器 · 行 64+</span></div>
+      </div>
+
+      <div class="screen">
+        <div class="mock">
+          <div class="mini">← 返回</div>
+          <div class="title">测试混合番</div>
+          <div class="meta2">2020 · 共 12 集 · 原作改编 · <span style="color:var(--accent);font-weight:600">★8.3</span></div>
+          <div class="statgrid"><div class="stat"><b>2</b><span>已看</span></div><div class="stat"><b>0</b><span>回看</span></div><div class="stat"><b>5</b><span>未看</span></div><div class="stat"><b>29%</b><span>进度</span></div></div>
+          <div class="rmeta" style="padding:0 2px 10px">来源覆盖：<b style="color:var(--ink)">原作 7 · TV原创 4 · 半原创 1 · 未判定 0</b> ｜ 已隐藏 5 集（统计按可见集计算）</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:0 2px 8px">
+            <span class="chip">⟳ 拉取Bangumi进度</span><span class="chip">↑ 推送Bangumi</span><span class="chip">⟳ 来源校准</span><span class="chip">⌁ 关联Bangumi</span>
+          </div>
+          <hr class="hair"/>
+          <div style="display:flex;justify-content:space-between;padding:6px 2px;font-size:14px"><span>1 · 东海篇</span><span class="lbl canon">原作改编</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 2px;font-size:14px"><span>3 · 原创特别篇</span><span class="lbl filler">TV原创</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 2px;font-size:14px"><span>4 · 半原创过渡集</span><span class="lbl semi">半原创</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 2px;font-size:14px"><span>9 · 未标注的中段</span><span class="lbl unknown">未判定</span></div>
+        </div>
+        <div class="cap"><span>详情页 · 统计等宽数字 + 四类标签</span><span>标签高 20 · 圆角 4</span></div>
+      </div>
+
+      <div class="screen">
+        <div class="mock">
+          <div class="mini">同步中心 · Bangumi</div>
+          <div class="kv"><b>已绑定 ✓</b> tester · 上次同步 19:41</div>
+          <div style="display:flex;gap:8px;padding:2px 0 10px;flex-wrap:wrap"><span class="chip on">⟳ 拉取全部进度</span><span class="chip">↑ 推送全部</span><span class="chip">更换 token</span></div>
+          <hr class="hair"/>
+          <div class="mini">同步记录</div>
+          <div style="font-size:12px;display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px dashed var(--line)"><span>拉取全部 · 补 12 集</span><span style="color:#7a9a6a;font-variant-numeric:tabular-nums">成功 3</span></div>
+          <div style="font-size:12px;display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px dashed var(--line)"><span>推送全部 · 回滚本次</span><span style="color:#7a9a6a;font-variant-numeric:tabular-nums">成功 2</span></div>
+          <div style="font-size:12px;display:flex;justify-content:space-between;padding:6px 2px"><span>拉取全部 · 限流重试</span><span style="color:var(--danger);font-variant-numeric:tabular-nums">失败 1 · 重试</span></div>
+          <div class="err" style="margin-top:10px">凭据失效——请在同步中心重新绑定 token</div>
+        </div>
+        <div class="cap"><span>同步中心 · 台账与错误恢复</span><span>等宽数字右对齐</span></div>
+      </div>
+
+      <div class="screen">
+        <div class="mock">
+          <div class="mini">添加 · 搜索</div>
+          <div style="display:flex;gap:8px;padding:0 0 8px"><span style="flex:1;border:1px solid var(--line);border-radius:8px;height:44px;display:flex;align-items:center;padding:0 12px;color:var(--muted);font-size:14px">搜索番剧名（本地 + 在线免绑定）</span><span class="chip" style="height:44px;padding:0 16px;color:var(--ink)">搜索</span></div>
+          <div class="mini">搜索源：本地库（离线可用）+ Bangumi 在线（免绑定直接搜）</div>
+          <div class="mini" style="color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:6px;letter-spacing:.12em">我的片单</div>
+          <div class="row" style="min-height:56px"><div style="min-width:0;flex:1"><div class="rtitle">海贼王</div><div class="rmeta">共 3 集 · 在看</div></div><span class="chip" style="align-self:center">查看</span></div>
+          <div class="mini" style="color:var(--accent);border-bottom:1px solid var(--line);padding:10px 2px 6px;letter-spacing:.12em">Bangumi 在线 · 实时</div>
+          <div class="row" style="min-height:56px"><div style="min-width:0;flex:1"><div class="rtitle">孤独摇滚！</div><div class="rmeta">ぼっち・ざ・ろっく！ · 2022 · 12 集</div></div><span class="chip" style="align-self:center;color:var(--ink)">添加</span></div>
+        </div>
+        <div class="cap"><span>搜索页 · 双源分区</span><span>输入 44 · 分区眉题 10</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="secno">06 — 边界与异常样例</div>
+    <h2>极端内容不破版</h2>
+    <div class="rule"></div>
+    <div class="cols2">
+      <div>
+        <h3>超长标题（单行省略 + title）</h3>
+        <div style="border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px">
+          <div class="long" title="这是一个特别特别长的测试番剧标题用来验证文字溢出与截断行为——中文与 Latin Mixed 12345">这是一个特别特别长的测试番剧标题用来验证文字溢出与截断行为——中文与 Latin Mixed 12345</div>
+        </div>
+        <h3>集标题两行截断</h3>
+        <div style="border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px">
+          <div class="clamp2">第 108 集 这是一个非常长的单集标题用来验证两行截断策略——超出部分应被截断且不遮挡相邻的标签与页码。</div>
+        </div>
+      </div>
+      <div>
+        <h3>空态 / 加载 / 错误 / 禁用</h3>
+        <div class="empty">还没有同步记录。绑定 Bangumi 后，每次拉取/推送都会留痕。</div>
+        <div style="margin:8px 0" class="err">网络不可达（检查网络/代理后重试）——已成功部分不会回滚</div>
+        <div style="display:flex;gap:8px"><span class="chip" style="opacity:.45">已禁用按钮</span><span class="chip on" style="opacity:.45">处理中…</span></div>
+      </div>
+    </div>
+    <h3>混排与等宽数字</h3>
+    <div style="border:1px solid var(--line);background:var(--card);border-radius:12px;padding:16px;font-variant-numeric:tabular-nums">
+      <div style="display:flex;gap:24px;flex-wrap:wrap"><span>《进击的巨人》S2 · 12 集</span><span>★ 8.3 / 10</span><span>进度 29%</span><span>Bangumi #999002</span><span>2026-09-14 19:41</span></div>
+      <div class="rmeta" style="margin-top:8px">中英混排不加隐形字距；全角标点不顶行；数字列对齐示例：0001 / 0108 / 1168</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="secno">07 — 落地与回滚</div>
+    <h2>五步实施 · 一键回退</h2>
+    <div class="rule"></div>
+    <ul>
+      <li>① 注入令牌（零视觉变化提交）→ ② 组件替换（每步跑三档宽度自检）→ ③ 全量映射（脚本双轮扫描至刻度外计数=0）→ ④ 清理内联排版样式 → ⑤ 跑验收用例并单提交。</li>
+      <li>预计影响仅 <code>index.html</code>，CSS 增量 ≤ 8KB；不触碰任何数据与功能。</li>
+      <li>回退：<code>git revert &lt;排版提交&gt;</code> 或恢复备份文件，强刷即回旧版；已在本地演练。</li>
+      <li>完整规则与映射表见同目录《排版-重设计方案与实施回滚.md》（旧值→新值逐项可查）。</li>
+    </ul>
+  </section>
+
+  <div class="colophon">
+    <span>追迹 AniTracker · 排版评估与重设计规格 · 瑞士网格纪律（Müller-Brockmann）× 应用暖色体系</span>
+    <span>2026-09-14 · AutoClaw</span>
+  </div>
+</div>
+</body>
+</html>
