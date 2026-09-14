@@ -192,6 +192,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .verline .warn{color:var(--danger);font-weight:600}
 .rangeline label{display:inline-flex;align-items:center;gap:4px;min-height:32px}
 .rangeline input[type=radio]{width:auto;border:none;padding:0;margin:0}
+.srsec{font-size:11px;letter-spacing:.12em;color:var(--muted);padding:14px 0 6px;border-bottom:1px solid var(--line);margin-bottom:8px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .syprog{font-size:11px;color:var(--muted);margin-top:6px;min-height:16px;white-space:pre-wrap}
 </style>
 
@@ -232,6 +233,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       <button class="ty" onclick="bgmPullProgress()" title="从 Bangumi 拉取本作进度（只补不删）">⟳ 拉取Bangumi进度</button><button class="ty" onclick="bgmPushOneShow()" title="把本作进度推送到 Bangumi（先比对差异，只推增量）">↑ 推送Bangumi</button>
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
       <button class="ty" onclick="fgOneShow()" id="btnFgCalibrate" title="用离线 Anime Filler Guide 数据校准本作原创集标注（TV原创/半原创）">⟳ 来源校准</button>
+      <button class="ty" onclick="assocUi()" id="btnAssoc" style="display:none" title="把这个本地添加的番关联到 Bangumi 条目，之后即可同步进度">⌁ 关联Bangumi</button>
     </div>
     <div class="statgrid" id="dStats"></div>
     <div class="srccov" id="dSrcCov"></div>
@@ -249,10 +251,12 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   <div id="vAdd" style="display:none">
     <button class="back" onclick="backList()">← 返回</button>
     <div class="searchrow">
-      <input id="qKw" placeholder="搜索番剧名…（Bangumi）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doBgmSearch();}"/>
+      <input id="qKw" placeholder="搜索番剧名（本地 + 在线免绑定）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doBgmSearch();}"/>
       <button onclick="doBgmSearch()">搜索</button>
     </div>
     <div id="srMsg" class="msg"></div>
+    <div id="addHint" class="srchint" style="padding:2px 0 8px"></div>
+    <div class="srcbar" style="padding:0 0 8px"><button class="srcchip tool" onclick="manualAdd()" title="完全不依赖网络与 Bangumi 的本地添加">＋ 手动添加</button></div>
     <div class="histrow" id="bgmHist"></div>
     <div id="srList"></div>
 
@@ -276,7 +280,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'原作改编',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'未判定'};
-var AT_VERSION='2.3.0', AT_BUILD='20260914';
+var AT_VERSION='2.4.0', AT_BUILD='20260914b';
 var STYPE_NAME={'manga-adapt':'原作改编','tv-original':'TV原创','semi-original':'半原创','unknown':'未分类'};
 var VALID_TYPES={'manga-adapt':1,'tv-original':1,'semi-original':1,'unknown':1};
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
@@ -633,9 +637,11 @@ function showInternalDetail(id){
 async function addInternal(id){
   var s=INTERNAL_SHOWS.find(function(x){return x.id===id;});
   if(!s)return;
-  // 检查是否已在片单
-  if(shows.find(function(x){return x.title===s.title;})){
-    toast('已在片单里');
+  // 检查是否已在片单（v2.4：归一化标题）
+  var _nt=normTxt(s.title);
+  var _hit=shows.find(function(x){return normTxt(x.title)===_nt;});
+  if(_hit){
+    toast('已在片单：《'+_hit.title+'》（未重复添加）');
     return;
   }
   // 构建集数组
@@ -763,6 +769,7 @@ function renderDetail(){
       (st.hidden?('<span>已隐藏 <b>'+st.hidden+'</b> 集（统计按可见集计算） <span style="color:var(--accent);cursor:pointer" onclick="clearHide()">恢复</span></span>'):'')+
       '<span class="lnk" onclick="showSrcTools()">来源标注 ›</span>';
   }
+  var _ba=document.getElementById('btnAssoc'); if(_ba){ _ba.style.display=(s.bgmId||bgmSid(s))?'none':''; }
   renderParts();
   renderHist(s);
   renderGrid();
@@ -938,6 +945,7 @@ function showAdd(){
   document.getElementById('vAdd').style.display='';
   window.scrollTo(0,0);
   renderSearchHist();
+  renderAddHint();
   setTimeout(function(){ document.getElementById('qKw').focus(); },80);
 }
 var BAPI='https://api.bgm.tv/v0';
@@ -998,47 +1006,166 @@ function searchVariants(kw){
   }
   return out.slice(0,4);
 }
+/* ===== v2.4：免绑定双源搜索（本地库 + Bangumi 在线） + 手动添加 + 关联 ===== */
+var _flags=(function(){ try{ var f=JSON.parse(localStorage.getItem('at_flags')||'{}'); return (f&&typeof f==='object')?f:{}; }catch(e){ return {}; } })();
+function SEARCH_NOSYNC(){ return _flags.searchNoSync!==false; }
+function setFlag(k,v){ _flags[k]=v; try{ localStorage.setItem('at_flags',JSON.stringify(_flags)); }catch(e){} }
+function normTxt(s){ return String(s==null?'':s).toLowerCase().replace(/[\s\u3000·・:：!！?？\-—_…·.。,，'’"“”()（）\[\]【】<>《》]/g,''); }
+function ownedInList(kw){
+  var q=normTxt(kw); if(!q) return [];
+  return shows.filter(function(s){
+    return normTxt(s.title).indexOf(q)>=0 || normTxt(s.nameJp||'').indexOf(q)>=0;
+  }).slice(0,6);
+}
+function localLibHits(kw){
+  var q=normTxt(kw); var out=[]; var lib=INTERNAL_SHOWS||window.ANITRACKER_LIB||[];
+  for(var i=0;i<lib.length && out.length<12;i++){
+    var it=lib[i];
+    var hay=normTxt(it.title)+'\u0001'+normTxt(it.nameJp)+'\u0001'+(it.aliases||[]).map(normTxt).join('\u0001');
+    if(hay.indexOf(q)>=0){
+      if(shows.some(function(s){ return normTxt(s.title)===normTxt(it.title); })) continue;
+      out.push(it);
+    }
+  }
+  return out;
+}
+function secHdr(t,r){ return '<div class="srsec"><span>'+t+'</span>'+(r?('<span class="srnote" style="padding:0">'+r+'</span>'):'')+'</div>'; }
+function renderAddHint(){
+  var el=document.getElementById('addHint'); if(!el) return;
+  if(el._offline){ el.innerHTML='<span style="color:var(--danger)">在线搜索暂不可用（网络问题）</span>——本地结果照常，可正常添加'; return; }
+  el.innerHTML=bgmTok()
+    ? '搜索源：本地库（离线可用）+ Bangumi 在线（已绑定，可同步进度）'
+    : '搜索源：本地库（离线可用）+ Bangumi 在线（<b style="color:var(--ink)">免绑定直接搜</b>）；绑定 token 仅用于进度同步（可选）';
+}
+function setAddOffline(off){ var el=document.getElementById('addHint'); if(el){ el._offline=!!off; renderAddHint(); } }
+function logAdd(title,note,ok){
+  try{
+    var e=syncLogNew('add','添加条目');
+    e.ok=ok?1:0; e.fail=ok?0:1;
+    e.note='来源：'+note;
+    e.items.push({title:title,ep:'',ok:!!ok,err:''});
+    syncLogCommit(e);
+  }catch(e2){}
+}
+async function addLibFromSearch(btn,id){
+  if(btn){ btn.disabled=true; btn.textContent='添加中…'; }
+  var before=shows.length;
+  await addInternal(id);
+  if(shows.length>before){
+    var va=document.getElementById('vAdd');
+    if(va&&va.style.display!=='none'){ doBgmSearch(); }
+  } else if(btn){ btn.disabled=false; btn.textContent='添加'; }
+}
 async function doBgmSearch(){
   var kw=document.getElementById('qKw').value.trim();
   var msg=document.getElementById('srMsg'), list=document.getElementById('srList');
   if(!kw){ msg.textContent='先输入番名'; return; }
-  if(!bgmTok()){
-    msg.innerHTML='未配置 Bangumi token —— <b style="color:var(--ink)">搜索番剧必须要它</b>（Bangumi 官方强制，跟同步无关）。已为你打开同步中心，按引导 1 分钟搞定';
-    try{ if(!document.querySelector('.syncwrap')) openSync('bgm'); }catch(e){}
+  if(!SEARCH_NOSYNC() && !bgmTok()){
+    msg.innerHTML='「免绑定搜索」已关闭（可在同步中心 → 高级设置 重新开启），或绑定 Bangumi 后重试';
     return;
   }
-  pushSearchHist(kw); renderSearchHist();
-  msg.textContent='搜索中…'; list.innerHTML='';
-  var vs=searchVariants(kw);
-  var seen={}, order=[];
-  try{
-    for(var i=0;i<vs.length;i++){
-      var r=null;
-      try{
-        /* type 2=动画, 6=三次元(真人剧/电视剧/电影) —— 两者都搜，真人剧也能加 */
-        r=await _bget(BAPI+'/search/subjects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:vs[i],filter:{type:[2,6]}})});
-      }catch(e){ r=null; }
-      var arr=(r&&r.data)||[];
-      for(var j=0;j<arr.length;j++){
-        var s=arr[j]; if(!s||!s.id||seen[s.id]) continue;
-        seen[s.id]=1; order.push(s);
-      }
-    }
-    var items=order.slice(0,60);
-    if(!items.length){ msg.textContent='没搜到，换个关键词或别名试试（如「海贼王」→「ONE PIECE」「进击的巨人」→「Attack on Titan」）'; return; }
-    msg.textContent='找到 '+items.length+' 条'+(vs.length>1?('（已合并 '+vs.length+' 种叫法）'):'')+' · 点「添加」自动拉取全集';
-    list.innerHTML=items.map(function(s){
-      var tlab=(s.type===6?'真人':(s.type===2?'动画':''));
-      return '<div class="sr">'+
-        '<img src="'+esc((s.images&&s.images.common)||'')+'" onerror="this.style.opacity=.25"/>'+
-        '<div class="i"><div class="t">'+esc(s.name_cn||s.name)+(tlab?' <span style="font-size:10px;color:var(--muted);font-weight:400">'+tlab+'</span>':'')+'</div>'+
-        '<div class="m">'+esc(s.name||'')+(s.date?' · '+String(s.date).slice(0,4):'')+' · '+((s.eps||s.total_episodes||'?')+' 集')+'</div></div>'+
-        '<button onclick="bgmAttach('+s.id+',this)">添加</button></div>';
-    }).join('');
-  }catch(e){
-    msg.textContent='Bangumi 连接失败（当前网络不可达）——请检查网络后重试';
+  pushSearchHist(kw); renderSearchHist(); setAddOffline(false); renderAddHint();
+  /* ① 本地结果（即时、离线可用） */
+  var owned=ownedInList(kw), lib=localLibHits(kw);
+  var localHtml='';
+  if(owned.length){
+    localHtml+=secHdr('我的片单','已在库中');
+    localHtml+=owned.map(function(s){ return '<div class="sr">'+(s.cover?'<img src="'+esc(s.cover)+'" onerror="this.style.opacity=.25"/>':'<div style="width:44px;flex:none"></div>')+'<div class="i"><div class="t">'+esc(s.title)+'</div><div class="m">共 '+s.total+' 集 · '+ST_NAME[s.status||'watching']+'</div></div><button onclick="openDetail(\''+esc(String(s.sid))+'\')">查看</button></div>'; }).join('');
   }
+  if(lib.length){
+    localHtml+=secHdr('本地库','内置快照 · 离线可用');
+    localHtml+=lib.map(function(it){ return '<div class="sr">'+(it.cover?'<img src="'+esc(it.cover)+'" onerror="this.style.opacity=.25"/>':'<div style="width:44px;flex:none"></div>')+'<div class="i"><div class="t">'+esc(it.title)+'</div><div class="m">'+esc(it.nameJp||'')+(it.year?' · '+it.year:'')+' · '+it.total+' 集</div></div><button onclick="addLibFromSearch(this,\''+esc(String(it.id))+'\')">添加</button></div>'; }).join('');
+  }
+  list.innerHTML=localHtml;
+  msg.textContent=(owned.length+lib.length)? ('本地命中 '+(owned.length+lib.length)+' 条 · 正在搜索在线…') : '正在搜索在线…';
+  /* ② 在线结果 */
+  var vs=searchVariants(kw), seen={}, order=[], errN=0;
+  for(var i=0;i<vs.length;i++){
+    var r=null;
+    try{
+      r=await _bget(BAPI+'/search/subjects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:vs[i],filter:{type:[2,6]}})});
+    }catch(e){ r=null; errN++; }
+    var arr=(r&&r.data)||[];
+    for(var j=0;j<arr.length;j++){ var s2=arr[j]; if(!s2||!s2.id||seen[s2.id]) continue; seen[s2.id]=1; order.push(s2); }
+  }
+  var items=order.slice(0,60), onlineHtml='';
+  if(items.length){
+    onlineHtml=secHdr('Bangumi 在线',(errN?'部分通道超时 · ':'')+'实时数据'+(bgmTok()?'':' · 免绑定'));
+    onlineHtml+=items.map(function(s2){
+      var tlab=(s2.type===6?'真人':(s2.type===2?'动画':''));
+      return '<div class="sr" data-t="'+esc(s2.name_cn||s2.name||'')+'">'+
+        '<img src="'+esc((s2.images&&s2.images.common)||'')+'" onerror="this.style.opacity=.25"/>'+
+        '<div class="i"><div class="t">'+esc(s2.name_cn||s2.name)+(tlab?' <span style="font-size:10px;color:var(--muted);font-weight:400">'+tlab+'</span>':'')+'</div>'+
+        '<div class="m">'+esc(s2.name||'')+(s2.date?' · '+String(s2.date).slice(0,4):'')+' · '+((s2.eps||s2.total_episodes||'?')+' 集')+'</div></div>'+
+        '<button onclick="bgmAttach('+s2.id+',this)">添加</button></div>';
+    }).join('');
+    msg.textContent='本地 '+(owned.length+lib.length)+' 条 + 在线 '+items.length+' 条'+(vs.length>1?('（已合并 '+vs.length+' 种叫法）'):'')+' · 点「添加」自动拉取全集';
+  } else if(errN>=vs.length){
+    setAddOffline(true);
+    onlineHtml='<div class="srnote">在线搜索暂不可用（网络问题）——以上为本地结果，可直接添加；恢复网络后重试可搜全网</div>';
+    msg.textContent=(owned.length+lib.length)?'仅本地结果（网络不可用）':'网络不可用且本地未命中——可用「＋ 手动添加」或稍后重试';
+  } else {
+    msg.textContent='在线没搜到'+((owned.length+lib.length)?('（本地有 '+(owned.length+lib.length)+' 条）'):'')+'，可换关键词/别名，或「＋ 手动添加」';
+    onlineHtml='<div class="srnote">在线无更多结果</div>';
+  }
+  list.innerHTML=localHtml+onlineHtml;
 }
+function manualAdd(){
+  var t=prompt('手动添加番剧（无需网络）\n① 标题：');
+  if(!t||!t.trim()) return;
+  var tt=t.trim();
+  var hit=shows.filter(function(x){ return normTxt(x.title)===normTxt(tt); })[0];
+  if(hit){ toast('已在片单里：《'+hit.title+'》（未重复添加）'); return; }
+  var n=prompt('② 总集数（可留空，之后在详情页「编辑集数」修改）：','');
+  var total=parseInt(n,10)||0;
+  var y=prompt('③ 年份（可留空）：','')||'';
+  var eps=[];
+  for(var i=1;i<=total;i++) eps.push({s:i,t:'第 '+i+' 集'});
+  addShow({ sid:'man-'+Date.now(), title:tt, nameJp:'', cover:'', year:String(y).trim().slice(0,4), total:total, eps:eps, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'手动添加', manual:1 });
+}
+/* ---- 关联 Bangumi（本地添加的番之后可同步） ---- */
+function __closeAssoc(){ var m=document.getElementById('assocMask'); if(m) m.remove(); }
+function assocUi(){
+  var s=bySid(curSid); if(!s) return;
+  var old=document.getElementById('assocMask'); if(old) old.remove();
+  var wrap=document.createElement('div'); wrap.id='assocMask'; wrap.className='mask';
+  var box=document.createElement('div'); box.className='panel';
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">关联 Bangumi 条目</h3><button onclick="__closeAssoc()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<div class="mini">为《'+esc(s.title)+'》找到 Bangumi 条目即可同步它的进度（搜索免绑定）。</div>'+
+    '<div class="searchrow"><input id="assocKw" value="'+esc(s.title)+'" style="caret-color:var(--accent)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();assocSearch();}"/><button onclick="assocSearch()">搜索</button></div>'+
+    '<div class="msg" id="assocMsg"></div><div id="assocList"></div>';
+  wrap.appendChild(box); document.body.appendChild(wrap);
+  wrap.addEventListener('click',function(e){ if(e.target===wrap) wrap.remove(); });
+  assocSearch();
+}
+async function assocSearch(){
+  var box=document.getElementById('assocMask'); if(!box) return;
+  var kw=(box.querySelector('#assocKw').value||'').trim(); if(!kw) return;
+  var msg=box.querySelector('#assocMsg'), list=box.querySelector('#assocList');
+  msg.textContent='搜索中…';
+  var vs=searchVariants(kw), seen={}, order=[], errN=0;
+  for(var i=0;i<vs.length;i++){
+    var r=null;
+    try{ r=await _bget(BAPI+'/search/subjects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:vs[i],filter:{type:[2,6]}})}); }catch(e){ errN++; }
+    ((r&&r.data)||[]).forEach(function(s2){ if(s2&&s2.id&&!seen[s2.id]){ seen[s2.id]=1; order.push(s2); } });
+  }
+  if(!order.length){ msg.textContent=errN?'网络不可用，稍后再试':'没搜到，换个关键词试试'; list.innerHTML=''; return; }
+  msg.textContent='选一个匹配的条目：';
+  list.innerHTML=order.slice(0,20).map(function(s2){
+    return '<div class="sr"><img src="'+esc((s2.images&&s2.images.common)||'')+'" onerror="this.style.opacity=.25"/><div class="i"><div class="t">'+esc(s2.name_cn||s2.name)+'</div><div class="m">'+esc(s2.name||'')+(s2.date?' · '+String(s2.date).slice(0,4):'')+' · '+((s2.eps||s2.total_episodes||'?')+' 集')+'</div></div><button onclick="assocPick('+s2.id+')">关联</button></div>';
+  }).join('');
+}
+function assocPick(bid){
+  var s=bySid(curSid); if(!s) return;
+  if(!confirm('把《'+s.title+'》关联到 Bangumi 条目 #'+bid+'？\n关联后可在同步中心拉取/推送它的进度。')) return;
+  s.bgmId=String(bid);
+  s.source=(s.source?(s.source+' + '):'')+'关联 Bangumi #'+bid;
+  s.updAt=Date.now(); save();
+  try{ logAdd(s.title,'关联 Bangumi #'+bid,true); }catch(e){}
+  __closeAssoc(); renderDetail();
+  toast('已关联 Bangumi #'+bid+'——可在同步中心「拉取全部进度」');
+}
+
 /* ==== Filler Guide 校准模块 ==== */
 /* 热门长篇中文名 → AFG slug 手工别名 */
 var FG_ALIAS = {
@@ -1324,7 +1451,9 @@ function fCnt(s){ /* 列表行来源角标：TV原创/半原创 计数 + 删减�
 /* ---------- Bangumi 账号同步（v2.3） ---------- */
 function bgmTok(){ return (localStorage.getItem('at_bgm_token')||'').trim(); }
 function bgmAuth(){ return { 'Authorization':'Bearer '+bgmTok(), 'Content-Type':'application/json' }; }
-function bgmSid(s){ var sid=String(s.sid).replace(/[^0-9]/g,''); return (String(s.sid).indexOf('int')===0)?'':sid; }
+function bgmSid(s){ var b=String(s.bgmId||'').replace(/[^0-9]/g,''); if(b) return b;
+  if(/^(int|man)/i.test(String(s.sid))) return '';
+  return String(s.sid).replace(/[^0-9]/g,''); }
 
 /* ===== 同步台账（持久化 at_sync_log，上限 80 条）===== */
 var LOGK='at_sync_log';
@@ -1691,7 +1820,7 @@ function renderLedger(box){
   var all=syncLogAll().slice(-15).reverse();
   if(!all.length){ el.innerHTML='<div class="mini" style="color:var(--muted)">还没有同步记录。绑定 Bangumi 后，每次拉取/推送/回滚都会留痕。</div>'; return; }
   function fmt(at){ try{ return new Date(at).toLocaleString('zh-CN',{hour12:false}); }catch(e){ return at||''; } }
-  function kindName(k){ var m={'bgm-push-all':'推送全部','bgm-pull-all':'拉取全部','bgm-push-one':'单番推送','bgm-pull-one':'单番拉取','bgm-ep-auto':'单集自动同步','bgm-retry':'重试','portal':'门户导入','douban':'豆瓣导入','webdav':'WebDAV','cloud':'账号云同步'}; return m[k]||k; }
+  function kindName(k){ var m={'bgm-push-all':'推送全部','bgm-pull-all':'拉取全部','bgm-push-one':'单番推送','bgm-pull-one':'单番拉取','bgm-ep-auto':'单集自动同步','bgm-retry':'重试','add':'添加条目','portal':'门户导入','douban':'豆瓣导入','webdav':'WebDAV','cloud':'账号云同步'}; return m[k]||k; }
   el.innerHTML=all.map(function(e3){
     var rTxt=e3.fail?('失败 '+e3.fail+(e3.ok?(' / 成功 '+e3.ok):'')):('成功 '+e3.ok);
     var det='';
@@ -1735,6 +1864,9 @@ async function cacheCover(url,useProxy){
   });
 }
 async function bgmAttach(sid,btn){
+  var knownT=(btn&&btn.parentNode&&btn.parentNode.getAttribute)?String(btn.parentNode.getAttribute('data-t')||''):'';
+  if(knownT){ var _d=shows.filter(function(x){ return normTxt(x.title)===normTxt(knownT); })[0]; if(_d){ toast('已在片单：《'+_d.title+'》（未重复添加）'); return; } }
+  if(shows.some(function(x){ return String(x.bgmId||'')===String(sid); })){ toast('已在片单里了'); return; }
   btn.disabled=true; btn.textContent='拉取中…';
   document.getElementById('srMsg').textContent='正在拉取剧集列表…';
   try{
@@ -1764,17 +1896,23 @@ async function bgmAttach(sid,btn){
     addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, bgmId:String(sid), type: fgType(det.name_cn||det.name||'bgm'+sid) });
   }catch(e){
     btn.disabled=false; btn.textContent='添加';
-    document.getElementById('srMsg').textContent='拉取失败：'+e.message+'——稍后重试，或先浏览内置库（☰）';
+    document.getElementById('srMsg').textContent='拉取失败：'+e.message+'——可稍后重试，或浏览本地库/手动添加（无需网络）';
   }
 }
 function addShow(item){
   item.sid=safeSid(item.sid);
   if(bySid(item.sid)){ toast('已在片单里了'); return; }
+  /* v2.4 跨源去重：同名（归一化）或同 Bangumi 条目 → 拦截并提示 */
+  var nt=normTxt(item.title);
+  var dup=shows.filter(function(x){ return normTxt(x.title)===nt || (item.bgmId&&x.bgmId&&String(x.bgmId)===String(item.bgmId)); })[0];
+  if(dup){ toast('已在片单：《'+dup.title+'》（未重复添加）'); return; }
   // 自动推断并保存类型
   if(!item.type || !VALID_TYPES[item.type]){
     item.type = fgType(item.title);
   }
   shows.push(item); save();
+  var src=(String(item.source||'').indexOf('Bangumi')>=0)?'在线搜索':((String(item.source||'').indexOf('内置库')>=0)?'本地库':((String(item.source||'').indexOf('手动')>=0)?'手动添加':(item.source||'未知')));
+  try{ logAdd(item.title, src+(item.bgmId?(' · Bangumi #'+item.bgmId):''), true); }catch(e0){}
   document.getElementById('srMsg').textContent='';
   document.getElementById('srList').innerHTML='';
   document.getElementById('qKw').value='';
@@ -2138,6 +2276,13 @@ function bindBgmCard(box, focus){
   }
   if(focus==='bgm'){ try{ setTimeout(function(){ card.scrollIntoView({block:'center',behavior:'smooth'}); },60); }catch(e){} }
 }
+function bindAdv(box){
+  var cb=box.querySelector('#optNoSync');
+  if(cb){ cb.checked=SEARCH_NOSYNC(); cb.onchange=function(){ setFlag('searchNoSync',cb.checked); toast(cb.checked?'已开启免绑定搜索':'已关闭：未绑定 Bangumi 时不能搜索'); }; }
+  var q=box.querySelector('#advUnmapped');
+  if(q){ var n=shows.filter(function(s){ return !bgmSid(s); }).length;
+    q.textContent=n?('本地添加、未关联 Bangumi：'+n+' 部（详情页可用「⌁ 关联Bangumi」补齐，之后即可同步）'):'全部番剧均已关联 Bangumi 或为 Bangumi 来源'; }
+}
 async function syncOpen(focus){
   var old=document.getElementById('syncMask'); if(old) old.remove();
   var cfg=rd(LS.cfg,null);
@@ -2174,6 +2319,10 @@ async function syncOpen(focus){
       '<div class="syrow"><button class="sybtn" id="syTest">测试连接</button><button class="sybtn pri" id="sySave">保存并同步</button></div>'+
       (last?'<div class="tiny" style="margin-top:8px">上次同步：'+esc(String(last.at||''))+'（上传 '+((last.res&&last.res.up)||0)+' / 下载 '+((last.res&&last.res.down)||0)+'）</div>':'')+
     '</details>'+
+    '<details style="margin:0 0 10px"><summary style="cursor:pointer;color:var(--ink);font-weight:700;padding:6px 0">高级设置</summary>'+
+      '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
+      '<div class="tiny" id="advUnmapped" style="margin-top:8px"></div>'+
+    '</details>'+
     '<div class="row2"><button class="b2" onclick="window.__closeSync()" style="width:100%">完成</button></div>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -2183,6 +2332,7 @@ async function syncOpen(focus){
   document.addEventListener('keydown',escClose);
   try{ if(window.CBSync) CBSync.mount(box); }catch(e){}
   bindBgmCard(box, focus);
+  bindAdv(box);
   renderLedger(box);
   fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(v){
     var el=box.querySelector('#verLine'); if(!el||!v||!v.version) return;

@@ -1,0 +1,127 @@
+[
+ {
+  "name": "无 token 可搜索（不再被拦）",
+  "pass": true,
+  "extra": "本地 2 条 + 在线 2 条（已合并 4 种叫法） · 点「添加」自动拉取全集"
+ },
+ {
+  "name": "「我的片单」分区出现",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "「Bangumi 在线」分区出现（含航海王）",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "免绑定提示可见",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "重复添加被拦截并提示",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "拦截后数量不变",
+  "pass": true,
+  "extra": "before=1"
+ },
+ {
+  "name": "在线添加成功（bgmId=999002，3 集）",
+  "pass": true,
+  "extra": "{\"count\":2,\"eps\":3}"
+ },
+ {
+  "name": "台账记录在线添加",
+  "pass": true,
+  "extra": "\"来源：在线搜索 · Bangumi #999002\""
+ },
+ {
+  "name": "本地库添加成功",
+  "pass": true,
+  "extra": "{\"count\":3,\"src\":\"内置库 · 长篇\"}"
+ },
+ {
+  "name": "台账记录本地库添加",
+  "pass": true,
+  "extra": "\"来源：本地库\""
+ },
+ {
+  "name": "添加后回列表；再搜银魂：进「我的片单」且本地库去重",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "断网：本地结果照常 + 明确提示",
+  "pass": true,
+  "extra": "在线搜索暂不可用（网络问题）——本地结果照常，可正常添加"
+ },
+ {
+  "name": "手动添加成功（离线可用，5 集）",
+  "pass": true,
+  "extra": "{\"sid\":\"man-1789378640435\",\"eps\":5,\"src\":\"手动添加\"}"
+ },
+ {
+  "name": "台账记录手动添加",
+  "pass": true,
+  "extra": "\"来源：手动添加\""
+ },
+ {
+  "name": "刷新后「离线测试番」仍在",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "离线时本地也能搜到已添加的番",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "开关关闭：回退为拦截并提示",
+  "pass": true,
+  "extra": "「免绑定搜索」已关闭（可在同步中心 → 高级设置 重新开启），或绑定 Bangumi 后重试"
+ },
+ {
+  "name": "未关联番显示「关联Bangumi」按钮",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "关联搜索返回候选",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "关联成功：bgmId=888001 且按钮隐藏",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "台账记录关联操作",
+  "pass": true,
+  "extra": "\"来源：关联 Bangumi #888001\""
+ },
+ {
+  "name": "同步中心打开且高级设置存在",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "未关联计数展示",
+  "pass": true,
+  "extra": "本地添加、未关联 Bangumi：2 部（详情页可用「⌁ 关联Bangumi」补齐，之后即可同步）"
+ },
+ {
+  "name": "开关切换持久化",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "无页面级 JS 错误",
+  "pass": true,
+  "extra": ""
+ }
+]
