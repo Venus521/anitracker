@@ -279,10 +279,9 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'); }
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
-var TYPE_NAME={canon:'原作改编',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'未判定'};
-var AT_VERSION='2.4.1', AT_BUILD='20260914c';
-var STYPE_NAME={'manga-adapt':'原作改编','tv-original':'TV原创','semi-original':'半原创','unknown':'未分类'};
-var VALID_TYPES={'manga-adapt':1,'tv-original':1,'semi-original':1,'unknown':1};
+var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
+var AT_VERSION='2.4.2', AT_BUILD='20260914d';
+/* v2.4.2：系列级统一分类（整部标一个类型）已按需求移除，类型只在集级存在 */
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
 var HIDE_SRC=(function(){ try{ var h=JSON.parse(localStorage.getItem('at_hide_src')||'null'); if(h&&typeof h==='object') return {filler:!!h.filler,semi:!!h.semi}; }catch(e){} return {filler:false,semi:false}; })();
 function anyHide(){ return !!(HIDE_SRC.filler||HIDE_SRC.semi); }
@@ -290,11 +289,7 @@ function saveHide(){ try{ localStorage.setItem('at_hide_src',JSON.stringify(HIDE
 function isHiddenSrc(k){ return (k==='filler'&&HIDE_SRC.filler)||(k==='semi'&&HIDE_SRC.semi); }
 /* 删减信息预定义 */
 var CENSOR_INFO={'one piece':{'censored':true,'note':'部分内容被删减/修改','platforms':['爱奇艺','腾讯','B站']},'naruto':{'censored':true,'note':'部分内容被删减','platforms':['爱奇艺','腾讯']},'bleach':{'censored':true,'note':'部分内容被删减','platforms':['腾讯']}};
-function sTypeOf(s){ var t=s.type; return VALID_TYPES[t] ? t : (fgType(s.title)||'unknown'); }
-var showTypeF='all';
-function setShowType(t){ showTypeF=t; renderFilter(); renderList(); }
-function jumpShowType(t){ showTypeF=t; backList(); }
-function stypePill(s){ var t=sTypeOf(s); var w=STYPE_NAME[t]; return w?'<span class="type-tag '+t+'" onclick="event.stopPropagation();setShowType(\''+t+'\')">'+w+'</span>':''; }
+/* v2.4.2：sTypeOf / showTypeF / setShowType / jumpShowType / stypePill 已随系列级分类移除 */
 var ST_EP={'null':'未看',watched:'已看',rewatch:'🔁回看'};
 var NEXT_EP={null:'watched',watched:'rewatch',rewatch:null};
 var FIL=['all','watching','want','done','drop'];
@@ -321,6 +316,12 @@ var shows=rd(LS.shows,[]);
     });
   });
   if(changed){ wr(LS.shows,shows); try{ console.log('[v2.3] 来源迁移：清除旧默认 canon 标记 '+changed+' 处'); }catch(e){} }
+})();
+/* v2.4.2 迁移：移除片单条目的系列级统一分类字段（整部一个标签的方式已废弃；分类只保留在集级） */
+(function migrateType242(){
+  var changed=0;
+  shows.forEach(function(s){ if(s.type){ delete s.type; changed++; } });
+  if(changed){ wr(LS.shows,shows); try{ console.log('[v2.4.2] 已移除系列级分类字段 '+changed+' 处'); }catch(e){} }
 })();
 
 
@@ -356,8 +357,8 @@ function cntWatched(s){ var n=0; for(var k in s.statuses){ if(s.statuses[k]==='w
 function cntRewatch(s){ var n=0; for(var k in s.statuses){ if(s.statuses[k]==='rewatch') n++; } return n; }
 function pct(s){ return s.total? Math.min(100,Math.round((cntWatched(s)/s.total)*100)) : 0; }
 
-/* ===== v2.3 来源判定器（唯一口径）=====
-   优先级：人工标注 > 标题【动画原创】 > 显式数据 > 校准区间 > 系列推断 > 未判定 */
+/* ===== v2.3 来源判定器（唯一口径；v2.4.2 起无系列级摊派）=====
+   优先级：人工标注 > 标题【动画原创】 > 显式数据 > 校准区间 > 待核 */
 function srcInfoOf(s,e){
   if(!e) return {src:'unknown',by:'none',note:''};
   if(e.src==='canon'||e.src==='filler'||e.src==='semi') return {src:e.src,by:'manual',note:e.srcNote||''};
@@ -369,14 +370,13 @@ function srcInfoOf(s,e){
     if(inRangeList(s.mixed,e.s)) return {src:'semi',by:'calib',note:'AFG 校准区间'};
     return {src:'canon',by:'calib',note:'AFG 校准（区间外）'};
   }
-  if(s&&sTypeOf(s)==='tv-original') return {src:'filler',by:'series',note:'整部为原创动画'};
   return {src:'unknown',by:'none',note:''};
 }
 function epTypeOf(s,e){ return srcInfoOf(s,e).src; }
-function srcDisplayName(k){ return TYPE_NAME[k]||'未判定'; }
+function srcDisplayName(k){ return TYPE_NAME[k]||'待核'; }
 function srcBasisText(s,e){
   var inf=srcInfoOf(s,e);
-  var by={manual:'人工标注',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',series:'系列推断',none:'暂无依据'}[inf.by]||inf.by;
+  var by={manual:'人工标注',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',none:'暂无依据'}[inf.by]||inf.by;
   return srcDisplayName(inf.src)+(inf.note?('（'+inf.note+'）'):'')+' · 判定依据：'+by+' · 点击修改';
 }
 function visEps(s){ var list=(s.eps||[]); if(!anyHide()) return list; return list.filter(function(e){ return !isHiddenSrc(srcInfoOf(s,e).src); }); }
@@ -411,11 +411,11 @@ function statOf(s){
 function srcCovLine(cov){
   if(!cov||!cov.total) return '无剧集数据';
   var parts=[];
-  if(cov.canon) parts.push('原作 '+cov.canon);
+  if(cov.canon) parts.push('漫改 '+cov.canon);
   if(cov.filler) parts.push('TV原创 '+cov.filler);
   if(cov.semi) parts.push('半原创 '+cov.semi);
   if(cov.movie) parts.push('剧场版 '+cov.movie);
-  parts.push('未判定 '+cov.unknown);
+  parts.push('待核 '+cov.unknown);
   return parts.join(' · ');
 }
 
@@ -459,11 +459,11 @@ function showSrcReport(){
   var html='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">来源标注覆盖报告</h3>'+
     '<button onclick="__closeSrcRep()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">全库 '+agg.shows+' 部番 · 含剧集数据 '+agg.withEps+' 部'+(rep?(' · 上次批量补齐：'+esc(String(rep.at||'').slice(0,16).replace('T',' '))+'（匹配 '+rep.matched+'/'+rep.total+' 部）'):' · 还没跑过批量补齐')+'</div>'+
-    '<div class="statgrid" style="margin-top:12px"><div class="stat"><b>'+agg.canon+'</b><span>原作改编</span></div>'+
+    '<div class="statgrid" style="margin-top:12px"><div class="stat"><b>'+agg.canon+'</b><span>漫改</span></div>'+
     '<div class="stat"><b>'+agg.filler+'</b><span>TV原创</span></div>'+
     '<div class="stat"><b>'+agg.semi+'</b><span>半原创</span></div>'+
-    '<div class="stat"><b>'+agg.unknown+'</b><span>未判定</span></div></div>'+
-    '<div class="mini">占比：原作 '+pctX(agg.canon)+' · TV原创 '+pctX(agg.filler)+' · 半原创 '+pctX(agg.semi)+' · 未判定 '+pctX(agg.unknown)+'（未判定不会计入原作）</div>'+
+    '<div class="stat"><b>'+agg.unknown+'</b><span>待核</span></div></div>'+
+    '<div class="mini">占比：漫改 '+pctX(agg.canon)+' · TV原创 '+pctX(agg.filler)+' · 半原创 '+pctX(agg.semi)+' · 待核 '+pctX(agg.unknown)+'（待核不会计入漫改）</div>'+
     (rep&&rep.miss&&rep.miss.length?('<div class="tiny" style="margin-top:10px">未匹配 AFG 数据、需手动标注的番（'+rep.miss.length+' 部）：'+esc(rep.miss.slice(0,12).join('、'))+'…</div>'):'')+
     '<div class="row2"><button class="b1" onclick="batchCalibrateAll()">再跑一次批量补齐</button><button class="b2" onclick="__closeSrcRep()">关闭</button></div>';
   box.innerHTML=html;
@@ -477,13 +477,6 @@ function renderFilter(){
   FIL.slice(1).forEach(function(f){ cnt[f]=shows.filter(function(s){ return (s.status||'watching')===f; }).length; });
   document.getElementById('filters').innerHTML=FIL.map(function(f){
     return '<button class="fbtn'+(curFilter===f?' on':'')+'" onclick="setFilter(\''+f+'\')">'+(f==='all'?'全部':ST_NAME[f])+' <span style="opacity:.5">'+(cnt[f]||0)+'</span></button>';
-  }).join('');
-  var TABS=['all','manga-adapt','tv-original','semi-original','unknown'];
-  var tc={all:shows.length};
-  shows.forEach(function(s){ var t=sTypeOf(s); tc[t]=(tc[t]||0)+1; });
-  var str2=document.getElementById('showTypeRow');
-  if(str2) str2.innerHTML=TABS.map(function(t){
-    return '<button class="ty'+(showTypeF===t?' on':'')+'" onclick="setShowType(\''+t+'\')">'+(t==='all'?'全部类型':STYPE_NAME[t])+' <span style="opacity:.5">'+(tc[t]||0)+'</span></button>';
   }).join('');
   renderSrcBar();
 }
@@ -687,7 +680,7 @@ function playInPortal(){
 function renderList(){
   var _sb=document.getElementById('srcBar'); if(_sb) _sb.style.display='';
   renderFilter();
-  var list=shows.filter(function(s){ return (curFilter==='all'||(s.status||'watching')===curFilter)&&(showTypeF==='all'||sTypeOf(s)===showTypeF); })
+  var list=shows.filter(function(s){ return (curFilter==='all'||(s.status||'watching')===curFilter); })
     .sort(function(a,b){ return (b.updAt||0)-(a.updAt||0); });
   var el=document.getElementById('list');
   /* 最近活动卡（全部片单的标记历史汇总，取最新5条） */
@@ -710,14 +703,13 @@ function renderList(){
   el.innerHTML=actHtml+list.map(function(s){
     var st=statOf(s);
     var w=st.watched, p=st.pct;
-    if (!s.type) s.type = fgType(s.title);
     var covTxt=st.hasEps?srcCovLine(st.cov):'剧集数据未收录';
     var hidTxt=(st.hidden>0)?' · <span style="color:var(--accent)">隐 '+st.hidden+'</span>':'';
     return '<div class="show">'+
       '<img src="'+esc(s.cover||'')+'" onerror="this.style.opacity=.25" onclick="openDetail(\''+esc(String(s.sid))+'\')"/>'+
       '<div class="info" onclick="openDetail(\''+esc(String(s.sid))+'\')">'+
         '<div class="t">'+esc(s.title)+'</div>'+fCnt(s)+(s.parts&&s.parts.length>1?'<span class="type-tag unknown" style="background:var(--accent-soft);color:var(--accent);border-color:var(--accent)">共 '+s.parts.length+' 部分</span>':'')+
-        '<div class="s">'+stypePill(s)+' · '+ST_NAME[s.status||'watching']+' · '+s.total+' 集'+(s.year?' · '+s.year:'')+'</div>'+
+        '<div class="s">'+ST_NAME[s.status||'watching']+' · '+s.total+' 集'+(s.year?' · '+s.year:'')+'</div>'+
         '<div class="tiny" style="margin-top:1px;font-size:10px" title="来源标注覆盖">'+covTxt+'</div>'+
         '<div class="prog"><i style="width:'+p+'%"></i></div>'+
         '<div class="num"><b>'+w+'</b> <span style="font-size:12px;color:var(--muted)">已看 / '+st.total+'</span>'+hidTxt+'</div>'+
@@ -738,7 +730,6 @@ function quickNext(sid){
 /* ---------- 详情 ---------- */
 function openDetail(sid){
   curSid=sid; var s=bySid(sid); if(!s) return;
-  if(!s.type) s.type=fgType(s.title); /* 确保类型已推断 */
   document.getElementById('vList').style.display='none';
   document.getElementById('vAdd').style.display='none';
   document.getElementById('vDetail').style.display='';
@@ -752,8 +743,7 @@ function renderDetail(){
   document.getElementById('dJp').textContent=s.nameJp||'';
   var diff=(s.bgmTotal&&s.bgmTotal!==s.total)?' · Bangumi 记 '+s.bgmTotal+' 集':'';
   var src=s.source?' · 数据源：'+esc(s.source):'';
-  var stp=sTypeOf(s);
-  document.getElementById('dMeta').innerHTML=esc(s.year||'')+' · 共 '+s.total+' 集'+diff+src+' <span class="type-tag '+stp+'" onclick="jumpShowType(\''+stp+'\')">'+STYPE_NAME[stp]+'</span>'+' · <span onclick="editRate()" style="cursor:pointer;color:var(--accent);font-weight:600" title="点按修改评分（0=清除；推送 Bangumi 时会带上）">'+(s.rating?('★'+s.rating):'☆ 评分')+'</span>';
+  document.getElementById('dMeta').innerHTML=esc(s.year||'')+' · 共 '+s.total+' 集'+diff+src+' · <span onclick="editRate()" style="cursor:pointer;color:var(--accent);font-weight:600" title="点按修改评分（0=清除；推送 Bangumi 时会带上）">'+(s.rating?('★'+s.rating):'☆ 评分')+'</span>';
   document.getElementById('dStatus').innerHTML=FIL.slice(1).map(function(f){
     return '<button class="st'+((s.status||'watching')===f?' on':'')+'" onclick="setStatus(\''+f+'\')">'+ST_NAME[f]+'</button>';
   }).join('');
@@ -1268,13 +1258,6 @@ function fgApplyTo(s, fg){
 }
 async function fgOneShow(){
   var s = bySid(curSid); if (!s) return;
-  if (fgType(s.title) === 'tv-original') {
-    toast('《' + s.title + '》是TV原创番，不适用 Filler 校准');
-    return;
-  }
-  if ((s.type || 'unknown') === 'semi-original') {
-    if (!confirm('《' + s.title + '》是半原创番，灌水校准可能不准确，继续？')) return;
-  }
   toast('查询中…');
   var r = await fgFetchOne(s);
   if (!r.ok) { toast('匹配失败：' + r.err); return; }
@@ -1303,7 +1286,15 @@ function fgClearCache(){
 }
 
 /* ===== v2.3 来源标注编辑器（集级） ===== */
-function srcByText(by){ return ({manual:'人工标注',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',series:'系列推断',none:'暂无依据'})[by]||'—'; }
+function srcByText(by){ return ({manual:'人工标注',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',none:'暂无依据'})[by]||'—'; }
+function webCheck(kind){ /* v2.4.2 联网查证：公开分集资料跳转（不依赖 Bangumi） */
+  var s=bySid(curSid); if(!s) return;
+  var q=encodeURIComponent(String(s.title||s.nameJp||'').trim());
+  var u={wiki:'https://zh.wikipedia.org/w/index.php?search='+q+encodeURIComponent(' 各集列表'),
+         moegirl:'https://zh.moegirl.org.cn/index.php?search='+q,
+         afg:'https://www.animefillerlist.com/search/node/'+q}[kind];
+  if(u) window.open(u,'_blank');
+}
 function __closeSrcEdit(){ var m=document.getElementById('srcEditMask'); if(m) m.remove(); }
 function editSrc(epNum){
   var s=bySid(curSid); if(!s) return;
@@ -1313,7 +1304,7 @@ function editSrc(epNum){
   var old=document.getElementById('srcEditMask'); if(old) old.remove();
   var wrap=document.createElement('div'); wrap.id='srcEditMask'; wrap.className='mask';
   var box=document.createElement('div'); box.className='panel';
-  var opts=[['canon','原作改编'],['filler','TV原创'],['semi','半原创'],['unknown','未判定']];
+  var opts=[['canon','漫改'],['filler','TV原创'],['semi','半原创'],['unknown','待核']];
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 '+e.s+' 集 · 来源标注</h3>'+
     '<button onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">当前：<b style="color:var(--ink)">'+esc(srcDisplayName(inf.src))+'</b> · 依据：'+esc(srcByText(inf.by))+(inf.note?(' · '+esc(inf.note)):'')+(e.src?' · <span style="color:var(--accent)">人工标注</span>':'')+'</div>'+
@@ -1366,15 +1357,18 @@ function showSrcTools(){
     '<button onclick="__closeSrcTools()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">《'+esc(s.title)+'》当前覆盖：<b style="color:var(--ink)">'+esc(srcCovLine(st.cov))+'</b></div>'+
     '<div class="divi"></div>'+
-    '<div class="mini"><b style="color:var(--ink)">① 数据源校准</b>：用离线 Anime Filler Guide 数据标出 TV原创/半原创 区间（区间外记为原作改编）。</div>'+
+    '<div class="mini"><b style="color:var(--ink)">① 数据源校准</b>：用离线 Anime Filler Guide 数据标出 TV原创/半原创 区间（区间外记为漫改）。</div>'+
     '<div class="syrow"><button class="sybtn acc" id="stFg">⟳ AFG 校准本作</button></div>'+
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">② 批量套用标签</b>（适合整部忠实原作的番）：</div>'+
-    '<div class="rangeline">范围：<label><input type="radio" name="stSc" value="unknown" checked/> 仅未判定集</label><label><input type="radio" name="stSc" value="all"/> 整部</label>'+
+    '<div class="rangeline">范围：<label><input type="radio" name="stSc" value="unknown" checked/> 仅待核集</label><label><input type="radio" name="stSc" value="all"/> 整部</label>'+
     '<label><input type="radio" name="stSc" value="range"/> 第 <input id="stA" type="number" min="1" value="1"/> 至 <input id="stB" type="number" min="1" value="'+epsN+'"/> 集</label></div>'+
     '<div class="srcopts" id="stOps">'+['canon','filler','semi'].map(function(k){ return '<button class="srcopt" onclick="__pickSt(this,\''+k+'\')">'+TYPE_NAME[k]+'</button>'; }).join('')+'</div>'+
     '<label>备注（可选）</label><input id="stNote" placeholder="如：整部基本忠于原作"/>'+
     '<div class="msg" id="stMsg"></div>'+
+    '<div class="divi"></div>'+
+    '<div class="mini"><b style="color:var(--ink)">③ 联网查证</b>（公开分集资料，逐集核对后可手动标注）：</div>'+
+    '<div class="syrow"><button class="sybtn" onclick="webCheck(\'wiki\')">维基百科</button><button class="sybtn" onclick="webCheck(\'moegirl\')">萌娘百科</button><button class="sybtn" onclick="webCheck(\'afg\')">AFG 英文站</button></div>'+
     '<div class="row2"><button class="b2" onclick="__closeSrcTools()">取消</button><button class="b1" id="stApply">应用</button></div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
   wrap.addEventListener('click',function(ev){ if(ev.target===wrap) wrap.remove(); });
@@ -1418,30 +1412,7 @@ function getCensorship(title){
   var slug=(title||'').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g,'-');
   return CENSOR_INFO[slug]||null;
 }
-function fgType(title){
-  var t=(title||'').toLowerCase();
-  /* TV 原创：无原作，纯原创动画 */
-  var tvOrig=['进击的巨人','attackontitan','attack on titan','bocchi the rock','孤独摇滚',
-    '辉夜大小姐','kaichou wa maid sama','frieren','sousou no frieren','葬送的芙莉莲',
-    '紫罗兰永恒花园','violet evergarden','声之形','koe no katachi',
-    '你的名字','kimini wa nomewa','天气之子','tenki no ko','铃芽之旅','suzume',
-    '间谍过家家','spy x family','魔法少女小圆','madoka magica','puella magi madoka magica'];
-  for(var i=0;i<tvOrig.length;i++) if(t.indexOf(tvOrig[i])>=0) return 'tv-original';
-  /* 漫改：有原作漫画，可能有 filler 集 */
-  var manga=['one piece','海贼王','naruto','火影','bleach','死神','haikyuu','排球少年',
-    'jojo','hunter x hunter','全职猎人','mob psycho','灵能百分百',
-    'code geass','叛逆的鲁路修','death note','死亡笔记','进击的巨人',
-    'conan','名侦探柯南','detective conan','gintama','银魂',
-    'yugioh','游戏王','sailor moon','美少女战士',
-    'pokemon','精灵宝可梦','数码宝贝','digimon',
-    ' Evangelion','新世纪福音战士','evangelion',
-    '咒术回战','jujutsu kaisen','鬼灭之刃','kimetsu no yaiba',
-    '电锯人','chainsaw man','链锯人','间谍过家家',
-    '我的英雄学院','boku no hero','一拳超人','one punch man',
-    '死亡笔记','death note','进击的巨人','attack on titan'];
-  for(var i=0;i<manga.length;i++) if(t.indexOf(manga[i])>=0) return 'manga-adapt';
-  return 'unknown';
-}
+/* v2.4.2：fgType（整部类型猜测表）已随系列级分类移除 */
 
 /* ---- Bangumi 账号同步（v2.3 模块：节流/台账/重试/回滚，见下方同步中心）---- */
 
@@ -1919,7 +1890,7 @@ async function bgmAttach(sid,btn){
     var pr=await bgmPullEpisodeList(sid), det=pr.det, ded=pr.ded;
     var coverUrl=(det.images&&det.images.common)||'';
     try{ coverUrl=await cacheCover(coverUrl,true); }catch(e2){}
-    addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, bgmId:String(sid), type: fgType(det.name_cn||det.name||'bgm'+sid) });
+    addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, bgmId:String(sid) });
   }catch(e){
     btn.disabled=false; btn.textContent='添加';
     document.getElementById('srMsg').textContent='拉取失败：'+e.message+'——可稍后重试，或浏览本地库/手动添加（无需网络）';
@@ -1932,10 +1903,6 @@ function addShow(item){
   var nt=normTxt(item.title);
   var dup=shows.filter(function(x){ return normTxt(x.title)===nt || (item.bgmId&&x.bgmId&&String(x.bgmId)===String(item.bgmId)); })[0];
   if(dup){ toast('已在片单：《'+dup.title+'》（未重复添加）'); return; }
-  // 自动推断并保存类型
-  if(!item.type || !VALID_TYPES[item.type]){
-    item.type = fgType(item.title);
-  }
   shows.push(item); save();
   var src=(String(item.source||'').indexOf('Bangumi')>=0)?'在线搜索':((String(item.source||'').indexOf('内置库')>=0)?'本地库':((String(item.source||'').indexOf('手动')>=0)?'手动添加':(item.source||'未知')));
   try{ logAdd(item.title, src+(item.bgmId?(' · Bangumi #'+item.bgmId):''), true); }catch(e0){}
@@ -1974,7 +1941,7 @@ async function syncFromPortal(box){
     if(!sid && !title) return;
     if((sid&&seen['s:'+sid])||(title&&seen['t:'+dbNormTitle(title)])){ dup++; return; }
     if(sid) seen['s:'+sid]=1; if(title) seen['t:'+dbNormTitle(title)]=1;
-    shows.push({ sid:sid, title:title, cover:b.cover||'', status:'watching', type:fgType(title), source:'B站追番(门户)', addedAt:Date.now(), updAt:Date.now() });
+    shows.push({ sid:sid, title:title, cover:b.cover||'', status:'watching', source:'B站追番(门户)', addedAt:Date.now(), updAt:Date.now() });
     added++;
   });
   if(added){ save(); renderList(); }
@@ -2040,7 +2007,7 @@ async function switchPart(bgmId){
       sid:newSid, title:det.name_cn||det.name||p.name, nameJp:det.name||'',
       cover:cover, year:String(det.date||'').slice(0,4), total:epsAll.length, eps:epsAll,
       statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(),
-      source:'Bangumi #'+det.id, type:fgType(det.name_cn||det.name||''),
+      source:'Bangumi #'+det.id,
       bgmId:String(det.id), seriesRoot:s.seriesRoot||s.sid,
       parts:parts, curPart:bgmId
     });
@@ -2200,7 +2167,7 @@ async function syncFromDouban(box){
         cover:d.pic||'', year:d.year||'', total:0, eps:[], statuses:{},
         status:stt, rating:d.rating||0,
         genres:d.genres||[], isAnime:!!d.isAnime, dbId:d.subjectId,
-        type:fgType(title), ep:d.ep||0,
+        ep:d.ep||0,
         source:'豆瓣'+(d.isAnime?'·动画':'·真人'),
         addedAt:Date.now(), updAt:Date.now()
       });
@@ -2235,7 +2202,7 @@ function importDoubanFile(box,ev){
         var stt=smap[d.status]||'watching';
         var cur=shows.find(function(s){ return dbNormTitle(s.title)===dbNormTitle(title); });
         if(cur){ if(cur.status!==stt){ cur.status=stt; cur.updAt=Date.now(); upd++; } else dup++; return; }
-        shows.push({ sid:'db'+Date.now()+Math.floor(Math.random()*1e4), title:title, nameJp:'', cover:'', year:d.year, total:0, eps:[], statuses:{}, status:stt, rating:d.rating, genres:[], isAnime:false, type:fgType(title), addedAt:Date.now(), updAt:Date.now(), source:'豆瓣·导入' });
+        shows.push({ sid:'db'+Date.now()+Math.floor(Math.random()*1e4), title:title, nameJp:'', cover:'', year:d.year, total:0, eps:[], statuses:{}, status:stt, rating:d.rating, genres:[], isAnime:false, addedAt:Date.now(), updAt:Date.now(), source:'豆瓣·导入' });
         added++;
       });
       if(added||upd){ save(); renderList(); }

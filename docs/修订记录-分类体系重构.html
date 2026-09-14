@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>追迹 v2.4.2 修订说明 · 分类体系重构</title>
+<style>
+:root{--bg:#faf8f4;--card:#fff;--ink:#17150f;--muted:#8a8377;--line:#e8e3d9;--accent:#b08d4f;--soft:#f2e9d8;--danger:#a8552f;--ok:#7a9a6a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.75 -apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}
+.page{max-width:860px;margin:0 auto;padding:48px 24px 80px}
+.k{font-size:10px;letter-spacing:.18em;color:var(--muted);margin:0 0 12px}
+h1{font-family:Georgia,'Songti SC',serif;font-weight:400;font-size:30px;line-height:1.3;margin:0 0 12px}
+.lede{color:var(--muted);font-size:15px;margin:0 0 24px;max-width:62ch}
+.badge{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:var(--soft);border-radius:999px;padding:2px 12px;font-size:12px;font-weight:600}
+h2{font-size:19px;font-weight:600;margin:36px 0 12px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:15px;font-weight:600;margin:20px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px;background:var(--card)}
+th{font-size:10px;letter-spacing:.1em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 16px}
+ul,ol{margin:0 0 12px;padding-left:20px}li{margin:0 0 6px}
+.ok{color:var(--ok);font-weight:600}
+.del{color:var(--danger)}
+.lbl{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:4px;border:1px solid var(--line);font-size:11px;background:var(--card)}
+.lbl.c{color:#2d6a9f;border-color:#c3d8ee}.lbl.f{color:var(--danger);border-color:#e8c8b0}.lbl.s{color:#c07b2d;border-color:#ecd5ae}.lbl.u{color:var(--muted);border-style:dashed}
+footer{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);letter-spacing:.06em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+code{font-family:Consolas,monospace;font-size:12px;background:var(--soft);padding:1px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="k">ANITRACKER 追迹 · 修订说明 · 2026-09-14</p>
+  <h1>分类体系重构：每集独立标注</h1>
+  <p class="lede">整部统一标一个「原作改编/TV原创」的方式已删除；分类只存在于每一集上，四类：<span class="lbl c">漫改</span> <span class="lbl f">TV原创</span> <span class="lbl s">半原创</span> <span class="lbl u">待核</span>，并新增联网查证入口。<span class="badge">v2.4.2 · build 20260914d</span></p>
+
+  <h2>删了什么</h2>
+  <table>
+    <tr><th>删除项</th><th>说明</th></tr>
+    <tr><td class="del">详情页整部类型徽章</td><td>你截图圈的「原作改编」胶囊，已从详情页头部移除</td></tr>
+    <tr><td class="del">列表行系列标签 + 类型筛选行</td><td>列表不再显示/筛选整部类型</td></tr>
+    <tr><td class="del">fgType 猜测表</td><td>按标题猜整部类型的硬编码表（曾把进击的巨人、芙莉莲等漫改番错猜成 TV 原创）</td></tr>
+    <tr><td class="del">「系列摊派」判定分支</td><td>整部被猜成 TV 原创 → 每一集全标 TV原创 的根子，已删</td></tr>
+    <tr><td class="del">添加/导入时的整部类型写入</td><td>在线添加、B站导入、豆瓣同步/导入不再写整部类型</td></tr>
+    <tr><td class="del">旧数据的系列级字段</td><td>首次加载自动清除（内置库「长篇/国漫」等栏目分类与此无关，保留）</td></tr>
+  </table>
+
+  <h2>现在怎么标（每集独立）</h2>
+  <div class="card">
+    <b>判定口径</b>（每集独立，互不污染）：人工标注 <b>›</b> 集标题含【动画原创】 <b>›</b> 显式集数据 <b>›</b> AFG 校准区间 <b>›</b> <span class="lbl u">待核</span>（查不到证据绝不硬塞前三类）。<br/>
+    点任意集的类型标签即可看依据并修改；详情页「来源标注 ›」工具新增 <b>③ 联网查证</b>：维基百科（自动带各集列表关键词）/ 萌娘百科 / AFG 英文站一键跳转，核对后标注。
+  </div>
+
+  <h2>抽查核验（91 集，一致率 100%）</h2>
+  <table>
+    <tr><th>作品</th><th>集数</th><th>抽样</th><th>结果</th></tr>
+    <tr><td>海贼王</td><td>1168</td><td>15</td><td class="ok">15/15（无标记集全部待核，不乱标）</td></tr>
+    <tr><td>火影忍者疾风传</td><td>500</td><td>15</td><td class="ok">15/15（TV原创/半原创/待核共存）</td></tr>
+    <tr><td>龙珠Z</td><td>291</td><td>15</td><td class="ok">15/15</td></tr>
+    <tr><td>火影忍者</td><td>220</td><td>15</td><td class="ok">15/15</td></tr>
+    <tr><td>死神</td><td>366</td><td>15</td><td class="ok">15/15（全部待核）</td></tr>
+    <tr><td>博人传</td><td>293</td><td>15</td><td class="ok">15/15（全部待核）</td></tr>
+    <tr><td>你的名字（剧场版）</td><td>1</td><td>1</td><td class="ok">1/1</td></tr>
+  </table>
+  <p style="color:var(--muted);font-size:13px">分类判定链对 Bangumi/bgm 的引用清查为 0；在线搜索与进度同步是分类之外的既有功能，保持不变。</p>
+
+  <h2>回滚</h2>
+  <div class="card">改动前备份：<code>backup_20260914_pre-v242/</code>，覆盖回去即回 v2.4.1；或 <code>git revert</code> 本次提交。旧数据兼容：v2.4.2 首次加载自动清除系列级字段。</div>
+
+  <footer><span>追迹 AniTracker · v2.4.2 修订说明</span><span>2026-09-14</span></footer>
+</div>
+</body>
+</html>
