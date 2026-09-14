@@ -1,31 +1,40 @@
-@chcp 65001 >nul
 @echo off
-title AniTracker è¿½è¿¹
-rem ä¸€é”®å…¥å£ï¼šæŒ‰éœ€èµ·æœï¼ˆ15åˆ†é’Ÿç©ºé—²è‡ªé€€ï¼‰+ å¼€é¡µé¢ï¼›å¤±è´¥æ—¶çª—å£åœç•™æ˜¾ç¤ºåŽŸå› 
+title AniTracker ×·¼£
+rem ============================================
+rem Ò»¼üÈë¿Ú£º°´ÐèÆð·þ£¨15 ·ÖÖÓ¿ÕÏÐ×ÔÍË£©+ ´ò¿ªÒ³Ãæ
+rem Ê§°ÜÊ±´°¿ÚÍ£ÁôÏÔÊ¾Ô­Òò£¨°´ÈÎÒâ¼ü¹Ø±Õ£©
+rem ============================================
 netstat -ano | findstr ":8089 " | findstr /I "LISTENING" >nul 2>nul
-if %errorlevel% equ 0 goto open
-echo [1/2] æ­£åœ¨å¯åŠ¨æœ¬åœ°æœåŠ¡â€¦
+if not errorlevel 1 goto open
+echo [1/3] ÕýÔÚÆô¶¯±¾µØ·þÎñ...
 set "PYW=C:\Users\Venus\.workbuddy\binaries\python\versions\3.13.12\pythonw.exe"
-if exist "%PYW%" (
-  start "" "%PYW%" "%~dp0æœåŠ¡å™¨-ç©ºé—²è‡ªé€€.py" --port 8089 --host 0.0.0.0 --dir "%~dp0." --idle 900 --log "%~dp0æœåŠ¡å™¨æ—¥å¿—.txt"
-) else (
-  start "anitracker-server" /MIN python "%~dp0æœåŠ¡å™¨-ç©ºé—²è‡ªé€€.py" --port 8089 --host 0.0.0.0 --dir "%~dp0." --idle 900 --log "%~dp0æœåŠ¡å™¨æ—¥å¿—.txt"
-)
-set /a n=0
+if not exist "%PYW%" goto trytool
+start "" "%PYW%" "%~dp0server.py" --port 8089 --host 0.0.0.0 --dir "%~dp0." --idle 900
+goto waitready
+:trytool
+echo [ÌáÊ¾] Î´ÕÒµ½ÄÚÖÃ Python£¬¸ÄÓÃÏµÍ³ Python...
+start "anitracker-server" /MIN python "%~dp0server.py" --port 8089 --host 0.0.0.0 --dir "%~dp0." --idle 900
 :waitready
+set /a n=0
+:loop
 ping -n 2 127.0.0.1 >nul
 netstat -ano | findstr ":8089 " | findstr /I "LISTENING" >nul 2>nul
-if %errorlevel% equ 0 goto open
-set /a n+=1
-if %n% lss 10 goto waitready
+if not errorlevel 1 goto open
+set /a n=%n%+1
+if %n% lss 10 goto loop
 echo.
-echo [é”™è¯¯] æœ¬åœ°æœåŠ¡æœªèƒ½å¯åŠ¨ï¼ˆç«¯å£8089ï¼‰ã€‚
-echo å¸¸è§åŽŸå› ï¼šå¤–ç½®Dç›˜æ­£åœ¨å”¤é†’æˆ–æœªæŒ‚è½½ï¼ˆè¯·ç¡®è®¤èµ„æºç®¡ç†å™¨é‡Œèƒ½çœ‹åˆ°Dç›˜åŽé‡è¯•ï¼‰ï¼Œ
-echo          æˆ– Python ä¸¢å¤±ã€ç«¯å£è¢«å ã€‚è¯¦æƒ…è§åŒç›®å½• æœåŠ¡å™¨æ—¥å¿—.txt
+echo [´íÎó] ±¾µØ·þÎñÎ´ÄÜÆô¶¯£¨¶Ë¿Ú 8089£©¡£
+echo ³£¼ûÔ­Òò£º
+echo   1. D ÅÌÎ´¹ÒÔØ»òÕýÔÚ»½ÐÑ£¨È·ÈÏ×ÊÔ´¹ÜÀíÆ÷ÀïÄÜ¿´µ½ D ÅÌºóÖØÊÔ£©
+echo   2. Python ÔËÐÐ»·¾³È±Ê§
+echo   3. ¶Ë¿Ú 8089 ±»ÆäËû³ÌÐòÕ¼ÓÃ
+echo ÏêÇé¼ûÍ¬Ä¿Â¼£º·þÎñÆ÷ÈÕÖ¾.txt
 echo.
 pause
 exit /b 1
 :open
-echo [2/2] æ‰“å¼€é¡µé¢â€¦
+echo [2/3] ·þÎñÒÑ¾ÍÐ÷£¬ÕýÔÚ´ò¿ªÒ³Ãæ...
 start "" "http://127.0.0.1:8089/index.html?v=%RANDOM%"
-ping -n 2 127.0.0.1 >nul
+echo [3/3] Íê³É£¬±¾´°¿Ú¼´½«×Ô¶¯¹Ø±Õ¡£
+ping -n 4 127.0.0.1 >nul
+exit /b 0
