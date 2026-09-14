@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>搜索与添加：免绑定能力说明 · AniTracker v2.4</title>
+<style>
+:root{
+  --bg:#faf8f4; --ink:#17150f; --muted:#8a8377; --line:#e8e3d9;
+  --accent:#b08d4f; --soft:#f4efe6;
+  --serif:Georgia,'Source Han Serif SC','Noto Serif SC','Songti SC',serif;
+  --sans:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.78 var(--sans)}
+.page{max-width:820px;margin:0 auto;padding:64px 28px 84px}
+.kicker{font-size:11px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;margin:0 0 20px}
+h1{font-family:var(--serif);font-weight:400;font-size:40px;line-height:1.16;margin:0 0 16px}
+.lede{font-size:16px;color:var(--muted);margin:0;max-width:62ch}
+.meta{font-size:12px;color:var(--muted);letter-spacing:.05em;margin:30px 0 0;padding-top:18px;border-top:1px solid var(--line)}
+.meta b{color:var(--ink);font-weight:600}
+section{margin:56px 0 0}
+.secnum{font-family:var(--serif);font-size:13px;color:var(--accent);letter-spacing:.14em}
+h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:8px 0 6px}
+.rule{height:1px;background:var(--line);margin:16px 0 22px}
+p{margin:0 0 14px}
+ul{margin:0 0 14px;padding-left:20px}
+li{margin:0 0 7px}
+em.hl{font-style:normal;color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0 18px}
+th{font-size:11px;letter-spacing:.08em;color:var(--muted);text-align:left;font-weight:600;padding:8px 10px;border-bottom:1px solid var(--ink)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.num{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.tag{display:inline-block;font-size:11.5px;border:1px solid var(--line);border-radius:3px;padding:2px 9px;color:var(--ink);margin:0 6px 6px 0}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:6px 0 14px}
+.fnode{flex:1 1 160px;border:1px solid var(--line);padding:12px 14px;min-width:150px;background:#fffdf9}
+.fnode b{display:block;font-size:13.5px;margin-bottom:4px}
+.fnode span{font-size:12px;color:var(--muted);line-height:1.6;display:block}
+.farrow{flex:0 0 auto;display:flex;align-items:center;color:var(--accent);font-size:15px;padding:0 2px}
+blockquote{margin:20px 0;padding:2px 0 2px 18px;border-left:2px solid var(--accent);font-family:var(--serif);font-size:16px}
+code{font-family:var(--mono);font-size:12.5px;background:var(--soft);padding:1px 5px;border-radius:3px}
+.colophon{margin-top:76px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);letter-spacing:.05em;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media (max-width:560px){h1{font-size:29px}.page{padding:42px 18px 64px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="kicker">AniTracker 追迹 · v2.4 · 2026-09-14</p>
+  <h1>不绑定、不同步，<br/>也能搜索与添加</h1>
+  <p class="lede">拆掉搜索前的绑定门槛；本地库与在线结果双源并列、来源可辨；在线、本地库、手动添加三条路都不经过同步流程；重复添加点击即判；断网也有出路。</p>
+  <div class="meta">版本 <b>v2.4.0 · 20260914b</b> ｜ 真身 <b>127.0.0.1:8089</b> ｜ 验证：模拟全路径 25/25 + 真网实测 PASS ｜ 状态 <b>已部署</b></div>
+
+  <section>
+    <div class="secnum">01 — 为什么以前不行</div>
+    <h2>一道非必要的硬门槛</h2>
+    <div class="rule"></div>
+    <p>旧版在搜索入口做了「未粘贴 Bangumi token 时直接拦截」的处理，当时依据是"官方强制鉴权"。实测（双通道验证）：官方搜索接口 <code>POST /v0/search/subjects</code> <em class="hl">支持匿名调用</em>——HTTP 200、CORS 全开、返回完整结果。v2.4 起，搜索与添加不再依赖任何同步配置。</p>
+  </section>
+
+  <section>
+    <div class="secnum">02 — 三种状态</div>
+    <h2>如实说明，不阻断操作</h2>
+    <div class="rule"></div>
+    <table>
+      <tr><th>状态</th><th>表现</th><th>界面文案</th></tr>
+      <tr><td>已绑定</td><td>在线搜索 + 进度可同步</td><td>「已绑定，可同步进度」</td></tr>
+      <tr><td>未绑定（可在线）</td><td>在线搜索照常（公开数据）</td><td>「免绑定直接搜；绑定仅用于进度同步（可选）」</td></tr>
+      <tr><td>网络不可用</td><td>自动降级为本地结果</td><td>「在线搜索暂不可用——本地结果照常，可正常添加」</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="secnum">03 — 双源搜索</div>
+    <h2>本地即时、在线实时，分区标注</h2>
+    <div class="rule"></div>
+    <div class="flow">
+      <div class="fnode"><b>我的片单</b><span>模糊命中，点按直达详情</span></div>
+      <div class="farrow">·</div>
+      <div class="fnode"><b>本地库（离线可用）</b><span>内置 302 部快照，直接可加</span></div>
+      <div class="farrow">·</div>
+      <div class="fnode"><b>Bangumi 在线（实时）</b><span>免绑定，点「添加」自动拉全集</span></div>
+    </div>
+    <p>本地分区即时渲染，在线结果异步补充；别名合并搜索（「海贼王 → ONE PIECE」）沿用既有逻辑。</p>
+  </section>
+
+  <section>
+    <div class="secnum">04 — 三条添加路径</div>
+    <h2>都不碰同步</h2>
+    <div class="rule"></div>
+    <table>
+      <tr><th style="width:150px">路径</th><th>条件</th><th>说明</th></tr>
+      <tr><td>在线添加</td><td>有网</td><td>自带 bgmId，之后可直接同步进度</td></tr>
+      <tr><td>本地库添加</td><td>无网也行</td><td>来源记「内置库」；详情页可「⌁ 关联Bangumi」补齐映射</td></tr>
+      <tr><td>手动添加（＋）</td><td>零依赖</td><td>标题 / 集数 / 年份；适合原创番、冷门番、剧场版</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="secnum">05 — 去重、离线与台账</div>
+    <h2>拦截而非静默，断网有出路</h2>
+    <div class="rule"></div>
+    <ul>
+      <li>重复添加：<b>点击即判</b>（归一化标题 / 同一条目），命中即提示「已在片单」，不产生重复数据。</li>
+      <li>断网：本地结果照常、提示明确；本地库与手动添加完全离线可用；无白屏、无静默失败。</li>
+      <li>可追踪：每次添加/关联写入「同步记录」（时间 / 来源 / 对象 / 状态）；最近搜索保留 10 条，可一键清空。</li>
+      <li>一键回退：同步中心 →「高级设置」可关闭「免绑定搜索」，恢复旧行为；文件级备份 <code>backup_20260914_pre-v24/</code> + git 提交。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="secnum">06 — 验证</div>
+    <h2>可复现的证据</h2>
+    <div class="rule"></div>
+    <table>
+      <tr><th>测试集</th><th>覆盖</th><th style="width:84px">结果</th></tr>
+      <tr><td>E2E-3（模拟全路径）</td><td>双源分区 · 点击即判 · 在线/本地库/手动添加 · 断网降级 · 刷新持久 · 开关回退 · 关联 · 台账</td><td class="num">25/25</td></tr>
+      <tr><td>E2E-4（真网实测）</td><td>无 token、真 api.bgm.tv：本地 1 条 + <b>在线 10 条</b>；版本行 ✓；零 JS 错误</td><td class="num">PASS</td></tr>
+    </table>
+    <blockquote>"本地 1 条 + 在线 10 条 · 点「添加」自动拉取全集" —— 真身实测输出</blockquote>
+    <p>截图留档：双源搜索、断网降级、高级设置、关联弹窗、真网搜索页；随包附于 <code>shots/</code>。</p>
+  </section>
+
+  <div class="colophon">
+    <span>追迹 AniTracker v2.4 · 免绑定搜索与添加</span>
+    <span>2026-09-14 · AutoClaw</span>
+  </div>
+</div>
+</body>
+</html>
