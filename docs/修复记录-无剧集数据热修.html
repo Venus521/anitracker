@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>追迹 v2.4.1 热修说明 · 「无剧集数据」</title>
+<style>
+:root{--bg:#faf8f4;--card:#fff;--ink:#17150f;--muted:#8a8377;--line:#e8e3d9;--accent:#b08d4f;--soft:#f2e9d8;--danger:#a8552f;--ok:#7a9a6a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.75 -apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}
+.page{max-width:860px;margin:0 auto;padding:48px 24px 80px}
+.k{font-size:10px;letter-spacing:.18em;color:var(--muted);margin:0 0 12px}
+h1{font-family:Georgia,'Songti SC',serif;font-weight:400;font-size:30px;line-height:1.3;margin:0 0 12px}
+.lede{color:var(--muted);font-size:15px;margin:0 0 24px;max-width:62ch}
+.badge{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:var(--soft);border-radius:999px;padding:2px 12px;font-size:12px;font-weight:600}
+h2{font-size:19px;font-weight:600;margin:36px 0 12px;padding-top:12px;border-top:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px;background:var(--card)}
+th{font-size:10px;letter-spacing:.1em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.dot{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 16px}
+ul{margin:0 0 12px;padding-left:20px}li{margin:0 0 6px}
+.ok{color:var(--ok);font-weight:600}.warn{color:var(--danger);font-weight:600}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;padding:10px 0 10px 40px;position:relative;border-bottom:1px dashed var(--line)}
+.steps li:before{content:counter(s);position:absolute;left:0;top:8px;width:26px;height:26px;border:1px solid var(--accent);color:var(--accent);border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+footer{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);letter-spacing:.06em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+code{font-family:Consolas,monospace;font-size:12px;background:var(--soft);padding:1px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="k">ANITRACKER 追迹 · 热修说明 · 2026-09-14</p>
+  <h1>「无剧集数据 / 用不了」已修复</h1>
+  <p class="lede">详情页统计全 0、来源覆盖显示「无剧集数据」、横幅却说「✓ 本作集全部标记过了」——这是空数据条目被误判的显示 bug。本页说明根因、修复内容与验证结果。<span class="badge">v2.4.1 · build 20260914c</span></p>
+
+  <h2>现象（你截图里看到的）</h2>
+  <div class="card">统计卡 <b>0 / 0 / 0 / 0%</b>；来源覆盖 <b>「无剧集数据」</b>；横幅 <span class="warn">「✓ 本作集全部标记过了」</span>；剧集区 <b>「没有匹配的集」</b>——条目完全无法标记进度。</div>
+
+  <h2>根因</h2>
+  <table>
+    <tr><th>问题</th><th>位置</th><th>后果</th></tr>
+    <tr><td><span class="dot" style="background:var(--danger)"></span>B站追番导入的条目没有集数字段</td><td>syncFromPortal</td><td>产生 total=0、eps=[] 的空条目</td></tr>
+    <tr><td><span class="dot" style="background:var(--danger)"></span>手动添加留空集数 → total=0</td><td>manualAdd</td><td>同样是空条目（输入合法，但无后续路径）</td></tr>
+    <tr><td><span class="dot" style="background:var(--danger)"></span>空数据被误判为「全部标记过了」</td><td>renderDetail 下一集按钮</td><td>误导横幅（空列表找不到未看集 ≠ 都看完了）</td></tr>
+    <tr><td><span class="dot" style="background:var(--danger)"></span>关联 Bangumi 后不自动拉剧集</td><td>assocPick</td><td>即使关联了，条目仍是空的</td></tr>
+  </table>
+  <p style="color:var(--muted);font-size:13px">在线搜索添加路径本身有保护（拉取失败不入库），不受影响。</p>
+
+  <h2>修复内容</h2>
+  <ul>
+    <li><b>关联后自动补齐</b>：关联 Bangumi 成功 → 自动拉取该剧全集并填充，立刻可以标记进度（新增共用拉取管线，搜索添加与关联补齐走同一条数据路径）。</li>
+    <li><b>空数据一键恢复</b>：空条目详情页横幅改为「⚠ 此条目还没有剧集数据——点这里自动拉取（已关联 Bangumi），或用「✎ 编辑集数」手动补」，点横幅即可重试。</li>
+    <li><b>来源覆盖行</b>：无数据时追加「关联 Bangumi 补齐剧集 ›」入口（未关联会先弹出关联搜索）。</li>
+    <li><b>空态文案纠错</b>：剧集区区分「暂无剧集数据」（给恢复指引）与「没有匹配的集」（真筛选无结果）。</li>
+    <li><b>提示补全</b>：手动添加 0 集与 B 站导入完成的提示里加入指引。</li>
+    <li><b>版本</b>：页面 2.4.1 / build 20260914c；SW 缓存 anitracker-v5（保证客户端能拿到新版）。</li>
+  </ul>
+
+  <h2>验证结果（全部实测）</h2>
+  <table>
+    <tr><th>用例</th><th>结果</th></tr>
+    <tr><td>空条目详情页引导（5 项断言，不再误报「全部标记过了」）</td><td class="ok">5/5 PASS</td></tr>
+    <tr><td>真实在线搜索「孤独摇滚」→ 添加自动拉齐（重构路径回归）</td><td class="ok">PASS · 16 集</td></tr>
+    <tr><td>B 站导入型空条目 → 关联 → 一键补齐</td><td class="ok">PASS · 16 集 · 横幅变「标记下一集」</td></tr>
+    <tr><td>正常条目「全部标记过了」原语义保留</td><td class="ok">PASS</td></tr>
+    <tr><td>v2.4 全功能回归（免绑定搜索/去重/离线/开关/台账）</td><td class="ok">25/25 PASS · 零 JS 错误</td></tr>
+    <tr><td>8089 部署验证（首页 200 + 版本行「页面 v2.4.1 · 服务端 v2.4.1 ✓ 一致」）</td><td class="ok">ALL PASS</td></tr>
+  </table>
+
+  <h2>你手里已有的空条目怎么办</h2>
+  <ol class="steps">
+    <li>双击 <b>AniTracker追迹-一键打开.bat</b>（新版已就位，打开后若页面仍旧，按一次 <b>Ctrl+F5</b> 强刷）。</li>
+    <li>打开那条空条目的详情页——会看到黄色引导横幅。</li>
+    <li>点横幅：已关联 Bangumi 的直接拉齐全集；没关联的会先弹出关联搜索，选对条目点「关联」即自动补齐。</li>
+  </ol>
+
+  <h2>回滚</h2>
+  <div class="card">改动前文件已存 <code>backup_20260914_hotfix/</code>（index.html / tracker-sw.js / tracker-version.json），覆盖回去即可；或 <code>git revert c2dadc8</code>。排版重设计包与本热修相互独立。</div>
+
+  <footer><span>追迹 AniTracker · v2.4.1 热修说明</span><span>2026-09-14 · 提交 c2dadc8</span></footer>
+</div>
+</body>
+</html>
