@@ -280,7 +280,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'原作改编',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'未判定'};
-var AT_VERSION='2.4.0', AT_BUILD='20260914b';
+var AT_VERSION='2.4.1', AT_BUILD='20260914c';
 var STYPE_NAME={'manga-adapt':'原作改编','tv-original':'TV原创','semi-original':'半原创','unknown':'未分类'};
 var VALID_TYPES={'manga-adapt':1,'tv-original':1,'semi-original':1,'unknown':1};
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
@@ -766,6 +766,7 @@ function renderDetail(){
   var covBox=document.getElementById('dSrcCov');
   if(covBox){
     covBox.innerHTML='<span>来源覆盖：<b>'+srcCovLine(st.cov)+'</b></span>'+
+      ((st.cov&&st.cov.total)?'':'<span class="lnk" onclick="recoverEmptyEps()">关联 Bangumi 补齐剧集 ›</span>')+
       (st.hidden?('<span>已隐藏 <b>'+st.hidden+'</b> 集（统计按可见集计算） <span style="color:var(--accent);cursor:pointer" onclick="clearHide()">恢复</span></span>'):'')+
       '<span class="lnk" onclick="showSrcTools()">来源标注 ›</span>';
   }
@@ -777,7 +778,11 @@ function renderDetail(){
   var nb=document.getElementById('nextBtn');
   var next=nextUnwatched(s);
   if(nb){
-    if(next===null){ nb.textContent=anyHide()?'✓ 可见集全部标记过了（隐藏了原创集）':'✓ 本作集全部标记过了'; nb.disabled=true; nb.style.opacity=.5; nb.onclick=null; }
+    if(next===null && !(s.eps||[]).length && !s.total){ /* v2.4.1 空剧集数据：给恢复入口，不再误报"全部标记过了" */
+      nb.textContent='⚠ 此条目还没有剧集数据——点这里自动拉取（已关联 Bangumi），或用「✎ 编辑集数」手动补';
+      nb.disabled=false; nb.style.opacity=1; nb.onclick=function(){ bgmFillEpisodes(s); };
+    }
+    else if(next===null){ nb.textContent=anyHide()?'✓ 可见集全部标记过了（隐藏了原创集）':'✓ 本作集全部标记过了'; nb.disabled=true; nb.style.opacity=.5; nb.onclick=null; }
     else {
       var _nt='';
       if(s.eps&&s.eps.length){ var _e=(s.eps||[]).filter(function(x){ return x.s===next; })[0]; if(_e&&_e.t) _nt=' · '+esc(String(_e.t).slice(0,14)); }
@@ -893,7 +898,7 @@ function renderGrid(){
       (tn?'<span class="ty ty-'+tk+'" onclick="event.stopPropagation();editSrc('+e.s+')" title="'+esc(srcBasisText(s,e))+'">'+tn+'</span>':'')+
     '</button>';
   });
-  if(!total) html='<div class="tiny" style="padding:10px 0">没有匹配的集（换筛选/关键词试试）</div>';
+  if(!total) html='<div class="tiny" style="padding:10px 0">'+((s.eps||[]).length?'没有匹配的集（换筛选/关键词试试）':'暂无剧集数据——点上方横幅一键拉取（需关联 Bangumi），或用「✎ 编辑集数」手动补齐')+'</div>';
   if(pages>1){
     var pis=[];
     if(pages<=12){ for(var i2=1;i2<=pages;i2++) pis.push(i2); }
@@ -1163,7 +1168,9 @@ function assocPick(bid){
   s.updAt=Date.now(); save();
   try{ logAdd(s.title,'关联 Bangumi #'+bid,true); }catch(e){}
   __closeAssoc(); renderDetail();
-  toast('已关联 Bangumi #'+bid+'——可在同步中心「拉取全部进度」');
+  toast('已关联 Bangumi #'+bid);
+  /* v2.4.1：无剧集数据的条目关联后自动补拉剧集，立即可标记 */
+  if(!(s.eps||[]).length){ bgmFillEpisodes(s); }
 }
 
 /* ==== Filler Guide 校准模块 ==== */
@@ -1863,6 +1870,45 @@ async function cacheCover(url,useProxy){
     im.src=URL.createObjectURL(b);
   });
 }
+async function bgmPullEpisodeList(sid){ /* v2.4.1 提取自 bgmAttach：拉取并规整剧集列表（搜索添加/关联补齐共用） */
+  var det=await _bget(BAPI+'/subjects/'+sid);
+  var eps=[], off=0;
+  while(true){
+    var r=await _bget(BAPI+'/episodes?subject_id='+sid+'&limit=100&offset='+off);
+    (r.data||[]).forEach(function(e){ eps.push(e); });
+    if((r.data||[]).length<100||off>=3000) break;
+    off+=100;
+  }
+  var list=eps.filter(function(e){ return e.type===0||e.type===1; }).map(function(e){
+    return {s:(e.sort!==undefined&&e.sort!==''&&+e.sort>0)?+e.sort:0, t:(e.name_cn||e.name||''), ref:null, dur:24, bid:e.id}; /* 来源标注交给判定器/AFG，不默认 canon */
+  }).filter(function(e){ return e.s>0; });
+  /* SP/特别篇 sort 异常大的排到正篇后顺延（避免显示"第 10001 集"） */
+  var normal=list.filter(function(e){ return e.s<=5000; });
+  var specials=list.filter(function(e){ return e.s>5000; });
+  var maxN=normal.length?Math.max.apply(null,normal.map(function(e){ return e.s; })):0;
+  specials.sort(function(a,b){ return a.s-b.s; }).forEach(function(e,i){ e.s=maxN+i+1; e.type='semi'; });
+  list=normal.concat(specials);
+  list.sort(function(a,b){ return a.s-b.s; });
+  var seen={}, ded=[];
+  list.forEach(function(e){ if(seen[e.s]){ e.s=Math.max.apply(null,Object.keys(seen).map(Number).concat([maxN]))+1; } seen[e.s]=1; ded.push(e); });
+  if(!ded.length) throw new Error('该条目没有可用剧集');
+  return {det:det, ded:ded};
+}
+function recoverEmptyEps(){ /* v2.4.1 空剧集条目的一键恢复入口 */
+  var s=bySid(curSid); if(!s) return;
+  if(s.bgmId||bgmSid(s)){ bgmFillEpisodes(s); } else { assocUi(); }
+}
+async function bgmFillEpisodes(s){ /* v2.4.1 关联/补拉剧集：填空条目后立即可标记 */
+  var sid=String(s.bgmId||bgmSid(s)||''); if(!sid){ assocUi(); return; }
+  toast('正在拉取《'+s.title+'》剧集列表…');
+  try{
+    var pr=await bgmPullEpisodeList(sid);
+    s.total=pr.ded.length; s.eps=pr.ded; s.bgmTotal=pr.ded.length;
+    if(!s.statuses) s.statuses={};
+    s.updAt=Date.now(); save(); statInvalidate(s.sid); renderDetail();
+    toast('已补齐 '+pr.ded.length+' 集——现在可以标记进度了');
+  }catch(e){ toast('拉取剧集失败：'+(e.message||e)+'——稍后点横幅重试，或用「✎ 编辑集数」手动补'); }
+}
 async function bgmAttach(sid,btn){
   var knownT=(btn&&btn.parentNode&&btn.parentNode.getAttribute)?String(btn.parentNode.getAttribute('data-t')||''):'';
   if(knownT){ var _d=shows.filter(function(x){ return normTxt(x.title)===normTxt(knownT); })[0]; if(_d){ toast('已在片单：《'+_d.title+'》（未重复添加）'); return; } }
@@ -1870,27 +1916,7 @@ async function bgmAttach(sid,btn){
   btn.disabled=true; btn.textContent='拉取中…';
   document.getElementById('srMsg').textContent='正在拉取剧集列表…';
   try{
-    var det=await _bget(BAPI+'/subjects/'+sid);
-    var eps=[], off=0;
-    while(true){
-      var r=await _bget(BAPI+'/episodes?subject_id='+sid+'&limit=100&offset='+off);
-      (r.data||[]).forEach(function(e){ eps.push(e); });
-      if((r.data||[]).length<100||off>=3000) break;
-      off+=100;
-    }
-    var list=eps.filter(function(e){ return e.type===0||e.type===1; }).map(function(e){
-      return {s:(e.sort!==undefined&&e.sort!==''&&+e.sort>0)?+e.sort:0, t:(e.name_cn||e.name||''), ref:null, dur:24, bid:e.id}; /* 来源标注交给判定器/AFG，不默认 canon */
-    }).filter(function(e){ return e.s>0; });
-    /* SP/特别篇 sort 异常大的排到正篇后顺延（避免显示"第 10001 集"） */
-    var normal=list.filter(function(e){ return e.s<=5000; });
-    var specials=list.filter(function(e){ return e.s>5000; });
-    var maxN=normal.length?Math.max.apply(null,normal.map(function(e){ return e.s; })):0;
-    specials.sort(function(a,b){ return a.s-b.s; }).forEach(function(e,i){ e.s=maxN+i+1; e.type='semi'; });
-    list=normal.concat(specials);
-    list.sort(function(a,b){ return a.s-b.s; });
-    var seen={}, ded=[];
-    list.forEach(function(e){ if(seen[e.s]){ e.s=Math.max.apply(null,Object.keys(seen).map(Number).concat([maxN]))+1; } seen[e.s]=1; ded.push(e); });
-    if(!ded.length) throw new Error('该条目没有可用剧集');
+    var pr=await bgmPullEpisodeList(sid), det=pr.det, ded=pr.ded;
     var coverUrl=(det.images&&det.images.common)||'';
     try{ coverUrl=await cacheCover(coverUrl,true); }catch(e2){}
     addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, bgmId:String(sid), type: fgType(det.name_cn||det.name||'bgm'+sid) });
@@ -1916,7 +1942,7 @@ function addShow(item){
   document.getElementById('srMsg').textContent='';
   document.getElementById('srList').innerHTML='';
   document.getElementById('qKw').value='';
-  toast('《'+item.title+'》已加入片单（'+item.total+' 集）');
+  toast('《'+item.title+'》已加入片单（'+item.total+' 集'+((!item.total)?'，打开详情页可一键拉取剧集':'')+'）');
   backList();
 }
 
@@ -1952,7 +1978,7 @@ async function syncFromPortal(box){
     added++;
   });
   if(added){ save(); renderList(); }
-  note('已从门户导入 '+added+' 部'+(dup?('，'+dup+' 部已存在跳过'):''), true);
+  note('已从门户导入 '+added+' 部'+(dup?('，'+dup+' 部已存在跳过'):'')+'——点开详情页可关联 Bangumi 一键补齐剧集', true);
 }
 /* ---------- 多季度整合与切换 ---------- */
 var PART_KIND_NAME={tv:'季度',movie:'剧场版',ova:'OVA',sp:'特别篇',other:'其他'};
