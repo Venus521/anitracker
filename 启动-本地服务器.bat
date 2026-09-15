@@ -1,4 +1,3 @@
 @echo off
-start "" python -m http.server 8089 --bind 127.0.0.1 --directory "%~dp0."
-timeout /t 1 >nul
-start "" http://localhost:8089
+rem 遗留入口：委托新版一键启动（按需起服 + 15 分钟空闲自退），保证行为一致
+call "%~dp0AniTracker追迹-一键打开.bat"
