@@ -1,0 +1,119 @@
+{
+ "t": "2026-09-15T16:01:54.722Z",
+ "results": [
+  {
+   "id": "00",
+   "name": "双入口字节一致",
+   "ok": true,
+   "detail": "823489B vs 823489B"
+  },
+  {
+   "id": "01",
+   "name": "版本一致（2.6.0）",
+   "ok": true,
+   "detail": "page=2.6.0 json=2.6.0"
+  },
+  {
+   "id": "02",
+   "name": "BGMSYNC=false 开关存在；bgmGet 仍不存在",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "10",
+   "name": "同步 UI 已删（详情按钮/绑定卡/中心文案）",
+   "ok": true,
+   "detail": "btn=true card=true"
+  },
+  {
+   "id": "11",
+   "name": "搜索结果自动分季（1 组 3 chips + 单条平铺）",
+   "ok": true,
+   "detail": "{\"groups\":1,\"chips\":3,\"addBtns\":3,\"groupText\":\"模拟番3 季/部 · 加入任意一部自动带上季度条\",\"flat\":0}"
+  },
+  {
+   "id": "12",
+   "name": "chip 加入：入片单+带 3 部季度条+缓存预取",
+   "ok": true,
+   "detail": "{\"n\":1,\"sid\":\"900001\",\"parts\":3,\"curPart\":\"900001\",\"cache\":[\"e900003\",\"e900004\"]}"
+  },
+  {
+   "id": "13",
+   "name": "季度秒切：缓存命中零网络，进入预览模式",
+   "ok": true,
+   "detail": "51ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+  },
+  {
+   "id": "14",
+   "name": "预览不可标记；加入片单后可标记且持久（8集）",
+   "ok": true,
+   "detail": "pvToast=预览模式：先点上方「＋ 加入片单」即可标记进度 committed=true marked=true"
+  },
+  {
+   "id": "15",
+   "name": "同步已删：有 token 也不发任何 /collections 请求",
+   "ok": true,
+   "detail": "mockReqs=0"
+  },
+  {
+   "id": "16",
+   "name": "未开播条目：明确提示不入库",
+   "ok": true,
+   "detail": "该条目暂无剧集数据（未开播或官方未录入）——暂时不能添加；可等更新后再试，或用「＋ 手动添加」先记录 | n=2->2"
+  },
+  {
+   "id": "17",
+   "name": "断网补拉：快速报错且提示可读",
+   "ok": true,
+   "detail": "9559ms"
+  },
+  {
+   "id": "19",
+   "name": "主题：默认深色/切换/持久化/占位图联动",
+   "ok": true,
+   "detail": "{\"th1\":{\"attr\":\"dark\",\"btn\":true,\"phDark\":true},\"th2\":{\"attr\":\"light\",\"ls\":\"light\",\"phLight\":true},\"th3\":{\"attr\":\"dark\",\"ls\":\"dark\"}}"
+  },
+  {
+   "id": "20",
+   "name": "封面自愈入口就绪（chip/按钮/防裂图属性/函数）",
+   "ok": true,
+   "detail": "{\"chip\":true,\"btn\":true,\"rp\":\"no-referrer\",\"fn\":true}"
+  },
+  {
+   "id": "21",
+   "name": "封面自愈：空封面条目补齐为本地 dataURL",
+   "ok": true,
+   "detail": "{\"e\":\"data:image/jpeg;base64\",\"r\":\"data:image/jpeg;base64\",\"f\":\"\",\"tryE\":true,\"tryF\":false}"
+  },
+  {
+   "id": "22",
+   "name": "封面自愈：失败条目登记退避台账且不误报",
+   "ok": true,
+   "detail": "{\"e\":\"data:image/jpeg;base64\",\"r\":\"data:image/jpeg;base64\",\"f\":\"\",\"tryE\":true,\"tryF\":false}"
+  },
+  {
+   "id": "23",
+   "name": "刷新后封面持久（localStorage dataURL 读回）",
+   "ok": true,
+   "detail": "{\"ok\":true}"
+  },
+  {
+   "id": "24",
+   "name": "离线补封面：快速跳过不卡死，占位保持",
+   "ok": true,
+   "detail": "{\"running\":false,\"cover\":\"\"}"
+  },
+  {
+   "id": "25",
+   "name": "无剧集+有总集数：显示拉取/关联入口而非误报",
+   "ok": true,
+   "detail": "暂无剧集数据 · 点此关联条目补齐"
+  },
+  {
+   "id": "18",
+   "name": "全程无页面级 JS 错误",
+   "ok": true,
+   "detail": "pageErrors=0"
+  }
+ ]
+}
