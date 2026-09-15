@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>追迹 v2.5.0 · 季度秒切与同步摘除</title>
+<style>
+  :root{ --bg:#fcfcfb; --ink:#14161a; --mut:#8a8d93; --acc:#a8772f; --hair:#e6e5e1; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.9 "Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;font-weight:300}
+  .wrap{max-width:860px;margin:0 auto;padding:110px 40px 140px}
+  .kicker{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--acc);font-weight:600}
+  h1{font-size:44px;font-weight:200;letter-spacing:-.01em;line-height:1.18;margin:26px 0 10px}
+  h1 b{font-weight:600}
+  .lede{font-size:16px;color:#3c3f45;max-width:620px;margin-top:18px}
+  .meta{font-size:12px;color:var(--mut);margin-top:26px;letter-spacing:.04em}
+  section{margin-top:110px}
+  h2{font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ink);display:flex;align-items:center;gap:18px}
+  h2::after{content:"";flex:1;height:1px;background:var(--hair)}
+  h3{font-size:22px;font-weight:400;margin:34px 0 6px}
+  h3 b{font-weight:600}
+  p{max-width:640px;margin-top:10px;color:#33363b}
+  .num{font-size:64px;font-weight:200;letter-spacing:-.02em;line-height:1;margin:44px 0 4px}
+  .num small{font-size:18px;font-weight:300;color:var(--mut);letter-spacing:0}
+  .cap{font-size:12.5px;color:var(--mut);letter-spacing:.06em}
+  table{width:100%;border-collapse:collapse;margin-top:26px;font-size:13.5px}
+  th{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mut);font-weight:600;text-align:left;padding:0 14px 10px 0}
+  td{padding:12px 14px 12px 0;border-top:1px solid var(--hair);vertical-align:top}
+  tr:last-child td{border-bottom:1px solid var(--hair)}
+  td.acc{color:var(--acc);font-weight:600;white-space:nowrap}
+  .accentline{width:56px;height:2px;background:var(--acc);margin:70px 0 0}
+  .quiet{color:var(--mut);font-size:13px}
+  ul{list-style:none;margin-top:12px;max-width:640px}
+  ul li{padding:9px 0;border-bottom:1px solid var(--hair);display:flex;gap:14px}
+  ul li:last-child{border-bottom:none}
+  ul li .k{color:var(--acc);font-weight:600;flex:none;font-size:12px;letter-spacing:.08em;padding-top:2px}
+  footer{margin-top:130px;padding-top:22px;border-top:1px solid var(--hair);font-size:11.5px;color:var(--mut);letter-spacing:.05em}
+  @media (max-width:640px){ .wrap{padding:70px 24px 90px} h1{font-size:32px} .num{font-size:48px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">AniTracker · v2.5.0 · 20260915c</div>
+  <h1>季度切换，<br><b>快到只剩点击。</b></h1>
+  <p class="lede"> Bangumi 同步整体摘除——先删，以后再说。季度切换重做成 B 站式：自动分季、缓存秒切、预览式加入；搜索结果里直接按系列分季。</p>
+  <div class="meta">真身 D:\项目\01_媒体娱乐\ani-tracker · 回归 12/12 · 真网走查通过 · 回滚快照已备</div>
+
+  <section>
+    <h2>秒切</h2>
+    <div class="num">17<small> ms</small></div>
+    <div class="cap">预取命中后的季度切换实测耗时（纯本地，零网络）</div>
+    <p>打开详情页即自动找齐同系列；未加入的季在后台静默预取剧集清单进缓存。此后每次切换都是纯本地渲染——不再有「正在加入…」的等待，也不会再把没想追的季硬塞进片单。</p>
+    <p>未加入的季以<b style="font-weight:600">预览模式</b>浏览：完整剧集列表照常看，顶部一条「预览模式 · 未加入片单」，想追再点「＋ 加入片单」。</p>
+  </section>
+
+  <section>
+    <h2>搜索即分季</h2>
+    <p>搜索结果按系列自动聚合成季度 chip（TV / 第X季 / 剧场版 / OVA，按季号排序）。真网实测：</p>
+    <ul>
+      <li><span class="k">老友记</span><span>10 季/部自动归入一个系列块、12 个 chip——点任意一部加入，整条季度条随身带走</span></li>
+      <li><span class="k">孤独摇滚</span><span>TV / 第2季 / 第3季 / 第4季 / 剧场版 自动成组</span></li>
+      <li><span class="k">加入即预取</span><span>从 chip 加入后，同系列其余各季在后台静默入缓存，切过去就是秒开</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>同步，摘除</h2>
+    <p>单集自动推送、状态/评分回传、拉取/推送全部、绑定 token、重试与回滚——全部停用，界面无入口。回归专项证明：<b style="font-weight:600">本地残留 token 也不会发出任何同步请求</b>。保留的全是不需要账号的读取能力：免绑定搜索、在线添加、剧集补拉、关联映射、整合季度。</p>
+    <table>
+      <tr><th>对象</th><th>处置</th></tr>
+      <tr><td>详情页拉取/推送按钮</td><td class="acc">已移除</td></tr>
+      <tr><td>同步中心 Bangumi 绑定卡</td><td class="acc">已移除</td></tr>
+      <tr><td>单集/状态/评分自动推送</td><td class="acc">已停用</td></tr>
+      <tr><td>搜索 · 剧集补拉 · 整合季度</td><td>保留（免账号）</td></tr>
+      <tr><td>at_bgm_token 本机数据</td><td>留存不动，随时可清</td></tr>
+    </table>
+    <p class="quiet" style="margin-top:16px">恢复方式：index.html 头部 <span style="font-family:Consolas,monospace">var BGMSYNC=false</span> 改回 true，按钮属性按《变更说明》还原——一轮改动就能回来。</p>
+  </section>
+
+  <section>
+    <h2>验证</h2>
+    <table>
+      <tr><th>项</th><th>结果</th></tr>
+      <tr><td>回归测试（tests/run-regression.js）</td><td class="acc">12 / 12 PASS</td></tr>
+      <tr><td>真网走查（老友记 / 孤独摇滚）</td><td class="acc">分季 · 秒切 · 预览 全通过</td></tr>
+      <tr><td>版本一致性（页面 / 服务端）</td><td class="acc">v2.5.0 ✓</td></tr>
+      <tr><td>页面 JS 错误</td><td class="acc">0</td></tr>
+      <tr><td>回滚快照</td><td>backup_20260915_pre-v250 + SHA256</td></tr>
+    </table>
+  </section>
+
+  <div class="accentline"></div>
+  <footer>
+    交接文档：DELIVERY/anitracker-v2.5.0-seasons-20260915/（变更说明 · 验证记录）· 截图 docs/shots/v250-*.png · 回归 tests/last-regression.json<br>
+    AutoClaw · 2026-09-15 · 自包含单文件，双击即开
+  </footer>
+</div>
+</body>
+</html>

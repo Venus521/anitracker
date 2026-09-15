@@ -1,15 +1,18 @@
-/* mock-bgm-api.js — AniTracker 回归测试用本地 Bangumi API 模拟器（127.0.0.1:8092）
+/* mock-bgm-api.js — AniTracker 回归测试用本地 Bangumi API 模拟器（127.0.0.1:8092）· v2.5.0
    控制端点：GET /__state · POST /__ctl {mode,target,reset} · POST /__seed {collections}
-   故障模式：ok | http429 | http500 | http404 | authfail | hang（target=all|me|search|subjects|episodes|collections）
-   条目：900001=模拟番（12 集，bid 90000001..90000012）；900002=空条目番（0 集，用于未开播路径） */
+   故障模式：ok | http429 | http500 | http404 | authfail | hang
+   条目：900001=模拟番（12集）· 900002=空条目番（0集）· 900003=模拟番 第二季（8集）· 900004=模拟番 剧场版（1集）
+   → 搜索"模拟番"会得到同系列 3 部 + 单独 1 部，用于分季分组断言 */
 const http = require('http');
 const PORT = 8092;
 const STATE = { mode: 'ok', target: 'all', collections: {} };
-const EPS = [];
-for (let i = 1; i <= 12; i++) EPS.push({ id: 90000000 + i, sort: String(i), name: '第 ' + i + ' 集', name_cn: '第 ' + i + ' 集', type: 0 });
+function mkEps(prefix, n) { const a = []; for (let i = 1; i <= n; i++) a.push({ id: prefix + i, sort: String(i), name: '第 ' + i + ' 集', name_cn: '第 ' + i + ' 集', type: 0 }); return a; }
+const EPS_BY_SID = { '900001': mkEps('90000000', 12), '900003': mkEps('90000300', 8), '900004': mkEps('90000400', 1) };
 const SUBJECTS = {
-  '900001': { id: 900001, name: 'mock anime (test)', name_cn: '模拟番（测试）', date: '2026-01-01', type: 2, eps: 12, images: { common: '' }, summary: '本地模拟条目' },
-  '900002': { id: 900002, name: 'empty subject (test)', name_cn: '空条目番（无剧集）', date: '2026-10-01', type: 2, eps: 0, images: { common: '' }, summary: '未开播/未录入剧集的条目' }
+  '900001': { id: 900001, name: 'mock anime (test)', name_cn: '模拟番（测试）', date: '2026-01-01', type: 2, eps: 12, total_episodes: 12, images: { common: '' }, summary: '本地模拟条目' },
+  '900002': { id: 900002, name: 'empty subject (test)', name_cn: '空条目番（无剧集）', date: '2026-10-01', type: 2, eps: 0, total_episodes: 0, images: { common: '' }, summary: '未开播/未录入剧集的条目' },
+  '900003': { id: 900003, name: 'mock anime S2', name_cn: '模拟番 第二季', date: '2026-07-01', type: 2, eps: 8, total_episodes: 8, images: { common: '' }, summary: '同系列第二季' },
+  '900004': { id: 900004, name: 'mock anime movie', name_cn: '模拟番 剧场版', date: '2025-12-01', type: 2, eps: 1, total_episodes: 1, images: { common: '' }, summary: '同系列剧场版' }
 };
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -38,12 +41,14 @@ const server = http.createServer(async (req, res) => {
   if (p === '/v0/me') { if (!okAuth) return send(res, 401, { title: 'Unauthorized', description: 'invalid token' }); return send(res, 200, { id: 1, username: 'tester', nickname: '测试用户', sign: 'mock' }); }
   if (p === '/v0/search/subjects' && req.method === 'POST') {
     return send(res, 200, { data: [
-      { id: 900001, name: 'mock anime (test)', name_cn: '模拟番（测试）', date: '2026-01-01', type: 2, eps: 12, images: { common: '' } },
-      { id: 900002, name: 'empty subject (test)', name_cn: '空条目番（无剧集）', date: '2026-10-01', type: 2, eps: 0, images: { common: '' } }
+      { id: 900001, name: 'mock anime (test)', name_cn: '模拟番（测试）', date: '2026-01-01', type: 2, eps: 12, total_episodes: 12, images: { common: '' } },
+      { id: 900002, name: 'empty subject (test)', name_cn: '空条目番（无剧集）', date: '2026-10-01', type: 2, eps: 0, total_episodes: 0, images: { common: '' } },
+      { id: 900003, name: 'mock anime S2', name_cn: '模拟番 第二季', date: '2026-07-01', type: 2, eps: 8, total_episodes: 8, images: { common: '' } },
+      { id: 900004, name: 'mock anime movie', name_cn: '模拟番 剧场版', date: '2025-12-01', type: 2, eps: 1, total_episodes: 1, images: { common: '' } }
     ] });
   }
   if (p.startsWith('/v0/subjects/')) { const id = p.split('/').pop(); if (SUBJECTS[id]) return send(res, 200, SUBJECTS[id]); return send(res, 404, { title: 'Not Found' }); }
-  if (p === '/v0/episodes') { const sid = u.searchParams.get('subject_id'); if (sid === '900001') return send(res, 200, { data: EPS }); return send(res, 200, { data: [] }); }
+  if (p === '/v0/episodes') { const sid = u.searchParams.get('subject_id'); return send(res, 200, { data: EPS_BY_SID[sid] || [] }); }
   if (!okAuth) return send(res, 401, { title: 'Unauthorized', description: 'invalid token' });
   let m = p.match(/^\/v0\/users\/-\/collections\/(\d+)\/episodes$/);
   if (m) {
