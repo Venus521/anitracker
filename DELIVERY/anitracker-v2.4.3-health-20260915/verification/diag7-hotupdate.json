@@ -1,0 +1,18 @@
+{
+  "file": "D:\\项目\\01_媒体娱乐\\ani-tracker\\index.html",
+  "marker": "【热更新测试-1789435198118】",
+  "shaBefore": "E6CCA129DD6F03C5A52E56880A541299C55350264A9DC5D183D1AC78703954F5",
+  "baseline": {
+    "title": "追迹 · AniTracker",
+    "swActive": false
+  },
+  "afterChange": {
+    "title": "追迹 · AniTracker 【热更新测试-1789435198118】"
+  },
+  "afterRevert": {
+    "title": "追迹 · AniTracker"
+  },
+  "shaRevertOk": true,
+  "markerVisibleAfterPlainReload": true,
+  "pass": true
+}

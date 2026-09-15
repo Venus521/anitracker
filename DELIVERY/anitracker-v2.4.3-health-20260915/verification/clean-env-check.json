@@ -1,0 +1,14 @@
+{
+  "base": "http://127.0.0.1:8097",
+  "ver": "2.4.3",
+  "build": "20260915a",
+  "faviconLink": true,
+  "cachesKeys": [
+    "anitracker-v7"
+  ],
+  "faviconStatus": 200,
+  "pullEps": 16,
+  "consoleErrors": [],
+  "pageErrors": [],
+  "badResponses": []
+}

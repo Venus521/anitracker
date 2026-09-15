@@ -1,0 +1,75 @@
+{
+  "startedAt": "2026-09-15T00:16:02.354Z",
+  "results": [
+    {
+      "label": "first-load-with-v",
+      "ver": "2.4.2",
+      "build": "20260914d",
+      "swController": true,
+      "swState": "activated",
+      "listRendered": false,
+      "bodyLen": 113,
+      "lsCount": 0,
+      "ms": 3068
+    },
+    {
+      "label": "normal-reload",
+      "ver": "2.4.2",
+      "build": "20260914d",
+      "swController": true,
+      "swState": "activated",
+      "listRendered": false,
+      "bodyLen": 113,
+      "lsCount": 0,
+      "ms": 2225
+    },
+    {
+      "label": "random-v-reload",
+      "ver": "2.4.2",
+      "build": "20260914d",
+      "swController": true,
+      "swState": "activated",
+      "listRendered": false,
+      "bodyLen": 113,
+      "lsCount": 0,
+      "ms": 2263
+    },
+    {
+      "label": "no-param",
+      "ver": "2.4.2",
+      "build": "20260914d",
+      "swController": true,
+      "swState": "activated",
+      "listRendered": false,
+      "bodyLen": 113,
+      "lsCount": 0,
+      "ms": 2239
+    },
+    {
+      "label": "bypass-cache-reload",
+      "ver": "2.4.2",
+      "build": "20260914d",
+      "swController": true,
+      "swState": "activated",
+      "listRendered": false,
+      "bodyLen": 113,
+      "lsCount": 0,
+      "ms": 2234
+    }
+  ],
+  "versionCheck": {
+    "server": "2.4.2",
+    "build": "20260914d",
+    "page": "2.4.2"
+  },
+  "incognitoLike": {
+    "label": "fresh-context (incognito-like)",
+    "ver": "2.4.2",
+    "build": "20260914d",
+    "swController": true,
+    "swState": "activated",
+    "listRendered": false,
+    "bodyLen": 113,
+    "lsCount": 0
+  }
+}

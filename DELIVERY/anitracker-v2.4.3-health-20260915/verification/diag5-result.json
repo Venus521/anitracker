@@ -1,0 +1,78 @@
+{
+  "startedAt": "2026-09-15T00:28:34.742Z",
+  "part1": {
+    "state": {
+      "ver": "2.4.3",
+      "build": "20260915a",
+      "faviconLink": true,
+      "swController": true,
+      "cachesKeys": [
+        "anitracker-v7"
+      ]
+    },
+    "faviconStatus": 200
+  },
+  "part2": {
+    "eps": 16,
+    "total": 16,
+    "toast": "已补齐 16 集——现在可以标记进度了",
+    "nb": "▶ 标记下一集：第 1 集 · 翻转孤独",
+    "elapsedMs": 2892,
+    "busyFirst": {
+      "at": 329,
+      "text": "正在拉取剧集列表…（网络慢时最长约 20 秒）"
+    },
+    "bannerBefore": "⚠ 此条目还没有剧集数据——点这里自动拉取（已关联 Bangumi），或用「✎ 编辑集数」手动补"
+  },
+  "part3": {
+    "marked": "watched",
+    "eps": 16
+  },
+  "part4": {
+    "failToast": "拉取剧集失败：网络不可达：直连与备用通道均失败——请检查网络/代理后重试——稍后点横幅重试，或用「✎ 编辑集数」手动补",
+    "failMs": 283,
+    "recovery": {
+      "ok": true,
+      "ms": 530,
+      "eps": 16
+    }
+  },
+  "part5": {
+    "normalReload": "2.4.3",
+    "bypassReload": "2.4.3",
+    "serverVer": "2.4.3"
+  },
+  "consoleErrors": [
+    {
+      "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "dt": 17145
+    },
+    {
+      "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "dt": 17147
+    },
+    {
+      "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "dt": 17148
+    }
+  ],
+  "pageErrors": [],
+  "badResponses": [],
+  "requestFailures": [
+    {
+      "url": "https://api.bgm.tv/v0/subjects/328609",
+      "err": "net::ERR_CONNECTION_REFUSED",
+      "dt": 17145
+    },
+    {
+      "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/subjects/328609",
+      "err": "net::ERR_CONNECTION_REFUSED",
+      "dt": 17147
+    },
+    {
+      "url": "https://api.codetabs.com/v1/proxy/?https://api.bgm.tv/v0/subjects/328609",
+      "err": "net::ERR_CONNECTION_REFUSED",
+      "dt": 17148
+    }
+  ]
+}

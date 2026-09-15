@@ -1,0 +1,6 @@
+{
+  "clickedAt": "http://127.0.0.1:8089/index.html",
+  "landedUrl": "http://127.0.0.1:8089/search/?q=%E5%AD%A4%E7%8B%AC%E6%91%87%E6%BB%9A%EF%BC%81",
+  "landedTitle": "Error response",
+  "landedBody": "Error response\n\nError code: 404\n\nMessage: File not found.\n\nError code explanation: 404 - Nothing matches the given URI."
+}

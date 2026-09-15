@@ -1,0 +1,192 @@
+AniTracker v2.4.3 修复补丁（对照 backup_20260914_pre-v243 / v2.4.2 build 20260914d）
+==============================================================================
+
+----- index.html -----
+--- a/index.html
++++ b/index.html
+@@ -5,6 +5,8 @@
+ <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+ <title>追迹 · AniTracker</title>
+ <link rel="manifest" href="tracker-manifest.webmanifest"/>
++<link rel="icon" type="image/png" sizes="512x512" href="tracker-icon-512.png"/>
++<link rel="apple-touch-icon" href="tracker-icon-512.png"/>
+ <meta name="theme-color" content="#faf8f4"/>
+ <meta name="mobile-web-app-capable" content="yes"/>
+ <meta name="apple-mobile-web-app-capable" content="yes"/>
+@@ -280,7 +282,7 @@
+ 
+ var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
+ var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
+-var AT_VERSION='2.4.2', AT_BUILD='20260914d';
++var AT_VERSION='2.4.3', AT_BUILD='20260915a';
+ /* v2.4.2：系列级统一分类（整部标一个类型）已按需求移除，类型只在集级存在 */
+ /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
+ var HIDE_SRC=(function(){ try{ var h=JSON.parse(localStorage.getItem('at_hide_src')||'null'); if(h&&typeof h==='object') return {filler:!!h.filler,semi:!!h.semi}; }catch(e){} return {filler:false,semi:false}; })();
+@@ -675,7 +677,10 @@
+ }
+ function playInPortal(){
+   var s=bySid(curSid); if(!s) return;
+-  location.href='/search/?q='+encodeURIComponent(s.title||'');
++  var _u=GW+'/search/?q='+encodeURIComponent(s.title||'');
++  /* v2.4.3：接上门户网关基址（此前相对路径在 8089 直开时会 404）；门户未启动时给出明确提示 */
++  fetch(GW+'/',{method:'HEAD',mode:'no-cors',cache:'no-store'}).then(function(){ location.href=_u; })
++    .catch(function(){ toast('门户未启动——请先启动 video-hub（端口 3000），再点「去门户播放」'); });
+ }
+ function renderList(){
+   var _sb=document.getElementById('srcBar'); if(_sb) _sb.style.display='';
+@@ -944,7 +949,6 @@
+   setTimeout(function(){ document.getElementById('qKw').focus(); },80);
+ }
+ var BAPI='https://api.bgm.tv/v0';
+-var _directState=null;
+ function _bget(u,opt){
+   opt=opt||{}; opt.headers=opt.headers||{};
+   if(u.indexOf('api.bgm.tv')>=0 && !opt.headers.Authorization){ var _tk=bgmTok(); if(_tk){ opt.headers=Object.assign({},opt.headers,{'Authorization':'Bearer '+_tk}); } }
+@@ -956,17 +960,19 @@
+     },function(e){ clearTimeout(t); throw e; });
+   };
+   var PROXIES=['https://proxy.cors.sh/','https://api.codetabs.com/v1/proxy/?'];
+-  if(_directState===false){
+-    var p0=Promise.reject(new Error('skip-direct'));
+-    PROXIES.forEach(function(b){ p0=p0.catch(function(){ return attempt(b,12000); }); });
+-    return p0;
+-  }
+-  return attempt('',3000).catch(function(e1){
+-    if(e1.name==='TypeError'||e1.name==='AbortError'){ _directState=false; }
+-    else { throw e1; } /* HTTP 状态错误：不切代理（代理不改变服务端语义） */
+-    var p1=Promise.reject(e1);
+-    PROXIES.forEach(function(b){ p1=p1.catch(function(){ return attempt(b,12000); }); });
+-    return p1;
++  function _viaProxies(ms){ /* v2.4.3：代理兜底链（单跳超时 12s→6s，仅作超时兜底） */
++    var p=Promise.reject(new Error('skip-direct'));
++    PROXIES.forEach(function(b){ p=p.catch(function(){ return attempt(b,ms); }); });
++    return p;
++  }
++  function _netErr(){ var e=new Error('网络不可达：直连与备用通道均失败——请检查网络/代理后重试'); e.name='TypeError'; return e; }
++  /* v2.4.3：每次请求都先直连（8 秒上限）；仅失败时走短超时代理兜底——不再有任何粘性状态
++     （修复「网络恢复后不刷新页面就一直失败」；此前一失败就整页禁用直连） */
++  return attempt('',8000).catch(function(e1){
++    if(e1.name==='TypeError'||e1.name==='AbortError'){
++      return _viaProxies(6000).catch(function(){ throw _netErr(); });
++    }
++    throw e1; /* HTTP 状态错误：不切代理（代理不改变服务端语义） */
+   });
+ }
+ /* 同名/异名分组：搜其中一个叫法，会把同组所有叫法都搜一遍再合并去重。
+@@ -1826,9 +1832,14 @@
+ }
+ async function cacheCover(url,useProxy){
+   if(!url) return '';
+-  var fetchUrl=useProxy?('https://proxy.cors.sh/'+url):url;
+-  var r=await fetch(fetchUrl);
+-  if(!r.ok) throw new Error('cover http '+r.status);
++  /* v2.4.3：先直连（lain.bgm.tv 已带 CORS 头），失败再走代理兜底；两路都失败才抛错 */
++  var _attempts=[url]; if(useProxy && url.indexOf('proxy.cors.sh')<0) _attempts.push('https://proxy.cors.sh/'+url);
++  var r=null, _lastErr=null;
++  for(var _i=0;_i<_attempts.length;_i++){
++    try{ r=await fetch(_attempts[_i]); if(r.ok) break; _lastErr=new Error('cover http '+r.status); r=null; }
++    catch(_e){ _lastErr=_e; r=null; }
++  }
++  if(!r) throw (_lastErr||new Error('cover load failed'));
+   var b=await r.blob();
+   return await new Promise(function(res,rej){
+     var im=new Image();
+@@ -1869,16 +1880,20 @@
+   var s=bySid(curSid); if(!s) return;
+   if(s.bgmId||bgmSid(s)){ bgmFillEpisodes(s); } else { assocUi(); }
+ }
+-async function bgmFillEpisodes(s){ /* v2.4.1 关联/补拉剧集：填空条目后立即可标记 */
++async function bgmFillEpisodes(s){ /* v2.4.1 关联/补拉剧集：填空条目后立即可标记（v2.4.3：拉取期间锁定横幅、持续反馈、防重复点击） */
+   var sid=String(s.bgmId||bgmSid(s)||''); if(!sid){ assocUi(); return; }
++  var _nb=document.getElementById('nextBtn');
++  if(_nb && _nb.getAttribute('data-busy')==='1') return;
++  if(_nb){ _nb.setAttribute('data-busy','1'); _nb.disabled=true; _nb.textContent='正在拉取剧集列表…（网络慢时最长约 20 秒）'; }
+   toast('正在拉取《'+s.title+'》剧集列表…');
+   try{
+     var pr=await bgmPullEpisodeList(sid);
+     s.total=pr.ded.length; s.eps=pr.ded; s.bgmTotal=pr.ded.length;
+     if(!s.statuses) s.statuses={};
+-    s.updAt=Date.now(); save(); statInvalidate(s.sid); renderDetail();
++    s.updAt=Date.now(); save(); statInvalidate(s.sid);
+     toast('已补齐 '+pr.ded.length+' 集——现在可以标记进度了');
+   }catch(e){ toast('拉取剧集失败：'+(e.message||e)+'——稍后点横幅重试，或用「✎ 编辑集数」手动补'); }
++  finally{ if(_nb) _nb.setAttribute('data-busy',''); renderDetail(); }
+ }
+ async function bgmAttach(sid,btn){
+   var knownT=(btn&&btn.parentNode&&btn.parentNode.getAttribute)?String(btn.parentNode.getAttribute('data-t')||''):'';
+@@ -2329,7 +2344,7 @@
+   renderLedger(box);
+   fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(v){
+     var el=box.querySelector('#verLine'); if(!el||!v||!v.version) return;
+-    el.innerHTML='页面 v'+AT_VERSION+' · 服务端 v'+esc(String(v.version))+(String(v.version)===AT_VERSION?' <span style="color:#7a9a6a">✓ 一致</span>':' <span class="warn">版本不一致：请强刷 Ctrl+F5</span>');
++    el.innerHTML='页面 v'+AT_VERSION+' · 服务端 v'+esc(String(v.version))+(String(v.version)===AT_VERSION?' <span style="color:#7a9a6a">✓ 一致</span>':' <span class="warn">版本不一致：刷新页面即可更新</span>');
+   }).catch(function(){});
+   if(cfg){ box.querySelector('#syUrl').value=cfg.url||''; box.querySelector('#syUser').value=cfg.user||''; box.querySelector('#syPass').value=cfg._p||''; }
+   var msg=function(t,ok){ var el=box.querySelector('#syMsg'); el.textContent=t; el.style.color=ok?'#7a9a6a':'var(--danger)'; };
+
+----- tracker-sw.js -----
+--- a/tracker-sw.js
++++ b/tracker-sw.js
+@@ -1,5 +1,5 @@
+ /* AniTracker SW v3 — 同源资源全部 network-first（更新即达，失败回退缓存）；跨域不缓存 */
+-var CACHE='anitracker-v6';
++var CACHE='anitracker-v7';
+ var PRECACHE=['./index.html','./tracker-manifest.webmanifest'];
+ self.addEventListener('install',function(e){
+   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(PRECACHE); }).then(function(){ return self.skipWaiting(); }));
+
+----- tracker-version.json -----
+--- a/tracker-version.json
++++ b/tracker-version.json
+@@ -1,7 +1,7 @@
+ {
+  "app": "anitracker",
+- "version": "2.4.2",
+- "build": "20260914d",
+- "note": "分类体系重构：移除整部统一分类，每集独立标注漫改/TV原创/半原创/待核 + 联网查证",
+- "ts": 1789396466651
++ "version": "2.4.3",
++ "build": "20260915a",
++ "note": "连接韧性修复：每次请求先直连（8 秒上限）、失败才走短超时兜底、不再整页粘死；拉取剧集期间横幅锁定反馈；「去门户播放」404 修复；favicon；服务单实例保护；封面直连优先",
++ "ts": 1789431718106
+ }
+
+----- 服务器-空闲自退.py -----
+--- a/服务器-空闲自退.py
++++ b/服务器-空闲自退.py
+@@ -58,6 +58,24 @@
+     def log_message(self, fmt, *args):
+         log('%s %s' % (self.address_string(), fmt % args))
+ 
++# 单实例保护（v2.4.3）：端口已有服务在响应则直接退出，避免多实例并存
++def _already_serving():
++    import socket as _sock
++    probe = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
++    probe.settimeout(1.2)
++    host = a.host if a.host and a.host != '0.0.0.0' else '127.0.0.1'
++    try:
++        probe.connect((host, a.port))
++        return True
++    except OSError:
++        return False
++    finally:
++        probe.close()
++
++if _already_serving():
++    log('port %d already in use (another instance or app), exit' % a.port)
++    sys.exit(0)
++
+ try:
+     srv = ThreadingHTTPServer((a.host, a.port), H)
+ except OSError as e:
+
+----- 启动-本地服务器.bat -----
+--- a/启动-本地服务器.bat
++++ b/启动-本地服务器.bat
+@@ -1,4 +1,3 @@
+ @echo off
+-start "" python -m http.server 8089 --bind 127.0.0.1 --directory "%~dp0."
+-timeout /t 1 >nul
+-start "" http://localhost:8089
++rem ������ڣ�ί���°�һ��������������� + 15 ���ӿ������ˣ�����֤��Ϊһ��
++call "%~dp0AniTracker׷��-һ����.bat"
