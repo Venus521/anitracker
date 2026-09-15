@@ -1,0 +1,918 @@
+{
+ "R": {
+  "t": "2026-09-15T08:02:59.345Z",
+  "addToast": "《孤独摇滚！》已加入片单（16 集）",
+  "mark": {
+   "statuses": {
+    "1": "watched",
+    "2": "watched",
+    "13": "watched"
+   },
+   "stats": "3已看0回看13未看19%进度"
+  },
+  "nextBtn": {
+   "before": "▶ 标记下一集：第 14 集 · 放送直前特番「ぼっち・ざ・ろ",
+   "after": "▶ 标记下一集：第 3 集 · 火速增员",
+   "statuses": 4
+  },
+  "persist": {
+   "n": 4,
+   "vals": {
+    "1": "watched",
+    "2": "watched",
+    "13": "watched",
+    "14": "watched"
+   }
+  },
+  "upcoming": {
+   "toast": "",
+   "beforeCount": 1,
+   "afterCount": 1
+  },
+  "emptyBefore": {
+   "nextBtn": "⚠ 此条目还没有剧集数据——点这里自动拉取（已关联 Bangumi），或用「✎ 编辑集数」手动补",
+   "disabled": false,
+   "meta": "2022 · 共 0 集 · 数据源：B站追番导入 · ☆ 评分",
+   "listMsg": "暂无剧集数据——点上方横幅一键拉取（需关联 Bangumi），或用「✎ 编辑集数」手动补齐",
+   "stats": "0已看0回看0未看0%进度"
+  },
+  "fillBusy": "▶ 标记下一集：第 1 集 · 翻转孤独",
+  "fillMs": 526,
+  "fillToast": "已补齐 16 集——现在可以标记进度了",
+  "emptyAfter": {
+   "eps": 16,
+   "total": 16,
+   "nextBtn": "▶ 标记下一集：第 1 集 · 翻转孤独",
+   "stats": "0已看0回看16未看0%进度"
+  },
+  "offlineSearch": {
+   "msg": "本地命中 1 条 · 正在搜索在线…",
+   "hint": "搜索源：本地库（离线可用）+ Bangumi 在线（免绑定直接搜）；绑定 token 仅用于进度同步（可选）",
+   "list": "我的片单已在库中孤独摇滚！共 16 集 · 在看查看"
+  },
+  "offlineFillMs": 41,
+  "offlineFillToast": "拉取剧集失败：网络不可达：直连与备用通道均失败——请检查网络/代理后重试——稍后点横幅重试，或用「✎ 编辑集数」手动补",
+  "netSummary": [
+   {
+    "t": "req",
+    "m": "POST",
+    "dt": 2289,
+    "url": "https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "POST",
+    "dt": 3946,
+    "url": "https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4136,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4136,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4136,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4136,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4137,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4137,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4138,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4138,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 4139,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 5277,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 5758,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 5955,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 5972,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 6153,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 6156,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 6233,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 6237,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 6246,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 7200,
+    "url": "https://api.bgm.tv/v0/subjects/328609"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 7584,
+    "url": "https://api.bgm.tv/v0/subjects/328609"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 7588,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 7962,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 7963,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 7968,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg"
+   },
+   {
+    "t": "req",
+    "m": "POST",
+    "dt": 12780,
+    "url": "https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "POST",
+    "dt": 13130,
+    "url": "https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13133,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13134,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13134,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13134,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13135,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13135,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13135,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13135,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13136,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13136,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13137,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13137,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13138,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13138,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13138,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13138,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 13139,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 13139,
+    "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 16147,
+    "url": "https://api.bgm.tv/v0/subjects/537409"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 16512,
+    "url": "https://api.bgm.tv/v0/subjects/537409"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 16514,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=537409&limit=100&offset=0"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 16889,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=537409&limit=100&offset=0"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 25098,
+    "url": "https://api.bgm.tv/v0/subjects/328609"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 25104,
+    "url": "https://api.bgm.tv/v0/subjects/328609"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 25105,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 25479,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "req",
+    "m": "POST",
+    "dt": 26138,
+    "url": "https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "fail",
+    "dt": 26144,
+    "url": "https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "req",
+    "m": "POST",
+    "dt": 26145,
+    "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/search/subjects"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 32191,
+    "url": "https://api.bgm.tv/v0/subjects/328609"
+   },
+   {
+    "t": "res",
+    "s": 200,
+    "m": "GET",
+    "dt": 32199,
+    "url": "https://api.bgm.tv/v0/subjects/328609"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 32201,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "fail",
+    "dt": 32205,
+    "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 32205,
+    "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "fail",
+    "dt": 32207,
+    "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "req",
+    "m": "GET",
+    "dt": 32208,
+    "url": "https://api.codetabs.com/v1/proxy/?https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   },
+   {
+    "t": "fail",
+    "dt": 32209,
+    "url": "https://api.codetabs.com/v1/proxy/?https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0"
+   }
+  ],
+  "pageErrors": [
+   "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+  ]
+ },
+ "net": [
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/search/subjects",
+   "m": "POST",
+   "dt": 2289
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/search/subjects",
+   "s": 200,
+   "m": "POST",
+   "dt": 3946
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg",
+   "m": "GET",
+   "dt": 4136
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg",
+   "m": "GET",
+   "dt": 4136
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg",
+   "m": "GET",
+   "dt": 4136
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg",
+   "m": "GET",
+   "dt": 4136
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg",
+   "m": "GET",
+   "dt": 4137
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg",
+   "m": "GET",
+   "dt": 4137
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg",
+   "m": "GET",
+   "dt": 4138
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg",
+   "m": "GET",
+   "dt": 4138
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg",
+   "m": "GET",
+   "dt": 4139
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 5277
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 5758
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 5955
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 5972
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 6153
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 6156
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 6233
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 6237
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 6246
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/subjects/328609",
+   "m": "GET",
+   "dt": 7200
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/subjects/328609",
+   "s": 200,
+   "m": "GET",
+   "dt": 7584
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "m": "GET",
+   "dt": 7588
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "s": 200,
+   "m": "GET",
+   "dt": 7962
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg",
+   "m": "GET",
+   "dt": 7963
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 7968
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/search/subjects",
+   "m": "POST",
+   "dt": 12780
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/search/subjects",
+   "s": 200,
+   "m": "POST",
+   "dt": 13130
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg",
+   "m": "GET",
+   "dt": 13133
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/5b/9a/537409_w8wy0.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13134
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg",
+   "m": "GET",
+   "dt": 13134
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/4d/fe/436738_Z960u.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13134
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg",
+   "m": "GET",
+   "dt": 13135
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/8e/16/459642_83jcG.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13135
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg",
+   "m": "GET",
+   "dt": 13135
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c7/54/30619_Kae7d.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13135
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg",
+   "m": "GET",
+   "dt": 13136
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/c5/78/49124_1rJ1b.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13136
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg",
+   "m": "GET",
+   "dt": 13137
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/d8/9c/74240_FkSsC.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13137
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg",
+   "m": "GET",
+   "dt": 13138
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/f6/16/104614_icTTi.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13138
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg",
+   "m": "GET",
+   "dt": 13138
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/28/99/135801_63sBY.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13138
+  },
+  {
+   "t": "req",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg",
+   "m": "GET",
+   "dt": 13139
+  },
+  {
+   "t": "res",
+   "url": "https://lain.bgm.tv/r/400/pic/cover/l/e2/e7/328609_2EHLJ.jpg",
+   "s": 200,
+   "m": "GET",
+   "dt": 13139
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/subjects/537409",
+   "m": "GET",
+   "dt": 16147
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/subjects/537409",
+   "s": 200,
+   "m": "GET",
+   "dt": 16512
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=537409&limit=100&offset=0",
+   "m": "GET",
+   "dt": 16514
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=537409&limit=100&offset=0",
+   "s": 200,
+   "m": "GET",
+   "dt": 16889
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/subjects/328609",
+   "m": "GET",
+   "dt": 25098
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/subjects/328609",
+   "s": 200,
+   "m": "GET",
+   "dt": 25104
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "m": "GET",
+   "dt": 25105
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "s": 200,
+   "m": "GET",
+   "dt": 25479
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/search/subjects",
+   "m": "POST",
+   "dt": 26138
+  },
+  {
+   "t": "fail",
+   "url": "https://api.bgm.tv/v0/search/subjects",
+   "err": "net::ERR_INTERNET_DISCONNECTED",
+   "dt": 26144
+  },
+  {
+   "t": "console",
+   "text": "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "dt": 26145
+  },
+  {
+   "t": "req",
+   "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/search/subjects",
+   "m": "POST",
+   "dt": 26145
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/subjects/328609",
+   "m": "GET",
+   "dt": 32191
+  },
+  {
+   "t": "res",
+   "url": "https://api.bgm.tv/v0/subjects/328609",
+   "s": 200,
+   "m": "GET",
+   "dt": 32199
+  },
+  {
+   "t": "req",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "m": "GET",
+   "dt": 32201
+  },
+  {
+   "t": "fail",
+   "url": "https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "err": "net::ERR_INTERNET_DISCONNECTED",
+   "dt": 32205
+  },
+  {
+   "t": "console",
+   "text": "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "dt": 32205
+  },
+  {
+   "t": "req",
+   "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "m": "GET",
+   "dt": 32205
+  },
+  {
+   "t": "fail",
+   "url": "https://proxy.cors.sh/https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "err": "net::ERR_INTERNET_DISCONNECTED",
+   "dt": 32207
+  },
+  {
+   "t": "console",
+   "text": "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "dt": 32208
+  },
+  {
+   "t": "req",
+   "url": "https://api.codetabs.com/v1/proxy/?https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "m": "GET",
+   "dt": 32208
+  },
+  {
+   "t": "fail",
+   "url": "https://api.codetabs.com/v1/proxy/?https://api.bgm.tv/v0/episodes?subject_id=328609&limit=100&offset=0",
+   "err": "net::ERR_INTERNET_DISCONNECTED",
+   "dt": 32209
+  },
+  {
+   "t": "console",
+   "text": "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+   "dt": 32210
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "R": {
+  "t": "2026-09-15T08:26:03.547Z",
+  "c1": {
+   "msg": "",
+   "card": "① Bangumi 账号 已绑定 ✓已绑定：tester · 上次同步：暂无⟳ 拉取全部进度↑ 推送全部到 Bangumi更换 token 拉取时「完全对齐」：以 Bangumi 为准，清除本地多余的已看标记",
+   "who": "已绑定：tester · 上次同步：暂无"
+  },
+  "c2search": {
+   "msg": "本地 0 条 + 在线 1 条 · 点「添加」自动拉取全集",
+   "n": 1
+  },
+  "c2added": {
+   "n": 1,
+   "sid": "900001",
+   "bgmId": "900001",
+   "eps": 12,
+   "bids": true
+  },
+  "c3pull": {
+   "msg": "完成：成功 1 / 失败 0 · 补标 5 集。明细见「同步记录」",
+   "statuses": {
+    "1": "watched",
+    "2": "watched",
+    "3": "watched",
+    "4": "watched",
+    "5": "watched"
+   },
+   "rating": 8
+  },
+  "c4auto": {
+   "mode": "ok",
+   "target": "all",
+   "collections": {
+    "900001": {
+     "type": 3,
+     "rate": 8,
+     "eps": {
+      "90000001": 2,
+      "90000002": 2,
+      "90000003": 2,
+      "90000004": 2,
+      "90000005": 2,
+      "90000006": 2
+     }
+    }
+   }
+  },
+  "c4push": "完成：推送 0 集 · 成功 1 / 失败 0。明细见「同步记录」",
+  "c4state": {
+   "mode": "ok",
+   "target": "all",
+   "collections": {
+    "900001": {
+     "type": 3,
+     "rate": 8,
+     "eps": {
+      "90000001": 2,
+      "90000002": 2,
+      "90000003": 2,
+      "90000004": 2,
+      "90000005": 2,
+      "90000006": 2,
+      "90000007": 2
+     }
+    }
+   }
+  },
+  "c4ledger": "推送全部 · 推送全部到 Bangumi成功 1 · 2026/9/15 16:26:27共 1 部 · 本次推送 0 集模拟番（测试） · +0 集✓单集自动同步 · 单集自动同步成功 2 · 2026/9/15 16:26:26模拟番（测试） · 6✓模拟番（测试） · 7✓拉取全部 · 拉取全部进度成功 1 · 2026/9/15 16:26:16共 1 部 · 补标 5 集 · 对齐取消 0 集模拟番（测试） · 补 5 / 取消 0✓添加条目 · 添加条目成功 1 · 2026/9/15 16:26:11来源：在线搜索 · Bangumi #900001模拟番（测试）✓",
+  "c5afterRollback": {
+   "mode": "ok",
+   "target": "all",
+   "collections": {
+    "900001": {
+     "type": 3,
+     "rate": 8,
+     "eps": {
+      "90000001": 2,
+      "90000002": 2,
+      "90000003": 2,
+      "90000004": 2,
+      "90000005": 2,
+      "90000006": 2,
+      "90000007": 2
+     }
+    }
+   }
+  },
+  "c5ledgerMark": false,
+  "c6limit": {
+   "msg": "完成：成功 0 / 失败 1 · 补标 0 集。明细见「同步记录」",
+   "ledger": "拉取全部 · 拉取全部进度失败 1 · 2026/9/15 16:26:34共 1 部 · 补标 0 集 · 对齐取消 0 集模拟番（测试）触发接口限流（已自动重试，仍失败请稍后再试）重试失败项 推送全部 · 推送全部到 Bangumi成功 1 · 2026/9/15 16:26:27共 1 部 · 本次推送 0 集模拟番（测试） · +0 集✓单集自动同步 · 单集自动同步成功 2 · 2026/9/15 16:26:26模拟番（测试） · 6✓模拟番（测试） · 7✓拉取全部 · 拉取全部进度成功 1 · 2026/9/15 16:26:16共 1 部 · 补标 5 集 · 对齐取消 0 集模拟番（测试） · 补 5 / 取消 0✓添加条目 · 添加条目成功 1 · 2026/9/15 16:26:11来源：在线搜索 · Bangumi #900001模拟番（测试）✓"
+  },
+  "c6hasRetry": true,
+  "fatal": "Error: Node is either not clickable or not an Element\n    at CdpElementHandle.clickablePoint (C:\\Users\\Venus\\.openclaw-autoclaw\\workspace\\.cluster\\bangumi-tracker\\app-test\\node_modules\\puppeteer-core\\lib\\cjs\\puppeteer\\api\\ElementHandle.js:694:23)\n    at async CdpElementHandle.<anonymous> (C:\\Users\\Venus\\.openclaw-autoclaw\\workspace\\.cluster\\bangumi-tracker\\app-test\\node_modules\\puppeteer-core\\lib\\cjs\\puppeteer\\api\\ElementHandle.js:121:20)\n    at async CdpElementHandle.click (C:\\Users\\Venus\\.openclaw-autoclaw\\workspace\\.cluster\\bangumi-tracker\\app-test\\node_modules\\puppeteer-core\\lib\\cjs\\puppeteer\\api\\ElementHandle.js:724:30)\n    at async CdpElementHandle.<anonymous> (C:\\Users\\Venus\\.openclaw-autoclaw\\workspace\\.cluster\\bangumi-tracker\\app-test\\node_modules\\puppeteer-core\\lib\\cjs\\puppeteer\\api\\ElementHandle.js:132:24)\n    at async C:\\Users\\Venus\\.openclaw-autoclaw\\workspace\\.cluster\\20260915-bangumi-overhaul\\tools\\audit-C.js:99:25"
+ },
+ "net": []
+}

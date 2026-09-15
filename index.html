@@ -282,7 +282,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.4.3', AT_BUILD='20260915a';
+var AT_VERSION='2.4.4', AT_BUILD='20260915b';
 /* v2.4.2：系列级统一分类（整部标一个类型）已按需求移除，类型只在集级存在 */
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
 var HIDE_SRC=(function(){ try{ var h=JSON.parse(localStorage.getItem('at_hide_src')||'null'); if(h&&typeof h==='object') return {filler:!!h.filler,semi:!!h.semi}; }catch(e){} return {filler:false,semi:false}; })();
@@ -970,7 +970,7 @@ function _bget(u,opt){
      （修复「网络恢复后不刷新页面就一直失败」；此前一失败就整页禁用直连） */
   return attempt('',8000).catch(function(e1){
     if(e1.name==='TypeError'||e1.name==='AbortError'){
-      return _viaProxies(6000).catch(function(){ throw _netErr(); });
+      return _viaProxies(5000).catch(function(){ throw _netErr(); }); /* v2.4.4：代理单跳 5s */
     }
     throw e1; /* HTTP 状态错误：不切代理（代理不改变服务端语义） */
   });
@@ -1482,7 +1482,7 @@ function bgmErrText(e){
   if(e.bgmCode==='NET'||e.name==='TypeError'||e.name==='AbortError'||m.indexOf('Failed to fetch')>=0) return '网络不可达（检查网络/代理后重试）';
   if(e.bgmCode==='RATE'||m.indexOf('429')>=0) return '触发接口限流（已自动重试，仍失败请稍后再试）';
   if(e.bgmCode==='AUTH'||m.indexOf('401')>=0||m.indexOf('403')>=0) return '凭据失效——请在同步中心重新绑定 token';
-  if(m.indexOf('HTTP 404')>=0) return '条目/章节不存在（映射歧义）';
+  if(m.indexOf('HTTP 404')>=0) return '条目或章节不存在（可能已下架/改版，或本地映射过期）';
   if(m.indexOf('HTTP 400')>=0) return '请求被拒绝（条目未收藏或章节ID无效）';
   return m;
 }
@@ -1496,7 +1496,8 @@ function bgmFetch(path,opt,opts){
       var rate=(msg.indexOf('429')>=0||msg.indexOf('HTTP 5')>=0);
       var net=(e&&(e.name==='TypeError'||e.name==='AbortError'));
       i++;
-      if(i>=tries||!(rate||net)){ if(rate) throw mkBErr('RATE',msg); if(net) throw mkBErr('NET',msg); throw e; }
+      /* v2.4.4：仅限流/5xx 自动重试；网络类错误一次即报（黑洞网络 3 次重试≈63s，改后≈20s） */
+      if(i>=tries||!rate){ if(rate) throw mkBErr('RATE',msg); if(net) throw mkBErr('NET',msg); throw e; }
       return _sleep(1000*Math.pow(2,i-1)).then(loop);
     });
   }
@@ -1521,17 +1522,7 @@ function bgmPatchEps(sid,eids,type){
   });
   return chain.then(function(){ return done; });
 }
-async function bgmGet(path){ /* - 用户名 404 时自动换真实用户名重试 */
-  try{ return await _bget(BAPI+path,{headers:bgmAuth()}); }
-  catch(e){
-    if(String(e.message||e).indexOf('404')>=0){
-      var un=localStorage.getItem('at_bgm_un')||'';
-      if(!un){ var me=await _bget(BAPI+'/me',{headers:bgmAuth()}); un=(me&&me.username)||''; if(un) localStorage.setItem('at_bgm_un',un); }
-      if(un) return await _bget(BAPI+'/users/'+un+path.replace('/users/-',''),{headers:bgmAuth()});
-    }
-    throw e;
-  }
-}
+/* v2.4.4：移除无引用的 bgmGet（死代码清理，回归测试锁定） */
 function bgmPushEp(s,epNum){ /* 标记单集看过→Bangumi（写入台账，不静默） */
   var tk=bgmTok(); if(!tk) return;
   var sid=bgmSid(s); if(!sid) return;
@@ -1836,7 +1827,11 @@ async function cacheCover(url,useProxy){
   var _attempts=[url]; if(useProxy && url.indexOf('proxy.cors.sh')<0) _attempts.push('https://proxy.cors.sh/'+url);
   var r=null, _lastErr=null;
   for(var _i=0;_i<_attempts.length;_i++){
-    try{ r=await fetch(_attempts[_i]); if(r.ok) break; _lastErr=new Error('cover http '+r.status); r=null; }
+    try{
+      var _c=new AbortController(); var _t=setTimeout(function(){ try{ _c.abort(); }catch(_e2){} },6000); /* v2.4.4：封面 6s 超时，防黑洞网络卡死添加 */
+      r=await fetch(_attempts[_i],{signal:_c.signal}); clearTimeout(_t);
+      if(r.ok) break; _lastErr=new Error('cover http '+r.status); r=null;
+    }
     catch(_e){ _lastErr=_e; r=null; }
   }
   if(!r) throw (_lastErr||new Error('cover load failed'));
@@ -1908,7 +1903,14 @@ async function bgmAttach(sid,btn){
     addShow({ sid:sid, title:det.name_cn||det.name||('bgm'+sid), nameJp:det.name||'', cover:coverUrl, year:det.date?String(det.date).slice(0,4):'', total:ded.length, eps:ded, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'Bangumi #'+sid, bgmId:String(sid) });
   }catch(e){
     btn.disabled=false; btn.textContent='添加';
-    document.getElementById('srMsg').textContent='拉取失败：'+e.message+'——可稍后重试，或浏览本地库/手动添加（无需网络）';
+    var _em=String((e&&e.message)||e||'');
+    if(_em.indexOf('没有可用剧集')>=0){
+      var _tip='该条目暂无剧集数据（未开播或官方未录入）——暂时不能添加；可等更新后再试，或用「＋ 手动添加」先记录';
+      document.getElementById('srMsg').textContent=_tip; toast(_tip);
+    }else{
+      document.getElementById('srMsg').textContent='拉取失败：'+_em+'——可稍后重试，或浏览本地库/手动添加（无需网络）';
+      toast('添加失败：'+_em);
+    }
   }
 }
 function addShow(item){
@@ -2227,14 +2229,14 @@ function importDoubanFile(box,ev){
   rd2.readAsText(f,'utf-8');
 }
 function bgmUnboundHtml(){
-  return '<h4>① Bangumi 账号 <span class="st" style="color:var(--danger)">未绑定 — 绑定后启用搜索与同步</span></h4>'+
+  return '<h4>① Bangumi 账号 <span class="st" style="color:var(--danger)">未绑定 — 搜索免绑定可用；绑定后启用进度同步</span></h4>'+
     '<div class="bd"><div style="background:rgba(122,154,106,.10);border:1px solid rgba(122,154,106,.45);border-radius:10px;padding:10px 12px;margin:0 0 8px">'+
     '<div style="font-weight:700;color:var(--ink);margin-bottom:6px">1 分钟绑定（只需一次）</div>'+
     '<ol style="margin:0 0 6px 18px;padding:0;color:var(--muted);font-size:13px;line-height:1.75">'+
     '<li>打开 <a href="https://bgm.tv/settings/services" target="_blank" rel="noopener" style="color:var(--accent)">bgm.tv/settings/services</a>（已登录会直达「网络服务」页）</li>'+
     '<li>找到「<b style="color:var(--ink)">API 访问令牌</b>」→ 点「生成新的令牌」并复制</li>'+
     '<li>粘到下面 → 点「保存并测试」</li></ol>'+
-    '<div style="font-size:12px;color:var(--danger)">搜索番剧与收藏同步都依赖它；token 只存本机浏览器，不上传。</div></div>'+
+    '<div style="font-size:12px;color:var(--danger)">进度同步依赖它（搜索免绑定，无需 token）；token 只存本机浏览器，不上传。</div></div>'+
     '<label>BANGUMI ACCESS_TOKEN</label><input id="syBgm" type="password" placeholder="粘贴 access_token"/>'+
     '<div class="syrow"><button class="sybtn pri" id="syBgmSaveTest">保存并测试</button></div>'+
     '<div class="msg" id="bgmTestMsg"></div></div>';

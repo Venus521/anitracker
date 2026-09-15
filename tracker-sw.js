@@ -1,5 +1,5 @@
 /* AniTracker SW v3 — 同源资源全部 network-first（更新即达，失败回退缓存）；跨域不缓存 */
-var CACHE='anitracker-v7';
+var CACHE='anitracker-v8';
 var PRECACHE=['./index.html','./tracker-manifest.webmanifest'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(PRECACHE); }).then(function(){ return self.skipWaiting(); }));
