@@ -2758,6 +2758,12 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
 .at270bar i{display:block;height:100%}
 .at270legend{font-size:10.5px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
 .at270dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.at270details{border-top:1px solid var(--line);padding:8px 0 2px}
+.at270details summary{cursor:pointer;font-size:12.5px;color:var(--muted);letter-spacing:1px;list-style:none}
+.at270details summary::-webkit-details-marker{display:none}
+.at270details summary::after{content:' ▾';color:var(--faint)}
+.at270details[open] summary::after{content:' ▴'}
+.at270details .at270dbody{padding-top:8px}
 </style>
 
 <script id="at270-js">
@@ -3273,16 +3279,17 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
       }
       var s = bySid(curSid); if (!s) return;
       var aliases = s.aliases || [];
-      var box = makeEl('<div class="at270box" id="at270Box"></div>');
+      var box = makeEl('<div class="at270box" id="at270Box"><details class="at270details"><summary>资料 · 关联 · 修改历史</summary><div class="at270dbody"></div></details></div>'); var dbody = box.querySelector('.at270dbody');
       /* 资料 */
       var secA = makeEl('<div class="sec"><div class="sech">资料 · 双语与别名</div></div>');
       var chips = '<span class="at270chip">中文：' + esc(s.title || '—') + '</span><span class="at270chip">原文：' + esc(s.nameJp || '（待补）') + '</span>';
-      aliases.forEach(function (a) { chips += '<span class="at270chip">' + esc(a) + '</span>'; });
+      aliases.slice(0, 3).forEach(function (a) { chips += '<span class="at270chip">' + esc(a) + '</span>'; });
+      if (aliases.length > 3) chips += '<span class="at270chip">+' + (aliases.length - 3) + '</span>';
       if (!aliases.length) chips += '<span class="at270chip" style="border-style:dashed">别名：暂无（点右侧添加）</span>';
       secA.appendChild(makeEl('<div>' + chips + '</div>'));
       var rowA = makeEl('<div class="syrow"><button type="button" class="sybtn" id="at270EditProf">✎ 编辑资料 / 别名</button></div>');
       secA.appendChild(rowA);
-      box.appendChild(secA);
+      dbody.appendChild(secA);
       /* 关联 */
       var relsAll = lsGet('at_relations', []);
       var mine = relsAll.filter(function (r) { return String(r.a) === String(curSid) || String(r.b) === String(curSid); });
@@ -3303,7 +3310,7 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
       });
       var rowB = makeEl('<div class="syrow"><button type="button" class="sybtn" id="at270AddRel">＋ 添加关联</button></div>');
       secB.appendChild(rowB);
-      box.appendChild(secB);
+      dbody.appendChild(secB);
       /* 历史 */
       var logs = lsGet('at_edit_log', []).filter(function (x) { return String(x.sid) === String(curSid); }).slice(-6).reverse();
       var secC = makeEl('<div class="sec"><div class="sech">修改历史（最近）</div></div>');
@@ -3313,7 +3320,7 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
       });
       var rowC = makeEl('<div class="syrow"><button type="button" class="sybtn" id="at270HistAll">全部历史</button><button type="button" class="sybtn" id="at270QualBtn">▦ 数据质量</button></div>');
       secC.appendChild(rowC);
-      box.appendChild(secC);
+      dbody.appendChild(secC);
       /* 挂载 */
       var anchor = vd.querySelector('button[onclick="delShow()"]');
       if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor);

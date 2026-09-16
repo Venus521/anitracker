@@ -253,7 +253,7 @@
       var uname = u.username || '';
       area.innerHTML =
         '<div class="mini">已登录：<b style="color:var(--ink)">' + escH(userName(u)) + '</b>' + (u.email && uname ? '（' + escH(u.email) + '）' : '') + '。改动会自动同步云端；换设备登录同一账号，点「从云端恢复」即可。</div>' +
-        (!uname ? '<label>设置用户名（可选，用于快捷登录）</label><input id="cbBindName" placeholder="6–25位 小写字母开头（可含数字 _ -）"/><div class="msg" id="cbBindMsg"></div><div class="row2"><button class="b3" id="cbBind" style="width:100%">绑定用户名</button></div>' : '') +
+        (!uname ? '<div class="mini">用户名（可选，一个账号只能设一次）：<button type="button" id="cbBindGen" style="background:none;border:none;color:var(--accent);cursor:pointer;padding:0;font-size:12px">帮我生成一个</button></div><input id="cbBindName" placeholder="点「帮我生成」或自行填写"/><div class="msg" id="cbBindMsg"></div><div class="row2"><button class="b3" id="cbBind" style="width:100%">绑定用户名</button></div>' : '') +
         '<div class="row2"><button class="b1" id="cbUp">立即上传</button><button class="b2" id="cbDown">从云端恢复</button></div>' +
         '<div class="msg" id="cbMsg"></div>' +
         (last ? '<div class="tiny">上次上传：' + escH(fmtAt(last.at)) + '</div>' : '') +
@@ -280,6 +280,20 @@
           setTimeout(function(){ location.reload(); }, 700);
         } catch (e) { m.textContent = '恢复失败：' + errText(e); m.style.color = 'var(--danger)'; }
       };
+      var genBtn = area.querySelector('#cbBindGen');
+      if (genBtn) {
+        genBtn.onclick = function () {
+          var base = String(u.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!base || /^[^a-z]/.test(base)) base = 'at' + base;
+          base = base.slice(0, 14);
+          while (base.length < 6) base += String(Math.floor(Math.random() * 10));
+          base += String(Math.floor(Math.random() * 90) + 10);
+          var inp = area.querySelector('#cbBindName');
+          if (inp) inp.value = base;
+          var mb = area.querySelector('#cbBindMsg');
+          if (mb) { mb.textContent = '已生成，点「绑定用户名」确认即可'; mb.style.color = 'var(--muted)'; }
+        };
+      }
       var bindBtn = area.querySelector('#cbBind');
       if (bindBtn) {
         bindBtn.onclick = async function(){
@@ -316,12 +330,12 @@
       '<div class="row2"><button class="b1" id="cbLogin">登录</button></div>' +
       '<div class="tiny" style="margin-top:8px"><a href="javascript:;" id="cbToReg" style="color:var(--accent)">还没有账号？注册一个 →</a></div>' +
       '<div id="cbRegBox" style="display:none;margin-top:10px;border-top:1px dashed var(--line,#ccc);padding-top:10px">' +
-        '<div class="mini" style="color:var(--muted)">用邮箱创建账号，收到验证码后即完成注册；可顺手设置用户名（用于以后快捷登录）。</div>' +
+        '<div class="mini" style="color:var(--muted)">填邮箱 + 密码，收一个验证码就完成。换设备登录同一邮箱即可恢复片单。</div>' +
         '<label>邮箱</label><input id="cbEmail" type="email" autocomplete="email" placeholder="you@example.com"/>' +
         '<label>密码（8–32 位，需含字母和数字）</label><input id="cbEmailPass" type="password" autocomplete="new-password"/>' +
         '<label>邮箱验证码</label><input id="cbCode" inputmode="numeric" placeholder="6 位验证码"/>' +
         '<div class="row2"><button class="b2" id="cbSendCode" style="width:100%">获取验证码</button></div>' +
-        '<label>用户名（可选）</label><input id="cbNewName" placeholder="6–25位 小写字母开头（可含数字 _ -）"/>' +
+        
         '<div class="msg" id="cbRegMsg"></div>' +
         '<div class="row2"><button class="b1" id="cbFinish">完成注册</button></div>' +
       '</div>';
@@ -378,7 +392,7 @@
     area.querySelector('#cbFinish').onclick = async function(){
       var m = area.querySelector('#cbRegMsg');
       var code = (area.querySelector('#cbCode').value || '').trim();
-      var uname = (area.querySelector('#cbNewName').value || '').trim();
+      var uname = ''; var _nn = area.querySelector('#cbNewName'); if (_nn) uname = (_nn.value || '').trim();
       var email = area.querySelector('#cbEmail').value.trim();
       if (!_pendingVerify || !_pendingEmail) { m.textContent = '请先点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
       if (_pendingEmail !== email) { m.textContent = '邮箱已修改，请重新点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
