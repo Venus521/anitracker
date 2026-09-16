@@ -268,6 +268,36 @@ function check(id, name, ok, detail) {
     check('10b', '审计数据可计算（含双语缺口）', t10b.series >= 3 && t10b.missingOrig >= 70, JSON.stringify(t10b));
     try { await page.screenshot({ path: OUT + '\\t10-quality.png' }); } catch (e) {}
 
+    /* T12 空剧集本地方案（无 Bangumi） */
+    await page.evaluate(() => {
+      const shows = JSON.parse(localStorage.getItem('tr_shows') || '[]');
+      shows.push({ sid: 'test-eps1', title: '海贼王', nameJp: 'One Piece', aliases: [], year: '1999', total: 0, status: 'watching', statuses: {}, addedAt: Date.now(), updAt: Date.now(), eps: [], source: '测试种子' });
+      shows.push({ sid: 'test-eps2', title: '测试番Y', nameJp: '', aliases: [], year: '', total: 6, status: 'watching', statuses: {}, addedAt: Date.now(), updAt: Date.now(), eps: [], source: '测试种子' });
+      localStorage.setItem('tr_shows', JSON.stringify(shows));
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(2000);
+    await page.evaluate(() => { openDetail('test-eps1'); });
+    await sleep(1000);
+    const t12a = await page.evaluate(() => {
+      const g = document.getElementById('dGroups').textContent;
+      const hasBtn = /从内置库补齐/.test(g) && /生成第1–N集/.test(g);
+      AT270.fillFromLib();
+      const shows = JSON.parse(localStorage.getItem('tr_shows') || '[]');
+      const s = shows.filter(x => x.sid === 'test-eps1')[0];
+      return { hasBtn: hasBtn, eps: (s.eps || []).length, firstTitle: (s.eps || [])[0] ? (s.eps || [])[0].t.slice(0, 24) : '' };
+    });
+    check('12a', '内置库补齐剧集（海贼王中文集名，无需 Bangumi）', t12a.hasBtn === true && t12a.eps > 1000, JSON.stringify({ eps: t12a.eps, firstTitle: t12a.firstTitle }));
+    await page.evaluate(() => { openDetail('test-eps2'); });
+    await sleep(900);
+    const t12b = await page.evaluate(() => {
+      AT270.fillPlaceholders();
+      const shows = JSON.parse(localStorage.getItem('tr_shows') || '[]');
+      const s = shows.filter(x => x.sid === 'test-eps2')[0];
+      return { eps: (s.eps || []).length, t1: (s.eps || [])[0] ? (s.eps || [])[0].t : '' };
+    });
+    check('12b', '生成第1–N集占位（6 集）', t12b.eps === 6 && t12b.t1 === '第 1 集', JSON.stringify(t12b));
+
     /* T11 无 JS 错误 */
     check('11', '全程无页面 JS 错误', pageErrors.length === 0, JSON.stringify(pageErrors.slice(0, 3)));
 

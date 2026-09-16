@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <script src="tracker-filler-data.js?v=20260903"></script>
 <script src="https://static.cloudbase.net/cloudbase-js-sdk/3.7.0/cloudbase.full.js"></script>
-<script src="cloudbase-sync.js?v=20260916a"></script>
+<script src="cloudbase-sync.js?v=20260916c"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   window.addEventListener('load',function(){ navigator.serviceWorker.register('tracker-sw.js').catch(function(){}); });
@@ -306,7 +306,7 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
     </div>
     <div class="searchrow2"><input id="qFilter" placeholder="按集标题/集号筛选…" oninput="renderGrid()"/></div>
     <div class="typerow" id="typeRow"></div>
-    <div class="seclabel" style="font-size:11px;letter-spacing:2px;color:var(--muted);margin:12px 0 6px">EPISODES</div>
+    <div class="seclabel" style="font-size:11px;letter-spacing:2px;color:var(--muted);margin:12px 0 6px">剧集 EPISODES</div>
     <div id="dGroups"></div>
     <button class="b2" style="width:100%;border-radius:10px;padding:12px;font-size:13px;color:var(--danger);border-color:var(--danger);opacity:.7;margin-top:10px" onclick="delShow()">从片单移除</button>
     <div style="height:40px"></div>
@@ -343,7 +343,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.7.0', AT_BUILD='20260916b';
+var AT_VERSION='2.7.0', AT_BUILD='20260916c';
 /* ===== Bangumi 同步开关：2026-09-15 依用户要求先移除同步（搜索与剧集数据保留）。要恢复同步：把 false 改回 true 并刷新 ===== */
 var BGMSYNC=false;
 try{ if(!BGMSYNC){ Array.prototype.forEach.call(document.querySelectorAll('[data-bgm-sync]'),function(el){ el.remove(); }); } }catch(_eSync){}
@@ -867,8 +867,8 @@ function renderDetail(){
         bgmFillEpisodes(s);
       } else {
         nb.disabled=false; nb.style.opacity=1;
-        nb.textContent=_hasBgm?'暂无剧集数据 · 点此重试自动拉取':'暂无剧集数据 · 点此关联条目补齐';
-        nb.onclick=function(){ bgmFillEpisodes(s); };
+        nb.textContent='暂无剧集数据 · 点此补齐剧集（内置库 / 占位）';
+        nb.onclick=function(){ AT270.fillEps(s); };
       }
     }
     else if(next===null){ nb.textContent=anyHide()?'✓ 可见集全部标记过了（隐藏了原创集）':'✓ 本作集全部标记过了'; nb.disabled=true; nb.style.opacity=.5; nb.onclick=null; nb.title='本作全部集都标记过了，没有可标记的下一集'; }
@@ -987,7 +987,7 @@ function renderGrid(){
       (tn?'<span class="ty ty-'+tk+'" onclick="event.stopPropagation();editSrc('+e.s+')" title="'+esc(srcBasisText(s,e))+'">'+tn+'</span>':'')+
     '</button>';
   });
-  if(!total) html='<div class="tiny" style="padding:10px 0">'+((s.eps||[]).length?'没有匹配的集（换筛选/关键词试试）':'暂无剧集数据——点上方横幅一键拉取（需关联 Bangumi），或用「✎ 编辑集数」手动补齐')+'</div>';
+  if(!total) html='<div class="tiny" style="padding:10px 0">'+((s.eps||[]).length?'没有匹配的集（换筛选/关键词试试）':'暂无剧集数据——<span class="srcchip" style="cursor:pointer" onclick="AT270.fillFromLib()">从内置库补齐</span> <span class="srcchip" style="cursor:pointer" onclick="AT270.fillPlaceholders()">生成第1–N集</span> 或用「✎ 编辑集数」手动改名（无需 Bangumi）')+'</div>';
   if(pages>1){
     var pis=[];
     if(pages<=12){ for(var i2=1;i2<=pages;i2++) pis.push(i2); }
@@ -2115,7 +2115,7 @@ async function bgmPullEpisodeList(sid){ /* v2.4.1 提取自 bgmAttach：拉取�
 }
 function recoverEmptyEps(){ /* v2.4.1 空剧集条目的一键恢复入口 */
   var s=bySid(curSid); if(!s) return;
-  if(s.bgmId||bgmSid(s)){ bgmFillEpisodes(s); } else { assocUi(); }
+  AT270.fillEps(s);
 }
 async function bgmFillEpisodes(s){ /* v2.4.1 关联/补拉剧集：填空条目后立即可标记（v2.4.3：拉取期间锁定横幅、持续反馈、防重复点击） */
   var sid=String(s.bgmId||bgmSid(s)||''); if(!sid){ assocUi(); return; }
@@ -3208,7 +3208,7 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
         (tn ? '<span class="ty ty-' + tk + '" onclick="event.stopPropagation();editSrc(' + e.s + ')" title="' + esc(srcBasisText(s, e)) + '">' + tn + '</span>' : '') +
         '</button>';
     });
-    if (!total) html = '<div class="tiny" style="padding:10px 0">' + ((s.eps || []).length ? '没有匹配的集（换筛选/关键词试试；支持原文/中文两种集名）' : '暂无剧集数据——点上方横幅一键拉取（需关联 Bangumi），或用「✎ 编辑集数」手动补齐') + '</div>';
+    if (!total) html = '<div class="tiny" style="padding:10px 0">' + ((s.eps || []).length ? '没有匹配的集（换筛选/关键词试试；支持原文/中文两种集名）' : '暂无剧集数据——<span class="srcchip" style="cursor:pointer" onclick="AT270.fillFromLib()">从内置库补齐</span> <span class="srcchip" style="cursor:pointer" onclick="AT270.fillPlaceholders()">生成第1–N集</span> 或用「✎ 编辑集数」手动改名（无需 Bangumi）') + '</div>';
     if (pages > 1) {
       var pis = [];
       if (pages <= 12) { for (var i2 = 1; i2 <= pages; i2++) pis.push(i2); }
@@ -3621,7 +3621,34 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
       setTimeout(function () { try { renderSrcBar(); } catch (e) {} }, 900);
     } catch (e) {}
   }
-  boot();
+    /* 空剧集本地方案（v2.7.1）：内置库补齐 / 生成占位 / 兜底引导——不依赖 Bangumi */
+  AT270.fillFromLib = function () {
+    var s = bySid(curSid); if (!s) return;
+    if ((s.eps || []).length) { toast('已有剧集数据，无需补齐'); return; }
+    var lib = (window.INTERNAL_SHOWS || []).filter(function (x) { return normTxt(x.title) === normTxt(s.title) || (s.nameJp && x.nameJp && normTxt(x.nameJp) === normTxt(s.nameJp)); })[0];
+    if (!lib || !(lib.eps || []).length) { toast('内置库没有《' + (s.title || '') + '》的剧集——可点「生成第1–N集」占位，或「✎ 编辑集数」手动补'); return; }
+    s.eps = JSON.parse(JSON.stringify(lib.eps));
+    if (!s.total || s.total < s.eps.length) s.total = s.eps.length;
+    s.updAt = Date.now(); save(); try { statInvalidate(s.sid); } catch (e) {}
+    renderDetail(); toast('已从内置库补齐 ' + s.eps.length + ' 集（含中文集名）');
+  };
+  AT270.fillPlaceholders = function () {
+    var s = bySid(curSid); if (!s) return;
+    if ((s.eps || []).length) { toast('已有剧集数据，无需生成'); return; }
+    var n = parseInt(s.total, 10) || 0;
+    if (!n) { toast('先在「✎ 编辑集数」里填总集数，再生成占位'); return; }
+    s.eps = [];
+    for (var i = 1; i <= n; i++) s.eps.push({ s: i, t: '第 ' + i + ' 集' });
+    s.updAt = Date.now(); save(); try { statInvalidate(s.sid); } catch (e) {}
+    renderDetail(); toast('已生成 ' + n + ' 集占位——点集号可逐集补双语集名');
+  };
+  AT270.fillEps = function (s) {
+    if (!s) return;
+    if ((s.eps || []).length) { renderDetail(); return; }
+    AT270.fillFromLib();
+    try { var cur = bySid(curSid) || s; if (!(cur.eps || []).length) AT270.fillPlaceholders(); } catch (e) {}
+  };
+boot();
   /* 草稿清扫（v2.7.0 复核修复）：登录/注册成功后表单消失 → 自动清理对应草稿 */
   setInterval(function () {
     try {

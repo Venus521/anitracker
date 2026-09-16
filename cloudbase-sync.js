@@ -16,7 +16,7 @@
   var LS_LAST = 'at_cb_last';
   var LOGK = 'at_sync_log';
   var CONSOLE_URL = 'https://tcb.cloud.tencent.com/dev?envId=' + ENV + '#/identity/login-manage';
-  var VERSION = '2.6.1';
+  var VERSION = '2.7.0';
 
   function lg(kind, title, st){ try{ var all = JSON.parse(localStorage.getItem(LOGK) || '[]'); all.push({ id: 'LG' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(), kind: kind, title: title, ok: st === 'ok' ? 1 : 0, fail: st === 'ok' ? 0 : 1, items: [], note: '', rolledBack: false }); localStorage.setItem(LOGK, JSON.stringify(all.slice(-80))); }catch(e){} }
   var app = null, auth = null, db = null, _timer = null;
@@ -37,23 +37,29 @@
 
   /* 错误翻译：把 CloudBase/SDK 报错翻成用户能看懂的中文；ctx: signup|login|generic */
   function errText(e, ctx){
-    var s = '', c = '';
-    try { s = String((e && (e.message || e.errMsg || e.msg)) || e || ''); } catch (x) {}
+    var s = '', c = '', d = '', h = '';
+    try { s = String((e && (e.message || e.errMsg || e.msg)) || ''); } catch (x) {}
     try { c = String((e && (e.status || e.code || e.error_code)) || ''); } catch (x) {}
-    var all = s + ' ' + c;
+    try { d = String((e && (e.error_description || e.description)) || ''); } catch (x) {}
+    try { h = String((e && e.helpMessage) || ''); } catch (x) {}
+    var all = s + ' ' + c + ' ' + d + ' ' + h;
     if (/provider email not found/i.test(all)) return 'PROVIDER_OFF';
     if (ctx === 'signup' && /not[_ ]?found|不存在|USER_NOT_FOUND/i.test(all)) return 'PROVIDER_OFF';
     if (all.indexOf('You must provide either an email or phone number') >= 0) return '请填写有效邮箱（当前账号体系使用邮箱注册）';
     if (/invalid_verification_code|验证码(错误|不正确|无效|校验失败)/i.test(all)) return '验证码不对，请检查后重试';
     if (/verification_?code.*(expired|过期)|expired/i.test(all)) return '验证码已过期，请重新获取';
     if (/too many|frequent|频繁|限流|exceeded|429/i.test(all)) return '尝试太频繁，请等 1 分钟再试';
+    if (/you already have username/i.test(all)) return '这个账号已经绑定过用户名了（一个账号只能绑一次）';
+    if (/does not match regex pattern|invalid.*EditProfileRequest.Username/i.test(all)) return '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）';
     if (/invalid_username_or_password|用户名或密码不正确|INVALID_CREDENTIALS/i.test(all)) return '邮箱/用户名或密码不正确';
     if (/already|已存在|已注册|已被使用|已被注册|占用/i.test(all)) return '这个邮箱或用户名已被使用，可直接登录或换一个';
-    if (/invalid.*username|用户名(格式|不合规)|INVALID_USERNAME/i.test(all)) return '用户名不合规：字母数字或 -/_，不能纯数字，不能以符号开头/结尾，1–32 位';
+    if (/invalid.*username|用户名(格式|不合规)|INVALID_USERNAME/i.test(all)) return '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）';
     if (/password/i.test(all) && /invalid|格式|weak|至少|不符/i.test(all)) return '密码需 8–32 位，且同时包含字母和数字';
     if (/network|Failed to fetch|timeout|超时|NetworkError|ERR_/i.test(all)) return '网络不给力，请检查网络后重试';
     if (/not_found|不存在|USER_NOT_FOUND/i.test(all)) return ctx === 'login' ? '账号不存在或未注册——请先「注册一个」' : '找不到对应账号（可先注册）';
-    return s || '未知错误，请稍后重试';
+    if (s && s !== '[object Object]') return s;
+    try { var jx = JSON.stringify(e); if (jx && jx !== '{}' && jx !== 'null') return jx.slice(0, 220); } catch (x) {}
+    return '未知错误，请稍后重试';
   }
 
   function providerOffHtml(){
@@ -64,12 +70,8 @@
   function isEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim()); }
   function pwdOk(p){ p = String(p || ''); return p.length >= 8 && p.length <= 32 && /[A-Za-z]/.test(p) && /\d/.test(p); }
   function userOk(u){
-    u = String(u || '').trim();
-    if (!u || u.length > 32) return false;
-    if (!/^[A-Za-z0-9_-]+$/.test(u)) return false;
-    if (/^\d+$/.test(u)) return false;
-    if (/^[-_]/.test(u) || /[-_]$/.test(u)) return false;
-    return true;
+    /* CloudBase 后端正则（实测）：^$|^[a-z][0-9a-z:_-]{5,24}$ —— 小写字母开头，6–25 位 */
+    return /^[a-z][0-9a-z:_-]{5,24}$/.test(String(u || '').trim());
   }
 
   async function sess(){
@@ -251,7 +253,7 @@
       var uname = u.username || '';
       area.innerHTML =
         '<div class="mini">已登录：<b style="color:var(--ink)">' + escH(userName(u)) + '</b>' + (u.email && uname ? '（' + escH(u.email) + '）' : '') + '。改动会自动同步云端；换设备登录同一账号，点「从云端恢复」即可。</div>' +
-        (!uname ? '<label>设置用户名（可选，用于快捷登录）</label><input id="cbBindName" placeholder="字母或数字组合"/><div class="msg" id="cbBindMsg"></div><div class="row2"><button class="b3" id="cbBind" style="width:100%">绑定用户名</button></div>' : '') +
+        (!uname ? '<label>设置用户名（可选，用于快捷登录）</label><input id="cbBindName" placeholder="6–25位 小写字母开头（可含数字 _ -）"/><div class="msg" id="cbBindMsg"></div><div class="row2"><button class="b3" id="cbBind" style="width:100%">绑定用户名</button></div>' : '') +
         '<div class="row2"><button class="b1" id="cbUp">立即上传</button><button class="b2" id="cbDown">从云端恢复</button></div>' +
         '<div class="msg" id="cbMsg"></div>' +
         (last ? '<div class="tiny">上次上传：' + escH(fmtAt(last.at)) + '</div>' : '') +
@@ -283,7 +285,7 @@
         bindBtn.onclick = async function(){
           var m = area.querySelector('#cbBindMsg');
           var name = (area.querySelector('#cbBindName').value || '').trim();
-          if (!userOk(name)) { m.textContent = '用户名不合规：字母数字或 -/_，不能纯数字，不能以符号开头/结尾，1–32 位'; m.style.color = 'var(--danger)'; return; }
+          if (!userOk(name)) { m.textContent = '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）'; m.style.color = 'var(--danger)'; return; }
           m.textContent = '绑定中…'; m.style.color = 'var(--muted)';
           try {
             var cu = auth.currentUser || (await auth.getCurrentUser());
@@ -319,7 +321,7 @@
         '<label>密码（8–32 位，需含字母和数字）</label><input id="cbEmailPass" type="password" autocomplete="new-password"/>' +
         '<label>邮箱验证码</label><input id="cbCode" inputmode="numeric" placeholder="6 位验证码"/>' +
         '<div class="row2"><button class="b2" id="cbSendCode" style="width:100%">获取验证码</button></div>' +
-        '<label>用户名（可选）</label><input id="cbNewName" placeholder="字母或数字组合"/>' +
+        '<label>用户名（可选）</label><input id="cbNewName" placeholder="6–25位 小写字母开头（可含数字 _ -）"/>' +
         '<div class="msg" id="cbRegMsg"></div>' +
         '<div class="row2"><button class="b1" id="cbFinish">完成注册</button></div>' +
       '</div>';
@@ -381,7 +383,7 @@
       if (!_pendingVerify || !_pendingEmail) { m.textContent = '请先点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
       if (_pendingEmail !== email) { m.textContent = '邮箱已修改，请重新点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
       if (!/^\d{4,8}$/.test(code)) { m.textContent = '请输入邮件里的验证码'; m.style.color = 'var(--danger)'; return; }
-      if (uname && !userOk(uname)) { m.textContent = '用户名不合规：字母数字或 -/_，不能纯数字，不能以符号开头/结尾'; m.style.color = 'var(--danger)'; return; }
+      if (uname && !userOk(uname)) { m.textContent = '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）'; m.style.color = 'var(--danger)'; return; }
       m.textContent = '验证中…'; m.style.color = 'var(--muted)';
       try {
         var res = await finishSignUp(_pendingVerify, code, uname);
