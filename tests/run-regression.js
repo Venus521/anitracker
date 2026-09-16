@@ -24,7 +24,7 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
   const ix = ib.toString('utf-8');
   const vm = ix.match(/AT_VERSION='([^']+)'/);
   const vj = JSON.parse(fs.readFileSync(path.join(ROOT, 'tracker-version.json'), 'utf-8'));
-  check('01', '版本一致（2.6.0）', vm && vm[1] === vj.version && vj.version === '2.6.0', 'page=' + (vm && vm[1]) + ' json=' + vj.version);
+  check('01', '版本一致（2.7.0）', vm && vm[1] === vj.version && vj.version === '2.7.0', 'page=' + (vm && vm[1]) + ' json=' + vj.version);
   check('02', 'BGMSYNC=false 开关存在；bgmGet 仍不存在', /var BGMSYNC=false;/.test(ix) && ix.indexOf('function bgmGet') < 0);
 
   const pySrv = spawn('python', [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore' });

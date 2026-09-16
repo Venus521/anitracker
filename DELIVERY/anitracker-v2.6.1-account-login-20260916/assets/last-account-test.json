@@ -1,0 +1,65 @@
+{
+ "at": "2026-09-15T17:43:40.751Z",
+ "results": [
+  {
+   "id": "01",
+   "name": "版本一致（页面 2.6.1 / CBSync 2.6.1）",
+   "ok": true,
+   "detail": "{\"a\":\"2.6.1\",\"cb\":\"2.6.1\"}"
+  },
+  {
+   "id": "02",
+   "name": "账号面板渲染（登录视图 + 注册入口）",
+   "ok": true,
+   "detail": "{\"hasArea\":true,\"hasUser\":true,\"hasLogin\":true,\"hasToReg\":true}"
+  },
+  {
+   "id": "03",
+   "name": "注册视图展开（邮箱/验证码/完成按钮）",
+   "ok": true,
+   "detail": "{\"regVisible\":true,\"hasEmail\":true,\"hasCode\":true,\"hasSend\":true,\"hasFinish\":true}"
+  },
+  {
+   "id": "04",
+   "name": "非法邮箱被本地拦截",
+   "ok": true,
+   "detail": "请先填写正确的邮箱地址"
+  },
+  {
+   "id": "05",
+   "name": "弱密码被本地拦截（需字母+数字）",
+   "ok": true,
+   "detail": "密码需 8–32 位，且同时包含字母和数字"
+  },
+  {
+   "id": "06",
+   "name": "发送验证码 → 未开启态给中文指引+控制台外链（或已开启态发码）",
+   "ok": true,
+   "detail": "{\"state\":\"enabled\",\"text\":\"验证码已发送到 acct-e2e-0916@uberip.com（10 分钟内有效；没收到可看垃圾箱，或 60 秒后重发）。\",\"href\":\"\",\"target\":\"\"}"
+  },
+  {
+   "id": "07",
+   "name": "注册尝试写入同步台账（kind=auth）",
+   "ok": true,
+   "detail": "[{\"t\":\"注册：验证码已发送 acct-e2e-0916@uberip.com\",\"ok\":1}]"
+  },
+  {
+   "id": "08",
+   "name": "不存在账号登录 → 中文错误提示",
+   "ok": true,
+   "detail": "登录失败：邮箱/用户名或密码不正确"
+  },
+  {
+   "id": "09",
+   "name": "同步中心其他区块完好",
+   "ok": true,
+   "detail": "{\"ledger\":true,\"local\":true}"
+  },
+  {
+   "id": "10",
+   "name": "无页面 JS 错误",
+   "ok": true,
+   "detail": "[]"
+  }
+ ]
+}
