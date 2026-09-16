@@ -1,0 +1,975 @@
+{
+ "total": 302,
+ "withTitleTag": 5,
+ "groups": [
+  {
+   "title": "海贼王",
+   "kind": "标题标注系",
+   "epsTotal": 1168,
+   "sampled": 15,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "我是路飞！ 将要成为海贼王的男人！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 78,
+     "title": "娜美生病了？朝海中下雪的方向前进！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 155,
+     "title": "禁断的圣地！神居住的岛和天之制裁",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 232,
+     "title": "Galley-la公司！壮观的一号船坞",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 309,
+     "title": "充满愿望之拳！路飞拼尽全力的机关枪",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 386,
+     "title": "憎恨草帽小子一伙的男人 铁面男迪巴鲁登场",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 463,
+     "title": "燃尽一切！大将赤犬的能力",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 540,
+     "title": "解放奴隶的英雄 冒险家泰格",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 617,
+     "title": "打倒凯撒！最强的灰熊枪",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 694,
+     "title": "不死之身！恐怖的人头玩具军团",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 771,
+     "title": "男人的誓言 路飞和光月桃之助",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 848,
+     "title": "保护阳光号 奋战! 乔巴与布鲁克",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 925,
+     "title": "大显身手! 正义的荞麦假面!",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 1002,
+     "title": "新的因缘! 娜美与润媞!",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 1079,
+     "title": "清晨来临！路飞等人的休憩！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    }
+   ]
+  },
+  {
+   "title": "火影忍者疾风传",
+   "kind": "标题标注系",
+   "epsTotal": 500,
+   "sampled": 15,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "归乡",
+     "judged": "semi",
+     "by": "data",
+     "hasTag": false,
+     "dataType": "semi",
+     "expect": "semi",
+     "match": true
+    },
+    {
+     "ep": 34,
+     "title": "新卡卡西小组成军",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 67,
+     "title": "各自的死斗 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 100,
+     "title": "在雾中 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 133,
+     "title": "自来也豪杰物语",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 166,
+     "title": "告白",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 199,
+     "title": "五影登场！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 232,
+     "title": "木叶的女生会 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 265,
+     "title": "与宿敌再会",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 298,
+     "title": "终于接触!!鸣人VS鼬",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 331,
+     "title": "注视黑暗的眼睛",
+     "judged": "semi",
+     "by": "data",
+     "hasTag": false,
+     "dataType": "semi",
+     "expect": "semi",
+     "match": true
+    },
+    {
+     "ep": 364,
+     "title": "紧密相连",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 397,
+     "title": "名副其实的领导者【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 430,
+     "title": "奇拉比落风传·地之卷【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 463,
+     "title": "意外性NO.1！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    }
+   ]
+  },
+  {
+   "title": "龙珠Z",
+   "kind": "标题标注系",
+   "epsTotal": 291,
+   "sampled": 15,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "新的危机",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 20,
+     "title": "赛亚人传说重提! 悟空的根源 【动画原创】",
+     "judged": "semi",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "semi",
+     "expect": "semi",
+     "match": true
+    },
+    {
+     "ep": 39,
+     "title": "是敌是友? 巨大太空船的小孩 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 58,
+     "title": "弗利萨的秘密武器!基纽特种部队",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 77,
+     "title": "最强战士诞生?尼尔和短笛合体",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 96,
+     "title": "怒气爆发!悟空给我报仇",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 115,
+     "title": "超神水生效!世界恶梦停止 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "filler",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 134,
+     "title": "一切太迟了?刺杀悟空的最强武器",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 153,
+     "title": "明天定能打倒你!悟空的挑战书",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 172,
+     "title": "寻找天神!悟空大型瞬间移动 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 191,
+     "title": "战斗结束…谢了，孙悟空",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 210,
+     "title": "无尿布小鬼特兰克斯之战",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 229,
+     "title": "宿敌的超决斗!悟空和贝吉塔激战",
+     "judged": "semi",
+     "by": "data",
+     "hasTag": false,
+     "dataType": "semi",
+     "expect": "semi",
+     "match": true
+    },
+    {
+     "ep": 248,
+     "title": "永别了各位!悟空返回阴间",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 267,
+     "title": "一次的奇迹…跟悟饭的超级合体",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    }
+   ]
+  },
+  {
+   "title": "火影忍者",
+   "kind": "标题标注系",
+   "epsTotal": 220,
+   "sampled": 15,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "漩涡鸣人登场",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 15,
+     "title": "视线为零的战斗·封锁写轮眼",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 29,
+     "title": "鸣人的反击!有胆就不要逃!",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 43,
+     "title": "退缩的鹿丸!女忍者们的热战",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 57,
+     "title": "四处乱窜的蟾蜍老大登场",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 71,
+     "title": "古今无双!火影级的战斗",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 85,
+     "title": "愚蠢的弟弟呀!恨我怨我吧",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 99,
+     "title": "继承火的意志的人 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 113,
+     "title": "力量全开!燃烧的丁次",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 127,
+     "title": "最后的一击!早蕨之舞",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 141,
+     "title": "小樱的决心 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 155,
+     "title": "悄悄靠近的黑云 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 169,
+     "title": "记忆空白的那一页 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 183,
+     "title": "星星的光芒更加耀眼 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    },
+    {
+     "ep": 197,
+     "title": "大危机!木叶11人全员集合 【动画原创】",
+     "judged": "filler",
+     "by": "title",
+     "hasTag": true,
+     "dataType": "",
+     "expect": "filler",
+     "match": true
+    }
+   ]
+  },
+  {
+   "title": "死神",
+   "kind": "无标注系",
+   "epsTotal": 366,
+   "sampled": 15,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "成为死神的这天",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 25,
+     "title": "巨大炮弹从中央突破？",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 49,
+     "title": "露琪亚的噩梦",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 73,
+     "title": "魂狩集结！开始行动的男人",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 97,
+     "title": "日番谷出击！斩向森林中的敌人",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 121,
+     "title": "激战！守护者VS承担者",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 145,
+     "title": "十刃集结！蓝染的御前会议",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 169,
+     "title": "新展开，危险的转校生现身",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 193,
+     "title": "无法抵抗，恐怖的傀儡戏",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 217,
+     "title": "美丽的小恶魔夏洛特",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 241,
+     "title": "为了荣耀！白哉VS恋次",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 265,
+     "title": "进化！？最后的刀兽威胁！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 289,
+     "title": "白哉VS剑八！？乱战开始！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 313,
+     "title": "十一番队赌上性命的男人",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 337,
+     "title": "改造魂魄的开发者",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    }
+   ]
+  },
+  {
+   "title": "博人传",
+   "kind": "无标注系",
+   "epsTotal": 293,
+   "sampled": 15,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "漩涡博人！！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 20,
+     "title": "写轮眼少年",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 39,
+     "title": "满月照亮的道路",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 58,
+     "title": "淘汰赛，开始！！",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 77,
+     "title": "强敌，辛牙的猛攻!!",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 96,
+     "title": "血与汗与泪",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 115,
+     "title": "第二十五班",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 134,
+     "title": "看透未来的力量",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 153,
+     "title": "黄金搭配",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 172,
+     "title": "恐怖的签名",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 191,
+     "title": "野狗",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 210,
+     "title": "壳的线索",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 229,
+     "title": "违反命令",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 248,
+     "title": "死闘、再び",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    },
+    {
+     "ep": 267,
+     "title": "カワキ、正体発覚!?",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    }
+   ]
+  },
+  {
+   "title": "你的名字",
+   "kind": "剧场版",
+   "epsTotal": 1,
+   "sampled": 1,
+   "rows": [
+    {
+     "ep": 1,
+     "title": "Amazing Fantasy",
+     "judged": "unknown",
+     "by": "none",
+     "hasTag": false,
+     "dataType": "",
+     "expect": "unknown",
+     "match": true
+    }
+   ]
+  }
+ ],
+ "sampled": 91,
+ "matched": 91,
+ "rate": "100.0%"
+}

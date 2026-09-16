@@ -1,0 +1,82 @@
+[
+ {
+  "name": "宽度 360：无横向溢出",
+  "pass": true
+ },
+ {
+  "name": "宽度 360：超长标题省略号生效",
+  "pass": true
+ },
+ {
+  "name": "宽度 360：标题右缘不越界",
+  "pass": true
+ },
+ {
+  "name": "宽度 360：两行截断生效",
+  "pass": true
+ },
+ {
+  "name": "宽度 360：字号令牌就位(--fs-body=14px)",
+  "pass": true
+ },
+ {
+  "name": "宽度 460：无横向溢出",
+  "pass": true
+ },
+ {
+  "name": "460：试排单列",
+  "pass": true
+ },
+ {
+  "name": "宽度 460：超长标题省略号生效",
+  "pass": true
+ },
+ {
+  "name": "宽度 460：标题右缘不越界",
+  "pass": true
+ },
+ {
+  "name": "宽度 460：两行截断生效",
+  "pass": true
+ },
+ {
+  "name": "宽度 460：字号令牌就位(--fs-body=14px)",
+  "pass": true
+ },
+ {
+  "name": "宽度 1280：无横向溢出",
+  "pass": true
+ },
+ {
+  "name": "1280：试排双列",
+  "pass": true
+ },
+ {
+  "name": "宽度 1280：超长标题省略号生效",
+  "pass": true
+ },
+ {
+  "name": "宽度 1280：标题右缘不越界",
+  "pass": true
+ },
+ {
+  "name": "宽度 1280：两行截断生效",
+  "pass": true
+ },
+ {
+  "name": "宽度 1280：字号令牌就位(--fs-body=14px)",
+  "pass": true
+ },
+ {
+  "name": "章节截图 3 张（章节数≥6）",
+  "pass": true
+ },
+ {
+  "name": "无外部资源请求（自包含）",
+  "pass": true
+ },
+ {
+  "name": "无页面级 JS 错误",
+  "pass": true
+ }
+]
