@@ -303,7 +303,6 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
     <div class="strow" id="dStatus"></div>
     <div id="dParts"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 10px">
-      <button class="ty" onclick="playInPortal()" style="border-color:var(--accent);color:var(--accent);font-weight:600">▶ 去门户播放</button>
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
       <button class="ty" onclick="fgOneShow()" id="btnFgCalibrate" title="用离线 Anime Filler Guide 数据校准本作原创集标注（TV原创/半原创）">⟳ 来源校准</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
@@ -356,7 +355,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.9.2', AT_BUILD='20260925a';
+var AT_VERSION='2.9.3', AT_BUILD='20260925b';
 /* ===== Bangumi 同步开关：2026-09-24 恢复（v2.8.0）。
    9/15 曾因「瘦身」临时改为 false；现已配合网络层重做恢复启用。
    如再需临时隐藏：把 true 改回 false 并刷新即可。 ===== */
@@ -803,13 +802,8 @@ function randomPlay(){
   openDetail(pick.sid);
   toast('随机到《'+(pick.title||'')+'》'+(cand.length?'':'（无在看/想看，已从全部随机）'));
 }
-function playInPortal(){
-  var s=bySid(curSid); if(!s) return;
-  var _u=GW+'/search/?q='+encodeURIComponent(s.title||'');
-  /* v2.4.3：接上门户网关基址（此前相对路径在 8089 直开时会 404）；门户未启动时给出明确提示 */
-  fetch(GW+'/',{method:'HEAD',mode:'no-cors',cache:'no-store'}).then(function(){ location.href=_u; })
-    .catch(function(){ toast('门户未启动——请先启动 video-hub（端口 3000），再点「去门户播放」'); });
-}
+/* v2.9.3：playInPortal() 已移除——本作定位为「纯记录」，不再做门户播放跳转。
+   门户相关的「B站追番导入」仍保留（那是导入，不是播放）。 */
 function renderList(){
   var _sb=document.getElementById('srcBar'); if(_sb) _sb.style.display='';
   renderFilter();

@@ -1,17 +1,17 @@
 {
- "t": "2026-09-24T17:17:46.370Z",
+ "t": "2026-09-24T17:34:31.905Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "923807B vs 923807B"
+   "detail": "923368B vs 923368B"
   },
   {
    "id": "01",
    "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.9.2 json=2.9.2"
+   "detail": "page=2.9.3 json=2.9.3"
   },
   {
    "id": "02",
@@ -53,7 +53,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "12ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "31ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -71,7 +71,13 @@
    "id": "15b",
    "name": "详情页同步按钮：关联 Bangumi 的番显示，本地番（man-）隐藏",
    "ok": true,
-   "detail": "linked={\"n\":2,\"shown\":2} local={\"sid\":\"man-1790270235358\",\"hasBgm\":false,\"n\":2,\"shown\":0}"
+   "detail": "linked={\"n\":2,\"shown\":2} local={\"sid\":\"man-1790271235618\",\"hasBgm\":false,\"n\":2,\"shown\":0}"
+  },
+  {
+   "id": "15c",
+   "name": "v2.9.3 纯记录：详情页无「去门户播放」按钮，playInPortal 已移除（GW 保留给 B站导入）",
+   "ok": true,
+   "detail": "{\"btn\":false,\"anyBtn\":false,\"fn\":\"undefined\",\"gwStillThere\":true}"
   },
   {
    "id": "16",
@@ -83,7 +89,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "9ms"
+   "detail": "18ms"
   },
   {
    "id": "19",

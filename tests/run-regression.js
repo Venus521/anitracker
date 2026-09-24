@@ -209,6 +209,17 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
       btnVisNoBgm.n === 2 && btnVisNoBgm.shown === 0,
       'linked=' + JSON.stringify(btnVis) + ' local=' + JSON.stringify(btnVisNoBgm));
 
+    // T15c v2.9.3：纯记录定位 —— 「去门户播放」按钮与 playInPortal() 必须不存在
+    const portalGone = await page.evaluate(() => ({
+      btn: !!document.querySelector('#vDetail [onclick*="playInPortal"]'),
+      anyBtn: /去门户播放/.test(document.getElementById('vDetail').textContent),
+      fn: typeof window.playInPortal,
+      gwStillThere: typeof GW !== 'undefined'   /* 门户导入还在用 GW，不能连带删掉 */
+    }));
+    check('15c', 'v2.9.3 纯记录：详情页无「去门户播放」按钮，playInPortal 已移除（GW 保留给 B站导入）',
+      portalGone.btn === false && portalGone.anyBtn === false && portalGone.fn === 'undefined' && portalGone.gwStillThere === true,
+      JSON.stringify(portalGone));
+
     // T16 未开播条目提示（v2.4.4 行为保持）
     await page.evaluate(() => { showAdd(); document.getElementById('qKw').value = '空条目'; doBgmSearch(); });
     await page.waitForFunction(() => document.getElementById('srList').textContent.includes('Bangumi 在线'), { timeout: 20000 }).catch(() => {});
