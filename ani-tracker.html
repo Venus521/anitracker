@@ -1048,35 +1048,32 @@ function showAdd(){
 }
 var BAPI='https://api.bgm.tv/v0';
 /* ===== v2.8.0 网络层重做（2026-09-24）=====
-   背景：实测 api.bgm.tv 在国内直连不通（10s 超时）；原「公共 CORS 代理兜底」
-   （proxy.cors.sh / api.codetabs.com）也已失效。结果是每次请求白等 13 秒后
+   背景实测：api.bgm.tv 在国内直连不通（10 秒超时）；原「公共 CORS 代理兜底」
+   （proxy.cors.sh / api.codetabs.com）也早已失效。结果是每次请求白等 13 秒后
    报一句含糊的「网络不可达」——这正是「同步做不好」的体感来源。
 
+   ⚠️ 关键认知：浏览器的 fetch 无法指定 HTTP 代理（代理由浏览器/系统级决定）。
+   所以正确做法是：直连 + 短超时 + 明确告知用户「需要开代理」，而不是让用户填代理地址。
+
    新策略：
-   1) 直连只给 3.5 秒（不再 8 秒），失败立刻进入下一步，绝不长时间空等；
+   1) 直连只给 4 秒（不再 8+5=13 秒），失败立刻给可操作的中文诊断；
    2) 移除两个已死的公共代理；
-   3) 支持用户自填代理（设置 → 同步中心 → 高级设置），填了就直接走它；
-   4) 失败时给出可操作的中文诊断，而不是笼统的「网络不可达」。 */
-var NET_PROXY_KEY='at_net_proxy';
-function netProxyGet(){ try{ return (localStorage.getItem(NET_PROXY_KEY)||'').trim(); }catch(e){ return ''; } }
-function netProxySet(v){ try{ if(v){ localStorage.setItem(NET_PROXY_KEY,String(v).trim()); }else{ localStorage.removeItem(NET_PROXY_KEY); } }catch(e){} }
-/* 把用户填的代理地址规整为可用的 URL：允许 "127.0.0.1:7897" 这种简写 */
-function netProxyUrl(){
-  var p=netProxyGet(); if(!p) return '';
-  if(!/^https?:\/\//i.test(p)) p='http://'+p;
-  return p;
-}
+   3) 诊断文案直接告诉用户「去开代理软件」，并给一键重试；
+   4) 可选：走一个公共 CORS 中继（若用户自建了反代，可填在设置里）。 */
+var NET_RELAY_KEY='at_net_relay';
+function netRelayGet(){ try{ return (localStorage.getItem(NET_RELAY_KEY)||'').trim(); }catch(e){ return ''; } }
+function netRelaySet(v){ try{ if(v){ localStorage.setItem(NET_RELAY_KEY,String(v).trim()); }else{ localStorage.removeItem(NET_RELAY_KEY); } }catch(e){} }
 /* 诊断：把 fetch 异常翻译成「用户能照着做」的中文 */
 function netDiag(e,u){
   var isBgm=(u||'').indexOf('bgm.tv')>=0;
   if(e && (e.name==='AbortError'||e.name==='TimeoutError')){
     return isBgm
-      ? '连不上 Bangumi（3.5 秒超时）。Bangumi 在国内需要代理访问——请在「设置 → 高级设置 → 自定义代理」填写你的代理地址（如 127.0.0.1:7897），或保持代理软件开启后重试。'
-      : '请求超时（3.5 秒），请检查网络后重试。';
+      ? '连不上 Bangumi（4 秒超时）。Bangumi 在国内需要代理才能访问——请打开你的代理软件（Clash 等）并确认已开启系统代理，然后重试。'
+      : '请求超时（4 秒），请检查网络后重试。';
   }
   if(e && e.name==='TypeError'){
     return isBgm
-      ? '无法连接 Bangumi。常见原因：① 未开代理（Bangumi 国内需代理）② 代理地址填错 ③ 浏览器拦截。可在「设置 → 高级设置 → 自定义代理」填写代理地址后重试。'
+      ? '无法连接 Bangumi。绝大多数情况是「代理没开」——请打开 Clash / 代理软件（并开启系统代理或 TUN 模式），然后重试。'
       : '网络不可达，请检查网络后重试。';
   }
   return (e && e.message) || '未知网络错误';
@@ -1091,21 +1088,20 @@ function _bget(u,opt){
       return r.text().then(function(txt){ if(!txt) return null; try{ return JSON.parse(txt); }catch(e){ return null; } });
     },function(e){ clearTimeout(t); throw e; });
   };
-  var px=netProxyUrl();
-  if(px){
-    /* 用户配了代理：直接走它，3.5 秒上限 */
-    var opt2=Object.assign({},opt||{});
-    return attempt('',3500).catch(function(){
-      return attempt(px+'/'+u,3500).catch(function(e){ var ne=new Error(netDiag(e,u)); ne.name=e&&e.name||'Error'; ne.bgmCode='NET'; throw ne; });
-    });
-  }
-  /* 未配代理：只直连，3.5 秒，失败即给明确诊断（不再走已死的公共代理） */
-  return attempt('',3500).catch(function(e1){
+  var relay=netRelayGet();
+  var direct=attempt('',4000).catch(function(e1){
     if(e1.name==='TypeError'||e1.name==='AbortError'){
+      /* 若配置了自建中继，失败后走它兜底 */
+      if(relay){
+        return attempt(relay.replace(/\/+$/,'')+'/',4000).catch(function(){
+          var ne=new Error(netDiag(e1,u)); ne.name=e1.name; ne.bgmCode='NET'; throw ne;
+        });
+      }
       var ne=new Error(netDiag(e1,u)); ne.name=e1.name; ne.bgmCode='NET'; throw ne;
     }
     throw e1; /* HTTP 状态错误：不是网络问题，原样抛出 */
   });
+  return direct;
 }
 /* 同名/异名分组：搜其中一个叫法，会把同组所有叫法都搜一遍再合并去重。
    解决「海贼王 / 航海王 / one piece 互相搜不到」和「多季作品只出前几条」。
@@ -1462,15 +1458,83 @@ function fgLookupLocal(s){
   try { var loose = fgLooseMatch(s); if (loose) return loose; } catch(e) {}
   return null;
 }
+/* v2.8.0：本地未收录时，联网实时抓取 animefillerlist.com 并缓存到本地。
+   这样「以后新番」不用等数据集更新——查一次就自动进本地库。
+   注意：浏览器直连该站可能被 CORS 拦；失败时给出明确提示与手动入口。 */
+var AFL_BASE = 'https://www.animefillerlist.com';
+var FG_LIVE_CACHE_KEY = 'at_fg_live';   /* {slug: {t,f,m,at}}，联网抓到后长期缓存 */
+
+function fgLiveCacheAll(){ try{ return JSON.parse(localStorage.getItem(FG_LIVE_CACHE_KEY)||'{}'); }catch(e){ return {}; } }
+function fgLiveCachePut(slug, entry){
+  try{ var c=fgLiveCacheAll(); c[slug]=entry; localStorage.setItem(FG_LIVE_CACHE_KEY, JSON.stringify(c)); }catch(e){}
+}
+/* 用 slug 直接解析 animefillerlist 的剧集表 */
+function fgParseAfl(html){
+  var m = html.match(/<table[\s\S]*?<\/table>/i);
+  if (!m) return null;
+  var table = m[0];
+  var f = [], mixed = [];
+  var rows = table.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  for (var i = 0; i < rows.length; i++) {
+    var cells = rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];
+    if (cells.length < 3) continue;
+    var clip = function(h){ return h.replace(/<[^>]+>/g,'').replace(/&#0?39;/g,"'").replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').trim(); };
+    var epTxt = clip(cells[0]), typ = clip(cells[2]);
+    var nums = epTxt.match(/\d+/g); if (!nums) continue;
+    var eps = nums.map(Number);
+    if (typ === 'Filler') f = f.concat(eps);
+    else if (typ === 'Mixed Canon/Filler' || typ === 'Anime Canon') mixed = mixed.concat(eps);
+  }
+  var uniq = function(a){ return a.filter(function(v,i){ return a.indexOf(v)===i; }).sort(function(x,y){ return x-y; }); };
+  if (!f.length && !mixed.length) return null;
+  return { f: uniq(f), m: uniq(mixed) };
+}
+/* 抓取一个 slug 的页面（走与 Bangumi 相同的代理策略） */
+function fgFetchSlug(slug){
+  var url = AFL_BASE + '/shows/' + slug;
+  return fetch(url, { cache: 'no-store' }).then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(function(html){
+    var parsed = fgParseAfl(html);
+    if (!parsed) throw new Error('该页面没有可解析的剧集分类表');
+    return parsed;
+  }).catch(function(e){
+    var ne = new Error('联网抓取失败（' + (e && e.message || '未知') + '）。可能原因：网络不通 / 该站被墙 / CORS 拦截。可点「打开 AFG 英文站」在浏览器里手动查，或在集上右键「来源标注」手动标。');
+    ne.name = e && e.name || 'Error';
+    throw ne;
+  });
+}
 async function fgFetchOne(show){
   var hit = fgLookupLocal(show);
   if (hit) {
     return { ok: true, title: show.title,
-      url: 'https://www.animefillerguide.com/anime/' + hit.slug + '/',
+      url: AFL_BASE + '/shows/' + hit.slug,
       filler: hit.data.f || [], mixed: hit.data.m || [],
       canon: 0, at: Date.now(), src: hit.data.t || hit.slug };
   }
-  return { ok: false, title: show.title, err: '本地灌水库未收录《' + (show.nameJp || show.title) + '》（收录 268 部长篇）' };
+  /* 本地未收录：尝试联网实时抓（先查 live 缓存，再命中别名 slug） */
+  var live = fgLiveCacheAll();
+  var cand = [ FG_ALIAS[String(show.title||'').toLowerCase()], fgSlug(show.title), fgSlug(show.nameJp) ].filter(Boolean);
+  for (var i = 0; i < cand.length; i++) {
+    var slug = cand[i];
+    if (live[slug] && live[slug].f) {
+      return { ok: true, title: show.title, url: AFL_BASE + '/shows/' + slug,
+        filler: live[slug].f || [], mixed: live[slug].m || [], canon: 0, at: live[slug].at || Date.now(),
+        src: live[slug].t || slug, fromLiveCache: true };
+    }
+  }
+  /* 联网试抓 */
+  for (var j = 0; j < Math.min(cand.length, 2); j++) {
+    try {
+      var data = await fgFetchSlug(cand[j]);
+      fgLiveCachePut(cand[j], { t: show.title, f: data.f, m: data.m, at: Date.now() });
+      return { ok: true, title: show.title, url: AFL_BASE + '/shows/' + cand[j],
+        filler: data.f, mixed: data.m, canon: 0, at: Date.now(), src: show.title + '（联网抓取）', fromLive: true };
+    } catch (e) { /* 换下一个候选 */ }
+  }
+  return { ok: false, title: show.title,
+    err: '《' + (show.nameJp || show.title) + '》本地库与联网均未找到分类数据（本地已收录 212 部 + 联网自动补）。可在「来源标注」里手动标注，或点「打开 AFG 英文站」自行查阅。' };
 }
 async function fgCalibrate(showsList){
   toast('正在校准 Filler Guide 数据…');
@@ -2702,31 +2766,18 @@ function bindAdv(box){
   var q=box.querySelector('#advUnmapped');
   if(q){ var n=shows.filter(function(s){ return !bgmSid(s); }).length;
     q.textContent=n?('本地添加、未关联 Bangumi：'+n+' 部（详情页可用「⌁ 关联Bangumi」补齐，之后即可同步）'):'全部番剧均已关联 Bangumi 或为 Bangumi 来源'; }
-  /* v2.8.0：自定义代理（Bangumi 国内需代理） */
-  var pi=box.querySelector('#optProxy'), pm=box.querySelector('#optProxyMsg');
-  if(pi){
-    var cur=netProxyGet(); pi.value=cur;
-    var showMsg=function(t,ok){ if(pm){ pm.textContent=t; pm.style.color=ok?'#7a9a6a':'var(--muted)'; } };
-    showMsg(cur?('当前：'+cur):'未设置（直连 Bangumi；若连不上请填写代理）');
-    var saveBtn=box.querySelector('#optProxySave');
-    if(saveBtn) saveBtn.onclick=function(){
-      var v=(pi.value||'').trim();
-      if(v && !/^https?:\/\//i.test(v) && !/^[\w\.\-]+:\d{2,5}$/.test(v)){
-        showMsg('格式看起来不对，应形如 127.0.0.1:7897 或 http://127.0.0.1:7897'); return;
-      }
-      netProxySet(v); showMsg(v?('已保存：'+v+'（可在上方测试）'):'已清空，恢复直连',true);
-      toast(v?'代理已保存':'代理已清空');
-    };
-    var testBtn=box.querySelector('#optProxyTest');
-    if(testBtn) testBtn.onclick=function(){
-      showMsg('正在测试…'); testBtn.disabled=true;
-      var v=(pi.value||'').trim(); var old=netProxyGet();
-      netProxySet(v);
-      _bget('/subjects/253').then(function(){
-        showMsg('✓ 连通！Bangumi 可以访问了',true); toast('代理可用');
-      }).catch(function(e){
-        showMsg('✗ 不通：'+((e&&e.message)||'未知错误'),false);
-      }).then(function(){ testBtn.disabled=false; if(!v) netProxySet(old); });
+  /* v2.8.0：CORS 中继（进阶可选项；Bangumi 连不上时首选开代理，而非填这里） */
+  var ri=box.querySelector('#optRelay'), rm=box.querySelector('#optRelayMsg');
+  if(ri){
+    var cur=netRelayGet(); ri.value=cur;
+    var showMsg=function(t,ok){ if(rm){ rm.textContent=t; rm.style.color=ok?'#7a9a6a':'var(--muted)'; } };
+    showMsg(cur?('当前：'+cur):'未设置（直连 Bangumi）');
+    var rs=box.querySelector('#optRelaySave');
+    if(rs) rs.onclick=function(){
+      var v=(ri.value||'').trim();
+      if(v && !/^https?:\/\//i.test(v)){ showMsg('请填完整地址，以 http:// 或 https:// 开头'); return; }
+      netRelaySet(v); showMsg(v?('已保存：'+v):'已清空，恢复直连',true);
+      toast(v?'中继已保存':'中继已清空');
     };
   }
 }
@@ -2749,13 +2800,15 @@ async function syncOpen(focus){
     '<details style="margin:0 0 10px"><summary style="cursor:pointer;color:var(--ink);font-weight:700;padding:6px 0">高级设置</summary>'+
       '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
       '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--hairline)">'+
-        '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">自定义代理</b>（Bangumi 在国内需代理才能访问；留空则直连）</div>'+
+        '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">Bangumi 连不上？</b></div>'+
+        '<div class="tiny" style="line-height:1.6;color:var(--muted)">绝大多数情况是<b>代理没开</b>。Bangumi（api.bgm.tv）在国内需要代理访问：请打开 Clash / 代理软件，并开启<b>系统代理</b>或 <b>TUN 模式</b>，然后刷新本页重试。<br/>'+
+        '浏览器不允许网页自己指定代理，所以必须由你的代理软件接管系统流量。</div>'+
+        '<div class="mini" style="margin-top:10px;margin-bottom:6px">可选：CORS 中继（进阶，一般不用填）</div>'+
         '<div style="display:flex;gap:6px;align-items:center">'+
-          '<input type="text" id="optProxy" placeholder="例如 127.0.0.1:7897" style="flex:1;min-width:0" autocomplete="off"/>'+
-          '<button class="sybtn" id="optProxySave" style="white-space:nowrap">保存</button>'+
-          '<button class="sybtn" id="optProxyTest" style="white-space:nowrap">测试</button>'+
+          '<input type="text" id="optRelay" placeholder="例如 https://你的反代域名/" style="flex:1;min-width:0" autocomplete="off"/>'+
+          '<button class="sybtn" id="optRelaySave" style="white-space:nowrap">保存</button>'+
         '</div>'+
-        '<div class="tiny" id="optProxyMsg" style="margin-top:6px;color:var(--muted)">未设置</div>'+
+        '<div class="tiny" id="optRelayMsg" style="margin-top:6px;color:var(--muted)">未设置</div>'+
       '</div>'+
       '<div class="tiny" id="advUnmapped" style="margin-top:8px"></div>'+
     '</details>'+

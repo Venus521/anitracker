@@ -36,7 +36,24 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
   const NODE = process.env.AT_NODE || process.execPath;
   const pySrv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore' });
   const mock = spawn(NODE, [path.join(__dirname, 'mock-bgm-api.js')], { stdio: 'ignore' });
-  await sleep(1800);
+  /* v2.8.0 修复：原来固定 sleep(1800) 等 Python 起服，机器繁忙时会 ERR_CONNECTION_REFUSED。
+     改为轮询健康检查（最多 15s），服务可选才继续。 */
+  const waitPort = async (port, pathName, tries) => {
+    for (let i = 0; i < (tries || 30); i++) {
+      const up = await new Promise(res => {
+        const req = http.get({ host: '127.0.0.1', port, path: pathName, timeout: 1500 }, x => { x.resume(); res(true); });
+        req.on('error', () => res(false));
+        req.on('timeout', () => { req.destroy(); res(false); });
+      });
+      if (up) return true;
+      await sleep(500);
+    }
+    return false;
+  };
+  const srvUp = await waitPort(8094, '/index.html', 30);
+  await waitPort(8092, '/__state', 20);
+  if (!srvUp) console.log('WARN: 8094 静态服务未就绪，浏览器类用例可能失败');
+  await sleep(400);
   let pageErrors = 0; let mockReqs = 0;
   let browser;
   try {
@@ -63,10 +80,11 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     const syncBtnBack = await page.evaluate(() => !!document.querySelector('[data-bgm-sync]'));
     await page.evaluate(() => syncOpen('bgm')); await sleep(900);
     const bgmCardTxt = await page.evaluate(() => { const e = document.getElementById('syCardBgm'); return e ? e.textContent.trim() : ''; });
-    const netProxyOk = await page.evaluate(() => !!document.getElementById('optProxy'));
-    check('10', '同步 UI 已恢复（详情按钮/绑定卡/高级设置代理）',
+    /* v2.8.0：高级设置里「自定义代理」改为「CORS 中继」（浏览器 fetch 无法指定 HTTP 代理） */
+    const netProxyOk = await page.evaluate(() => !!document.getElementById('optRelay'));
+    check('10', '同步 UI 已恢复（详情按钮/绑定卡/高级设置中继）',
       syncBtnBack && bgmCardTxt.length > 0 && netProxyOk,
-      'btn=' + syncBtnBack + ' cardLen=' + bgmCardTxt.length + ' proxy=' + netProxyOk);
+      'btn=' + syncBtnBack + ' cardLen=' + bgmCardTxt.length + ' relay=' + netProxyOk);
     await page.evaluate(() => window.__closeSync()); await sleep(300);
 
     // T11 搜索分季（mock 4 条 → 同系列 3 部分组 + 单条平铺）

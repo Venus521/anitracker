@@ -1,11 +1,11 @@
 {
- "t": "2026-09-24T14:31:50.748Z",
+ "t": "2026-09-24T14:49:03.519Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "890649B vs 890649B"
+   "detail": "893874B vs 893874B"
   },
   {
    "id": "01",
@@ -21,9 +21,9 @@
   },
   {
    "id": "10",
-   "name": "同步 UI 已恢复（详情按钮/绑定卡/高级设置代理）",
+   "name": "同步 UI 已恢复（详情按钮/绑定卡/高级设置中继）",
    "ok": true,
-   "detail": "btn=true cardLen=198 proxy=true"
+   "detail": "btn=true cardLen=198 relay=true"
   },
   {
    "id": "11",
@@ -41,7 +41,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "36ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "29ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -65,7 +65,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "47ms"
+   "detail": "23ms"
   },
   {
    "id": "19",
