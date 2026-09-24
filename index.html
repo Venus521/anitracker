@@ -171,6 +171,18 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .srccov b{color:var(--ink);font-weight:600}
 .srccov .lnk{color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;font-weight:600}
 .sycard{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;background:var(--card)}
+/* v2.9.2 同步面板：顶部一句话状态条 + 折叠档视觉 */
+.systatus{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:0 0 4px;background:var(--card)}
+.systatus .dot{font-size:13px;line-height:1}
+.systatus .txt{font-size:12px;color:var(--ink);font-weight:600;flex:1;min-width:0}
+.systatus .sybtn{margin-left:auto}
+details.syfold{border:1px solid var(--line);border-radius:12px;padding:0 14px;margin:0 0 10px;background:var(--card)}
+details.syfold>summary{cursor:pointer;list-style:none;padding:12px 0;font-size:13px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+details.syfold>summary::-webkit-details-marker{display:none}
+details.syfold>summary::before{content:'▸';color:var(--muted);font-size:11px;transition:transform .15s}
+details.syfold[open]>summary::before{transform:rotate(90deg)}
+details.syfold>summary .st{font-size:10px;font-weight:400;color:var(--muted)}
+details.syfold>summary+p,details.syfold>div:last-child{padding-bottom:12px}
 .sycard h4{margin:0;font-size:13px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sycard h4 .st{font-size:10px;font-weight:400;color:var(--muted)}
 .sycard .bd{margin-top:8px}
@@ -292,11 +304,11 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
     <div id="dParts"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 10px">
       <button class="ty" onclick="playInPortal()" style="border-color:var(--accent);color:var(--accent);font-weight:600">▶ 去门户播放</button>
-      <button class="ty" data-bgm-sync="1" onclick="bgmPullProgress()" title="从 Bangumi 拉取本作进度（只补不删）">⟳ 拉取Bangumi进度</button><button class="ty" data-bgm-sync="1" onclick="bgmPushOneShow()" title="把本作进度推送到 Bangumi（先比对差异，只推增量）">↑ 推送Bangumi</button>
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
-      <button class="ty" onclick="healThisCover()" title="从 Bangumi 重新拉取本作封面并保存到本地（离线时提示重试）">⟳ 重拉封面</button>
       <button class="ty" onclick="fgOneShow()" id="btnFgCalibrate" title="用离线 Anime Filler Guide 数据校准本作原创集标注（TV原创/半原创）">⟳ 来源校准</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
+      <button class="ty" onclick="healThisCover()" title="从 Bangumi 重新拉取本作封面并保存到本地（离线时提示重试）">⟳ 重拉封面</button>
+      <button class="ty" data-bgm-sync="1" onclick="bgmPullProgress()" style="display:none" title="从 Bangumi 拉取本作进度（只补不删）">⟳ 拉取Bangumi进度</button><button class="ty" data-bgm-sync="1" onclick="bgmPushOneShow()" style="display:none" title="把本作进度推送到 Bangumi（先比对差异，只推增量）">↑ 推送Bangumi</button>
       <button class="ty" onclick="assocUi()" id="btnAssoc" style="display:none" title="把这个本地添加的番关联到 Bangumi 条目，用于自动补齐剧集列表（不涉及账号同步）">⌁ 关联Bangumi</button>
     </div>
     <div class="statgrid" id="dStats"></div>
@@ -344,39 +356,58 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.9.1', AT_BUILD='20260924d';
+var AT_VERSION='2.9.2', AT_BUILD='20260925a';
 /* ===== Bangumi 同步开关：2026-09-24 恢复（v2.8.0）。
    9/15 曾因「瘦身」临时改为 false；现已配合网络层重做恢复启用。
    如再需临时隐藏：把 true 改回 false 并刷新即可。 ===== */
 var BGMSYNC=true;
-/* ===== v2.9.1 同步精简总开关 =====
-   用户反馈「同步很累赘」。本开关关闭后，隐藏所有 Bangumi / 云同步相关 UI
-   （顶部同步入口、详情页拉取/推送/关联按钮、同步中心里的 Bangumi 卡、台账、云同步、代理设置），
-   只保留「本地备份（导出/导入）」这个纯文件操作。代码全部保留，随时可开回。
-   存储：localStorage.at_sync_off = '1' 表示已关闭（默认关闭，即默认精简）。 */
-var SYNC_OFF_KEY = 'at_sync_off';
-function syncOff() { try { var v = localStorage.getItem(SYNC_OFF_KEY); return v == null ? true : (v === '1'); } catch (e) { return true; } }
-function syncOffSet(off) { try { localStorage.setItem(SYNC_OFF_KEY, off ? '1' : '0'); } catch (e) {} }
-function applySyncOff() {
-  /* 顶栏「⇅ 同步」：关闭时仍然保留入口（备份/导入在这里），但改名「数据」以免像"同步"那么重 */
+/* ===== v2.9.2 同步「按需取用」改版 =====
+   v2.9.1 曾用「默认关闭总开关」隐藏同步 UI —— 那只是把累赘挪到看不见的地方，问题没解决。
+   本版改为【频率分层】：
+     · 面板顶部一条「一句话状态」，一眼知道现在是什么状况（绑定没绑定、上次同步成没成）
+     · 常用档（本地备份 / Bangumi 进度）默认展开
+     · 低频档（账号云同步 / 同步记录 / 高级设置）默认折叠，想用点开
+     · 全局唯一一个「主行动」按钮，随状态变化（去绑定 / 立即同步 / 检查网络）
+   所有功能默认都在，不做隐藏；折叠只影响视觉层次。
+   旧的 at_sync_off 开关保留读取兼容（老用户若开过，首次进入自动清掉并恢复完整 UI）。 */
+function syncOff() { return false; }        /* 恒为 false：不再支持整体隐藏 */
+function syncOffSet(off) { syncFoldPref(off ? 'off' : 'on'); }
+/* 折叠偏好：记住用户每次展开/收起哪几档（不是隐藏，只是记忆视觉状态） */
+var SYNC_FOLD_KEY = 'at_sync_fold';
+function syncFoldPref(v) {
   try {
-    var b = document.querySelector('[aria-label="同步中心"]');
-    if (b) {
-      if (syncOff()) { b.setAttribute('title', '数据：本地备份 / 导入导出'); b.innerHTML = '<span class="ic">⇅</span>数据'; }
-      else { b.setAttribute('title', '同步中心：Bangumi / 云同步 / 备份'); b.innerHTML = '<span class="ic">⇅</span>同步'; }
+    if (v === undefined) {
+      var s = localStorage.getItem(SYNC_FOLD_KEY);
+      var d = { bgm: false, cloud: true, ledger: true, adv: true };
+      if (!s) return d;
+      var o = JSON.parse(s);
+      return { bgm: !!o.bgm, cloud: o.cloud === undefined ? true : !!o.cloud, ledger: o.ledger === undefined ? true : !!o.ledger, adv: o.adv === undefined ? true : !!o.adv };
     }
+    localStorage.setItem(SYNC_FOLD_KEY, JSON.stringify(v));
   } catch (e) {}
-  /* 详情页 / 其他标了 data-bgm-sync 的按钮 */
-  try {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-bgm-sync]'), function (el) {
-      el.style.display = syncOff() ? 'none' : '';
-    });
-  } catch (e) {}
-  /* 全局标记，供 CSS 与渲染函数判断 */
-  try { document.documentElement.setAttribute('data-sync-off', syncOff() ? '1' : '0'); } catch (e) {}
 }
-/* 供渲染函数判断是否要跳过 Bangumi 相关块 */
-window.__syncOff = syncOff;
+/* 兼容旧开关：若曾被打开过，清掉标记并恢复完整 UI（这是本版要撤掉的错误做法） */
+try {
+  if (localStorage.getItem('at_sync_off') !== null) {
+    localStorage.removeItem('at_sync_off');
+    localStorage.removeItem(SYNC_FOLD_KEY);
+  }
+} catch (e) {}
+/* 同步健康状态：给面板顶部那句「一句话状态」用 */
+function syncHealth() {
+  var tk = '';
+  try { tk = (localStorage.getItem('at_bgm_token') || '').trim(); } catch (e) {}
+  var last = rd('tr_synclast', null);
+  var h = { bgmBound: !!tk, lastAt: '', lastOk: null, lastText: '', cloudOn: false };
+  if (last && last.at) {
+    h.lastAt = last.at;
+    var d = (Date.now() - new Date(last.at).getTime()) / 1000;
+    h.lastText = d < 90 ? '刚刚' : (d < 3600 ? Math.round(d / 60) + ' 分钟前' : (d < 86400 ? Math.round(d / 3600) + ' 小时前' : Math.round(d / 86400) + ' 天前'));
+    h.lastOk = true;
+  }
+  try { h.cloudOn = !!(window.CBSync && CBSync.isOn && CBSync.isOn()); } catch (e) {}
+  return h;
+}
 try{ if(!BGMSYNC){ Array.prototype.forEach.call(document.querySelectorAll('[data-bgm-sync]'),function(el){ el.remove(); }); } }catch(_eSync){}
 /* v2.4.2：系列级统一分类（整部标一个类型）已按需求移除，类型只在集级存在 */
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
@@ -883,6 +914,13 @@ function renderDetail(){
     covBox.innerHTML=_hidHtml; covBox.style.display=_hidHtml?'':'none';
   }
   var _ba=document.getElementById('btnAssoc'); if(_ba){ _ba.style.display=(s.bgmId||bgmSid(s))?'none':''; }
+  /* v2.9.2：拉取/推送只在「本作真的关联了 Bangumi」时才出现——本地添加的番不该看到两个永远点不动的按钮 */
+  try{
+    var _hasBgm=!!(s.bgmId||bgmSid(s));
+    Array.prototype.forEach.call(document.querySelectorAll('#vDetail [data-bgm-sync], #vDetail [data-bgm-need]'),function(el){
+      el.style.display=_hasBgm?'':'none';
+    });
+  }catch(e){}
   renderParts();
   renderHist(s);
   renderGrid();
@@ -1764,7 +1802,7 @@ function fCnt(s){ /* 列表行来源角标：TV原创/半原创 计数 + 删减�
 }
 
 /* ---------- Bangumi 账号同步（v2.3） ---------- */
-function bgmTok(){ if(syncOff()) return ''; return (localStorage.getItem('at_bgm_token')||'').trim(); }
+function bgmTok(){ return (localStorage.getItem('at_bgm_token')||'').trim(); }
 function bgmAuth(){ return { 'Authorization':'Bearer '+bgmTok(), 'Content-Type':'application/json' }; }
 function bgmSid(s){ var b=String(s.bgmId||'').replace(/[^0-9]/g,''); if(b) return b;
   if(/^(int|man)/i.test(String(s.sid))) return '';
@@ -2041,29 +2079,31 @@ async function bgmPullAll(box){
   msg('完成：成功 '+okN+' / 失败 '+failN+' · 补标 '+addT+' 集'+(rmT?(' · 取消 '+rmT+' 集'):'')+'。明细见「同步记录」', true);
   if(box) renderLedger(box);
 }
-async function bgmPushAll(box){
+function bgmPushAll(){
   if(!BGMSYNC) return;
-  var msg=testMsgSetter(box,'#syBgmMsg');
-  if(!bgmTok()){ msg('先绑定 token',false); return; }
+  if(!bgmTok()){ toast('先绑定 Bangumi token'); return; }
   var targets=shows.filter(function(s){ return !!bgmSid(s); });
-  if(!targets.length){ msg('片单里没有 Bangumi 添加的番',false); return; }
+  if(!targets.length){ toast('片单里没有 Bangumi 添加的番'); return; }
   var totalEps=0;
   targets.forEach(function(s){ totalEps+=(s.eps||[]).filter(function(e2){ return epStat(s,e2.s)==='watched'; }).length; });
   if(!confirm('把本地进度推送到 Bangumi：\n· '+targets.length+' 部番\n· 本地共 '+totalEps+' 集已看\n\n只推送与 Bangumi 的差异，不删除远端数据；\n失败项可在「同步记录」重试或回滚。继续？')) return;
+  var cb=document.getElementById('syncMask');
+  toast('推送中…（完成后可在「同步」里看记录）');
   var ent=syncLogNew('bgm-push-all','推送全部到 Bangumi');
   var okN=0, failN=0, pushT=0, i;
-  for(i=0;i<targets.length;i++){
-    msg('推送中 '+(i+1)+'/'+targets.length+'：《'+targets[i].title+'》…',true);
-    try{
-      var r=await bgmPushShow(targets[i],{log:false});
-      okN++; pushT+=r.pushed;
-      ent.items.push({title:targets[i].title,ep:'+'+r.pushed+' 集',ok:true,err:'',undo:r.undo});
-    }catch(e){ failN++; ent.items.push({title:targets[i].title,ep:'',ok:false,err:bgmErrText(e)}); }
-  }
-  ent.ok=okN; ent.fail=failN; ent.note='共 '+targets.length+' 部 · 本次推送 '+pushT+' 集';
-  syncLogCommit(ent);
-  msg('完成：推送 '+pushT+' 集 · 成功 '+okN+' / 失败 '+failN+'。明细见「同步记录」', true);
-  if(box) renderLedger(box);
+  (async function(){
+    for(i=0;i<targets.length;i++){
+      try{
+        var r=await bgmPushShow(targets[i],{log:false});
+        okN++; pushT+=r.pushed;
+        ent.items.push({title:targets[i].title,ep:'+'+r.pushed+' 集',ok:true,err:'',undo:r.undo});
+      }catch(e){ failN++; ent.items.push({title:targets[i].title,ep:'',ok:false,err:bgmErrText(e)}); }
+    }
+    ent.ok=okN; ent.fail=failN; ent.note='共 '+targets.length+' 部 · 本次推送 '+pushT+' 集';
+    syncLogCommit(ent);
+    toast('推送完成：'+pushT+' 集 · 成功 '+okN+' / 失败 '+failN);
+    var b2=document.getElementById('syncMask'); if(b2) renderLedger(b2);
+  })();
 }
 async function bgmRollback(id){
   if(!BGMSYNC) return;
@@ -2781,7 +2821,7 @@ function bindBgmCard(box, focus){
   var pull=card.querySelector('#syPullAll');
   if(pull) pull.onclick=function(){ bgmPullAll(box); };
   var push=card.querySelector('#syPushAll');
-  if(push) push.onclick=function(){ bgmPushAll(box); };
+  if(push) push.onclick=function(){ bgmPushAll(); };
   var chg=card.querySelector('#syBgmChange');
   if(chg) chg.onclick=function(){ if(!confirm('更换 token？将清除当前绑定，然后粘贴新 token。')) return; try{ localStorage.removeItem('at_bgm_token'); localStorage.removeItem('at_bgm_un'); }catch(e){} rebind(); };
   var who=card.querySelector('#bgmWho');
@@ -2817,49 +2857,60 @@ function bindAdv(box){
 async function syncOpen(focus){
   var old=document.getElementById('syncMask'); if(old) old.remove();
   var cfg=rd(LS.cfg,null);
-  var OFF=syncOff();
   var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask';
   var box=document.createElement('div'); box.className='panel';
   var tk=bgmTok();
   var last=rd('tr_synclast',null);
-  /* v2.9.1：关闭同步后，本面板退化为「数据」面板——只留本地备份 + 一个重新开启同步的入口 */
-  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">'+(OFF?'数据':'同步中心')+'</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
-    (OFF
-      ? '<div class="mini" style="margin-bottom:10px">数据保存在<b style="color:var(--ink)">本机浏览器</b>。这里只做一件事：<b style="color:var(--ink)">导出 / 导入备份文件</b>。</div>'
-      : '<div class="mini" style="margin-bottom:10px">数据保存在<b style="color:var(--ink)">本机浏览器</b>。三档同步，按需取用：<b style="color:var(--ink)">① 本地备份</b>（最省事，导出/导入一个文件）·<b style="color:var(--ink)">② Bangumi 进度同步</b>（把已看进度推到 Bangumi / 拉回来，需代理）· <b style="color:var(--ink)">③ 账号云同步</b>（手机电脑自动互通，需注册）。</div>')+
-    (!OFF&&BGMSYNC?'<div class="sycard" id="syCardBgm">'+(tk?bgmBoundHtml():bgmUnboundHtml())+'</div>':'')+
-    (!OFF?'<div class="sycard"><h4>同步记录 <span class="st">最近 15 条 · 点标题展开/收起明细</span></h4><div class="ledger" id="syLedger"></div></div>':'')+
-    (!OFF?'<div class="sycard"><h4>账号云同步 <span class="st">手机 / 电脑自动互通（可选）</span></h4><div id="cbArea"><div class="mini" style="color:var(--muted)">云同步加载中…</div></div></div>':'')+
-    '<div class="sycard"><h4>本地备份 <span class="st">无需任何账号，建议常用</span></h4>'+
+  var H=syncHealth();
+  var FOLD=syncFoldPref();
+  /* v2.9.2：一条状态 + 两档常开 + 三档折叠。不再有「隐藏一切」的开关。 */
+  var statusIcon=H.bgmBound?'●':'○';
+  var statusColor=H.bgmBound?'#7a9a6a':'var(--muted)';
+  var statusTxt;
+  if(H.bgmBound){
+    statusTxt='Bangumi 已绑定'+(H.lastText?(' · 上次同步 '+H.lastText):' · 还没同步过')+(H.cloudOn?' · 云同步已开':'');
+  }else{
+    statusTxt='Bangumi 未绑定'+(H.lastText?(' · WebDAV 上次 '+H.lastText):'')+(H.cloudOn?' · 云同步已开':'');
+  }
+  /* 主行动按钮：随状态变 */
+  var primary;
+  if(!H.bgmBound) primary='<button class="sybtn pri" id="syPrimary">去绑定 Bangumi</button>';
+  else primary='<button class="sybtn pri" id="syPrimary">立即同步进度</button>';
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">同步</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    /* ① 一句话状态 —— 打开就知道现在什么状况 */
+    '<div class="systatus"><span class="dot" style="color:'+statusColor+'">'+statusIcon+'</span><span class="txt">'+esc(statusTxt)+'</span>'+primary+'</div>'+
+    '<div class="mini" style="margin:2px 0 12px;color:var(--muted)">数据存在<b style="color:var(--ink)">本机浏览器</b>。下面按「你多久用一次」排序，常用的直接摆着，少用的收起来。</div>'+
+    /* ② 常开档 A：本地备份（几乎人人偶尔要用） */
+    '<div class="sycard"><h4>本地备份 <span class="st">导出 / 导入一个文件 · 不用账号</span></h4>'+
       '<div class="syrow"><button class="sybtn" id="syExport">导出全部数据</button><button class="sybtn" id="syImport">导入数据</button></div>'+
       '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
     '</div>'+
-    (OFF
-      ? '<details style="margin:0 0 10px"><summary style="cursor:pointer;color:var(--ink);font-weight:700;padding:6px 0">已精简的同步功能</summary>'+
-        '<div class="mini" style="margin-top:8px;line-height:1.7;color:var(--muted)">'+
-        'Bangumi 进度同步、关联条目、账号云同步、同步记录台账、代理设置——<b style="color:var(--ink)">当前已隐藏</b>，数据与代码都还在，随时可开回。</div>'+
-        '<div class="syrow" style="margin-top:10px"><button class="sybtn pri" id="optSyncOn">重新开启同步功能</button></div>'+
-        '<div class="tiny" style="margin-top:8px;color:var(--muted)">重开后顶部按钮会恢复为「同步」，详情页出现拉取/推送/关联，同步中心恢复完整三档。</div>'+
-        '</details>'
-      : '<details style="margin:0 0 10px"><summary style="cursor:pointer;color:var(--ink);font-weight:700;padding:6px 0">高级设置</summary>'+
-        '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
-        '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--hairline)">'+
-          '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">Bangumi 连不上？</b></div>'+
-          '<div class="tiny" style="line-height:1.6;color:var(--muted)">绝大多数情况是<b>代理没开</b>。Bangumi（api.bgm.tv）在国内需要代理访问：请打开 Clash / 代理软件，并开启<b>系统代理</b>或 <b>TUN 模式</b>，然后刷新本页重试。<br/>'+
-          '浏览器不允许网页自己指定代理，所以必须由你的代理软件接管系统流量。</div>'+
-          '<div class="mini" style="margin-top:10px;margin-bottom:6px">可选：CORS 中继（进阶，一般不用填）</div>'+
-          '<div style="display:flex;gap:6px;align-items:center">'+
-            '<input type="text" id="optRelay" placeholder="例如 https://你的反代域名/" style="flex:1;min-width:0" autocomplete="off"/>'+
-            '<button class="sybtn" id="optRelaySave" style="white-space:nowrap">保存</button>'+
-          '</div>'+
-          '<div class="tiny" id="optRelayMsg" style="margin-top:6px;color:var(--muted)">未设置</div>'+
+    /* ③ 常开档 B：Bangumi 进度（要用的就是高频，绑定卡本来就自带引导，不需要再折叠） */
+    (BGMSYNC?'<div class="sycard" id="syCardBgm">'+(tk?bgmBoundHtml():bgmUnboundHtml())+'</div>':'')+
+    /* ④ 折叠档：账号云同步 */
+    '<details class="syfold"'+(FOLD.cloud?'':' open')+' data-fold="cloud"><summary>账号云同步 <span class="st">手机 / 电脑自动互通 · 需注册</span></summary>'+
+      '<div id="cbArea" style="margin-top:8px"><div class="mini" style="color:var(--muted)">云同步加载中…</div></div>'+
+    '</details>'+
+    /* ⑤ 折叠档：同步记录 */
+    '<details class="syfold"'+(FOLD.ledger?'':' open')+' data-fold="ledger"><summary>同步记录 <span class="st">最近 15 条 · 点标题展开明细</span></summary>'+
+      '<div class="ledger" id="syLedger" style="margin-top:8px"></div>'+
+    '</details>'+
+    /* ⑥ 折叠档：高级设置（代理 / 中继 / 免绑定搜索） */
+    '<details class="syfold"'+(FOLD.adv?'':' open')+' data-fold="adv"><summary>高级设置 <span class="st">代理 · 中继 · 连不上时看这里</span></summary>'+
+      '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
+      '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--hairline)">'+
+        '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">Bangumi 连不上？</b></div>'+
+        '<div class="tiny" style="line-height:1.6;color:var(--muted)">绝大多数情况是<b>代理没开</b>。Bangumi（api.bgm.tv）在国内需要代理访问：请打开 Clash / 代理软件，并开启<b>系统代理</b>或 <b>TUN 模式</b>，然后刷新本页重试。<br/>'+
+        '浏览器不允许网页自己指定代理，所以必须由你的代理软件接管系统流量。</div>'+
+        '<div class="mini" style="margin-top:10px;margin-bottom:6px">可选：CORS 中继（进阶，一般不用填）</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<input type="text" id="optRelay" placeholder="例如 https://你的反代域名/" style="flex:1;min-width:0" autocomplete="off"/>'+
+          '<button class="sybtn" id="optRelaySave" style="white-space:nowrap">保存</button>'+
         '</div>'+
-        '<div class="tiny" id="advUnmapped" style="margin-top:8px"></div>'+
-        '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--hairline)">'+
-          '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">不想要这些了？</b></div>'+
-          '<div class="syrow"><button class="sybtn" id="optSyncOffBtn">精简掉同步功能（保留本地备份）</button></div>'+
-        '</div>'+
-        '</details>')+
+        '<div class="tiny" id="optRelayMsg" style="margin-top:6px;color:var(--muted)">未设置</div>'+
+      '</div>'+
+      '<div class="tiny" id="advUnmapped" style="margin-top:8px"></div>'+
+    '</details>'+
     '<div class="row2"><button class="b2" onclick="window.__closeSync()" style="width:100%">完成</button></div>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -2867,24 +2918,29 @@ async function syncOpen(focus){
   window.__closeSync=function(){ document.removeEventListener('keydown',escClose); if(wrap&&wrap.parentNode) wrap.remove(); };
   wrap.addEventListener('click',function(e){ if(e.target===wrap) window.__closeSync(); });
   document.addEventListener('keydown',escClose);
+  /* 折叠状态记忆：用户每次开合都记住，下次打开保持他习惯的样子 */
+  Array.prototype.forEach.call(box.querySelectorAll('details.syfold'),function(d){
+    d.addEventListener('toggle',function(){
+      var key=d.getAttribute('data-fold'); if(!key) return;
+      var cur=syncFoldPref(); cur[key]=!d.open; syncFoldPref(cur);
+    });
+  });
   try{ if(window.CBSync) CBSync.mount(box); }catch(e){}
-  if(!OFF&&BGMSYNC) bindBgmCard(box, focus);
-  if(!OFF) bindAdv(box);
-  if(!OFF) renderLedger(box);
-  /* v2.9.1 开关按钮 */
-  var _sOn=box.querySelector('#optSyncOn');
-  if(_sOn) _sOn.onclick=function(){
-    syncOffSet(false); applySyncOff();
-    try{ localStorage.removeItem('at_sync_off'); }catch(e){}
-    window.__closeSync(); syncOpen(focus);
-    toast('已开启同步功能');
-  };
-  var _sOff=box.querySelector('#optSyncOffBtn');
-  if(_sOff) _sOff.onclick=function(){
-    if(!confirm('精简掉同步功能？\n\n将隐藏：Bangumi 拉取/推送/关联、账号云同步、同步记录、代理设置。\n保留：本地备份（导出/导入）。\n\n数据和代码都不会删，随时可以开回来。')) return;
-    syncOffSet(true); applySyncOff();
-    window.__closeSync(); syncOpen(focus);
-    toast('已精简：只保留本地备份');
+  if(BGMSYNC) bindBgmCard(box, focus);
+  bindAdv(box);
+  renderLedger(box);
+  /* 主行动按钮 */
+  var _pb=box.querySelector('#syPrimary');
+  if(_pb) _pb.onclick=function(){
+    if(!H.bgmBound){
+      var c=box.querySelector('#syCardBgm'); if(c){ try{ c.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+      var t=box.querySelector('#bgmTokInp, input[type=password], input[placeholder*="令牌"], input[placeholder*="token"]');
+      if(t){ try{ t.focus(); }catch(e){} }
+      else { toast('在下面「Bangumi 进度同步」里填令牌即可绑定'); }
+      return;
+    }
+    window.__closeSync();
+    try{ bgmPushAll(); }catch(e){ toast('推送失败：'+(e.message||e)); }
   };
   fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(v){
     var el=box.querySelector('#verLine'); if(!el||!v||!v.version) return;
@@ -4295,8 +4351,7 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
     try { var cur = bySid(curSid) || s; if (!(cur.eps || []).length) AT270.fillPlaceholders(); } catch (e) {}
   };
 boot();
-  /* v2.9.1：启动时应用「同步精简」状态（隐藏同步 UI）。延后一拍，确保 boot 渲染完成。 */
-  try { applySyncOff(); setTimeout(applySyncOff, 300); setTimeout(applySyncOff, 1200); } catch (e) {}
+  /* v2.9.2：不再有「同步精简」全局开关。此处仅清理旧版遗留的 at_sync_off 标记（已在头部执行）。 */
   /* 草稿清扫（v2.7.0 复核修复）：登录/注册成功后表单消失 → 自动清理对应草稿 */
   setInterval(function () {
     try {

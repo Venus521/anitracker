@@ -1,17 +1,17 @@
 {
- "t": "2026-09-24T16:51:18.057Z",
+ "t": "2026-09-24T17:17:46.370Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "921632B vs 921632B"
+   "detail": "923807B vs 923807B"
   },
   {
    "id": "01",
    "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.9.1 json=2.9.1"
+   "detail": "page=2.9.2 json=2.9.2"
   },
   {
    "id": "02",
@@ -20,22 +20,22 @@
    "detail": ""
   },
   {
-   "id": "10a",
-   "name": "v2.9.1 默认精简：详情节同步按钮隐藏、顶栏显示「数据」",
+   "id": "10",
+   "name": "同步面板：状态条 + 主行动 + 本地备份 + Bangumi 卡常开，3 个低频档默认折叠",
    "ok": true,
-   "detail": "{\"off\":true,\"detailSyncBtnsHidden\":true,\"topLabel\":\"⇅数据\"}"
+   "detail": "{\"status\":\"Bangumi 未绑定\",\"hasPrimary\":true,\"hasExport\":true,\"hasBgmCard\":true,\"foldCount\":3,\"foldOpen\":[],\"foldAll\":[\"adv\",\"cloud\",\"ledger\"],\"topLabel\":\"⇅同步\"}"
   },
   {
-   "id": "10",
-   "name": "开启后同步 UI 完整（详情按钮/绑定卡/高级设置中继）",
+   "id": "10a",
+   "name": "折叠档展开后内容都在（台账/云同步/中继/免绑定搜索）—— 只是收起，不是删掉",
    "ok": true,
-   "detail": "btn=true cardLen=198 relay=true"
+   "detail": "{\"hasLedger\":true,\"hasCloud\":true,\"hasRelay\":true,\"hasNoSync\":true}"
   },
   {
    "id": "10b",
-   "name": "精简态面板只留本地备份（无 Bangumi/台账/云同步/中继，有重新开启入口）",
+   "name": "v2.9.1 精简开关已移除（syncOff() 恒 false、无旧按钮、localStorage 标记已清）",
    "ok": true,
-   "detail": "{\"hasExport\":true,\"hasImport\":true,\"hasBgmCard\":false,\"hasLedger\":false,\"hasCloud\":false,\"hasRelay\":false,\"hasReopen\":true,\"title\":\"数据\"}"
+   "detail": "{\"offFn\":false,\"hasOldBtn\":false,\"hasOldReopen\":false,\"lsFlag\":null}"
   },
   {
    "id": "11",
@@ -53,7 +53,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "55ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "12ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -63,27 +63,27 @@
   },
   {
    "id": "15",
-   "name": "开启同步后：有 token 时标记发出 /collections 请求",
+   "name": "有 token 时标记发出 /collections 请求（无「精简态」拦截）",
    "ok": true,
    "detail": "mockReqs=2"
   },
   {
    "id": "15b",
-   "name": "精简态：自动推送静默（无 Bangumi 请求、无报错提示）",
+   "name": "详情页同步按钮：关联 Bangumi 的番显示，本地番（man-）隐藏",
    "ok": true,
-   "detail": "mockReqs=0 toast="
+   "detail": "linked={\"n\":2,\"shown\":2} local={\"sid\":\"man-1790270235358\",\"hasBgm\":false,\"n\":2,\"shown\":0}"
   },
   {
    "id": "16",
    "name": "未开播条目：明确提示不入库",
    "ok": true,
-   "detail": "该条目暂无剧集数据（未开播或官方未录入）——暂时不能添加；可等更新后再试，或用「＋ 手动添加」先记录 | n=2->2"
+   "detail": "该条目暂无剧集数据（未开播或官方未录入）——暂时不能添加；可等更新后再试，或用「＋ 手动添加」先记录 | n=3->3"
   },
   {
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "11ms"
+   "detail": "9ms"
   },
   {
    "id": "19",
