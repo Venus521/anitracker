@@ -76,16 +76,48 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     await page.goto('http://127.0.0.1:8094/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(1100);
 
-    // T10 同步 UI 已恢复（v2.8.0：BGMSYNC=true，详情按钮/绑定卡/中心文案应回来）
-    const syncBtnBack = await page.evaluate(() => !!document.querySelector('[data-bgm-sync]'));
+    // T10 同步 UI（v2.9.1：默认「精简」= 同步 UI 隐藏；需显式开启后才可见）
+    // 先验证默认精简态，再开启验证完整态。
+    const offDefault = await page.evaluate(() => ({
+      off: syncOff(),
+      detailSyncBtnsHidden: Array.prototype.every.call(
+        document.querySelectorAll('[data-bgm-sync]'),
+        el => el.style.display === 'none'
+      ),
+      topLabel: (document.querySelector('[aria-label="同步中心"]') || {}).textContent || ''
+    }));
+    check('10a', 'v2.9.1 默认精简：详情节同步按钮隐藏、顶栏显示「数据」',
+      offDefault.off === true && offDefault.detailSyncBtnsHidden === true && /数据/.test(offDefault.topLabel),
+      JSON.stringify(offDefault).slice(0, 200));
+
+    // 开启同步 → 完整 UI 回归
+    await page.evaluate(() => { syncOffSet(false); applySyncOff(); });
     await page.evaluate(() => syncOpen('bgm')); await sleep(900);
+    const syncBtnBack = await page.evaluate(() => !!document.querySelector('[data-bgm-sync]'));
     const bgmCardTxt = await page.evaluate(() => { const e = document.getElementById('syCardBgm'); return e ? e.textContent.trim() : ''; });
-    /* v2.8.0：高级设置里「自定义代理」改为「CORS 中继」（浏览器 fetch 无法指定 HTTP 代理） */
     const netProxyOk = await page.evaluate(() => !!document.getElementById('optRelay'));
-    check('10', '同步 UI 已恢复（详情按钮/绑定卡/高级设置中继）',
+    check('10', '开启后同步 UI 完整（详情按钮/绑定卡/高级设置中继）',
       syncBtnBack && bgmCardTxt.length > 0 && netProxyOk,
       'btn=' + syncBtnBack + ' cardLen=' + bgmCardTxt.length + ' relay=' + netProxyOk);
     await page.evaluate(() => window.__closeSync()); await sleep(300);
+
+    // T10b 精简态面板只留本地备份（先关回精简，再打开面板核对）
+    await page.evaluate(() => { syncOffSet(true); applySyncOff(); });
+    await page.evaluate(() => syncOpen()); await sleep(700);
+    const slimPanel = await page.evaluate(() => ({
+      hasExport: !!document.getElementById('syExport'),
+      hasImport: !!document.getElementById('syImport'),
+      hasBgmCard: !!document.getElementById('syCardBgm'),
+      hasLedger: !!document.getElementById('syLedger'),
+      hasCloud: !!document.getElementById('cbArea'),
+      hasRelay: !!document.getElementById('optRelay'),
+      hasReopen: !!document.getElementById('optSyncOn'),
+      title: (document.querySelector('#syncMask h3') || {}).textContent || ''
+    }));
+    await page.evaluate(() => window.__closeSync()); await sleep(300);
+    check('10b', '精简态面板只留本地备份（无 Bangumi/台账/云同步/中继，有重新开启入口）',
+      slimPanel.hasExport && slimPanel.hasImport && !slimPanel.hasBgmCard && !slimPanel.hasLedger && !slimPanel.hasCloud && !slimPanel.hasRelay && slimPanel.hasReopen,
+      JSON.stringify(slimPanel).slice(0, 260));
 
     // T11 搜索分季（mock 4 条 → 同系列 3 部分组 + 单条平铺）
     await page.evaluate(() => { showAdd(); document.getElementById('qKw').value = '模拟番'; doBgmSearch(); });
@@ -136,12 +168,29 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
 
     // T15 同步行为恢复：本地有 token 时，标记应触发 Bangumi /collections 请求
     // （v2.8.0：BGMSYNC=true，同步链路重新启用；mock 已把 api.bgm.tv 指到本地 8092）
+    // v2.9.1：默认精简态下 bgmTok() 返回空 → 自动推送为静默空操作，这里先开启同步。
+    await page.evaluate(() => { syncOffSet(false); applySyncOff(); });
     await page.evaluate(() => localStorage.setItem('at_bgm_token', 'dummy-token-should-not-be-used'));
     await page.evaluate(() => openDetail('900001')); await sleep(600);
     mockReqs = 0;
     await page.evaluate(() => { const els = document.querySelectorAll('#dGroups .eprow'); els[2] && els[2].click(); });
     await sleep(3500);
-    check('15', '同步已恢复：有 token 时标记发出 /collections 请求', mockReqs > 0, 'mockReqs=' + mockReqs);
+    check('15', '开启同步后：有 token 时标记发出 /collections 请求', mockReqs > 0, 'mockReqs=' + mockReqs);
+
+    // T15b 精简态下自动推送静默（不请求、不弹报错）
+    await page.evaluate(() => { syncOffSet(true); applySyncOff(); });
+    await page.evaluate(() => openDetail('900001')); await sleep(500);
+    /* 先清掉 T15 遗留的 toast，否则会读到上一条的报错 */
+    await page.evaluate(() => { const t = document.getElementById('toast'); if (t) { t.textContent = ''; t.classList.remove('on'); } });
+    mockReqs = 0;
+    await page.evaluate(() => { const els = document.querySelectorAll('#dGroups .eprow'); els[3] && els[3].click(); });
+    await sleep(1800);
+    const toastNow = await page.evaluate(() => (document.getElementById('toast') || {}).textContent || '');
+    check('15b', '精简态：自动推送静默（无 Bangumi 请求、无报错提示）',
+      mockReqs === 0 && !/Bangumi/.test(toastNow), 'mockReqs=' + mockReqs + ' toast=' + toastNow.slice(0, 80));
+
+    /* T16 起需要 Bangumi 搜索链路，恢复为「开启同步」态 */
+    await page.evaluate(() => { syncOffSet(false); applySyncOff(); });
 
     // T16 未开播条目提示（v2.4.4 行为保持）
     await page.evaluate(() => { showAdd(); document.getElementById('qKw').value = '空条目'; doBgmSearch(); });
