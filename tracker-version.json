@@ -1,7 +1,7 @@
 {
     "app": "anitracker",
-    "version": "2.10.0",
-    "build": "20260925c",
-    "note": "方向转向【账号】：删掉 Bangumi 观看进度双向同步（拉取/推送/台账/回滚）与 WebDAV 文件同步（含明文密码隐患），把早已写好的邮箱注册登录扶正为右上角「账号」一级入口。面板重排为：状态条 → 账号（常开置顶）→ 本地备份（常开）→ 高级设置（折叠）。入口按钮由「同步」改名为「账号」。详情页移除「拉取Bangumi进度 / 推送Bangumi」两按钮。重要边界：Bangumi 的【导入/关联】链路完整保留（bgmSid / bgmQueue / bgmFetch / bgmPullEpisodeList / bgmFillEpisodes / bgmAttach / bgmAttachGroup），否则搜索添加与关联会失效。顺带修复 CBSync.isOn 未导出导致状态条永远显示「云同步未开」的静默 bug（cloudbase-sync.js 补 isOn/current 导出）。数据仍存于腾讯云开发 CloudBase（环境 cloud1-d7gsn5t0w6407b963，ap-shanghai）。",
-    "ts": 1790292000000
+    "version": "2.10.1",
+    "build": "20260925d",
+    "note": "AI 结果导入面板重做：粘贴即自动识别（防抖 260ms，去掉「预览识别」这一步），识别结果由三行灰字改为分类色卡（TV原创/半原创/漫改各一色块，含集号区间、集数、占比条），按钮从 5 个精简为 3 个（复制提问给 AI / 取消 / 写入），没认出来的行收进折叠区不再抢视线，超范围集号给出明确提示。顺带修两个真 bug：① 防抖定时器在面板关闭后触发会读 null 报「Cannot read properties of null」；② toast 浮层会遮住面板底部的主按钮（新增 body.panel-open 让 toast 抬高，用 MutationObserver 自动同步，覆盖所有面板）。解析器 aiParse 逻辑未改动。",
+    "ts": 1790295600000
 }

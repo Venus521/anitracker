@@ -1,4 +1,6 @@
-/* ai-import-e2e.js — v2.9.0 「AI 结果导入」端到端测试
+/* ai-import-e2e.js — 「AI 结果导入」端到端测试
+   v2.10.1：面板重做 —— 粘贴即自动识别（不再需要「预览识别」按钮），
+   结果改为分类色卡；断言同步更新。
    覆盖：解析器单元用例 + 详情页真实交互（打开面板 → 粘贴 → 预览 → 写入 → 集级生效）
    用法：node tests\ai-import-e2e.js  ·  自起静态服务 8094 */
 const path = require('path');
@@ -101,17 +103,34 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const maskOpen = await page.evaluate(() => !!document.getElementById('at270AiMask'));
     check('4', '粘贴面板可打开', maskOpen);
 
-    /* 填内容 + 预览 */
+    /* v2.10.1：填内容后【不需要点任何按钮】，防抖自动识别 */
     await page.evaluate(() => {
       const ta = document.getElementById('at270AiText');
       ta.value = '1-10集为漫改，11-15集是TV原创，16集半原创，17-26集漫改。';
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      document.getElementById('at270AiPrevBtn').click();
     });
-    await sleep(300);
+    await page.waitForFunction(() => {
+      const el = document.getElementById('at270AiPrev');
+      return el && /TV原创/.test(el.textContent);
+    }, { timeout: 6000, polling: 100 }).catch(() => {});
+    await sleep(200);
     const prevTxt = await page.evaluate(() => document.getElementById('at270AiPrev').textContent);
-    const applyVisible = await page.evaluate(() => { const b = document.getElementById('at270AiApply'); return b && b.style.display !== 'none'; });
-    check('5', '预览显示识别结果（TV原创5/半原创1/漫改20）', /TV原创\s*5/.test(prevTxt) && /半原创\s*1/.test(prevTxt) && /漫改\s*20/.test(prevTxt) && applyVisible, prevTxt.slice(0, 160));
+    const applyEnabled = await page.evaluate(() => { const b = document.getElementById('at270AiApply'); return b && !b.disabled; });
+    const prevBtns = await page.evaluate(() => !!document.getElementById('at270AiPrevBtn'));
+    /* 用卡片结构断言，别依赖 textContent 的拼接细节（"半原创161 集" 这种） */
+    const cards = await page.evaluate(() => Array.from(document.querySelectorAll('#at270AiPrev .aicat')).map(c => ({
+      label: (c.querySelector('.lbl') || {}).textContent || '',
+      range: (c.querySelector('.range') || {}).textContent || '',
+      cnt: (c.querySelector('.cnt') || {}).textContent || ''
+    })));
+    const byLabel = {};
+    cards.forEach(c => { byLabel[c.label] = c; });
+    check('5', '粘贴即自动识别（无需点按钮）：三类色卡齐全、集号与集数正确，写入按钮自动启用',
+      prevBtns === false && applyEnabled &&
+      !!byLabel['TV原创'] && byLabel['TV原创'].range === '11-15' && byLabel['TV原创'].cnt === '5 集' &&
+      !!byLabel['半原创'] && byLabel['半原创'].range === '16' && byLabel['半原创'].cnt === '1 集' &&
+      !!byLabel['漫改'] && byLabel['漫改'].range === '1-10,17-26' && byLabel['漫改'].cnt === '20 集',
+      JSON.stringify(cards) + ' | applyEnabled=' + applyEnabled);
 
     /* 写入 */
     await page.evaluate(() => document.getElementById('at270AiApply').click());
@@ -150,9 +169,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       const ta = document.getElementById('at270AiText');
       ta.value = '11-15集TV原创，16集半原创，其余漫改。';
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      document.getElementById('at270AiPrevBtn').click();
     });
-    await sleep(300);
+    await page.waitForFunction(() => {
+      const el = document.getElementById('at270AiPrev');
+      return el && /TV原创/.test(el.textContent);
+    }, { timeout: 6000, polling: 100 }).catch(() => {});
+    await sleep(200);
     await page.evaluate(() => document.getElementById('at270AiApply').click());
     await sleep(700);
     const kept = await page.evaluate(() => {
@@ -173,11 +195,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       const ta = document.getElementById('at270AiText');
       ta.value = '1-5集TV原创，900-905集TV原创。';
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      document.getElementById('at270AiPrevBtn').click();
     });
-    await sleep(300);
+    await page.waitForFunction(() => {
+      const el = document.getElementById('at270AiPrev');
+      return el && /超出本作范围/.test(el.textContent);
+    }, { timeout: 6000, polling: 100 }).catch(() => {});
+    await sleep(200);
     const warn = await page.evaluate(() => document.getElementById('at270AiPrev').textContent);
-    check('10', '超范围集号给出提示且不写入', /超出本作集数/.test(warn), warn.slice(0, 200));
+    /* v2.10.1：文案由「超出本作集数」改为「超出本作范围」 */
+    check('10', '超范围集号给出提示且不写入', /超出本作范围/.test(warn), warn.slice(0, 200));
     await page.evaluate(() => { const x = document.getElementById('at270AiX'); if (x) x.click(); });
     await sleep(200);
 

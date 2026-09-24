@@ -137,6 +137,43 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .divi{border-top:1px solid var(--line);margin:18px 0 6px}
 .mini{font-size:12px;color:var(--muted);line-height:1.7}
 .tiny{font-size:11px;color:var(--muted)}
+/* ===== v2.10.1：AI 结果导入面板（重做） =====
+   目标：粘贴即识别，结果一眼看懂。分类色板沿用全app 的暖色调，
+   三类各给一个可辨认的色：TV原创=赤陶 / 半原创=赭黄 / 漫改=松绿。 */
+.aiwrap{--ai-filler:#b4573c;--ai-mixed:#a8842f;--ai-canon:#5f8a5a}
+html[data-theme=dark] .aiwrap{--ai-filler:#d98a70;--ai-mixed:#d4b269;--ai-canon:#93bb8c}
+.aibox{width:100%;box-sizing:border-box;min-height:104px;resize:vertical;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:14px/1.65 var(--sans);padding:12px 13px;outline:none;transition:border-color .15s}
+.aibox:focus{border-color:var(--muted);box-shadow:none}
+.aibox::placeholder{color:var(--muted);opacity:.75}
+.aihint{margin:0 0 10px;font-size:12px;line-height:1.7;color:var(--muted)}
+.aiflow{margin-top:12px}
+.aiflow .aihd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.aiflow .aitot{font-size:12px;color:var(--muted)}
+.aiflow .aitot b{color:var(--ink)}
+.aicat{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;margin-bottom:6px;border:1px solid var(--line);background:var(--card)}
+.aicat .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.aicat .lbl{font-size:12px;font-weight:700;flex:none;width:52px}
+.aicat .range{font-size:13px;line-height:1.6;color:var(--ink);word-break:break-word;font-variant-numeric:tabular-nums;flex:1;min-width:0}
+.aicat .cnt{font-size:11px;color:var(--muted);flex:none;text-align:right}
+.aicat.f{border-color:color-mix(in srgb,var(--ai-filler) 38%,var(--line));background:color-mix(in srgb,var(--ai-filler) 7%,var(--card))}
+.aicat.f .dot{background:var(--ai-filler)} .aicat.f .lbl{color:var(--ai-filler)}
+.aicat.m{border-color:color-mix(in srgb,var(--ai-mixed) 38%,var(--line));background:color-mix(in srgb,var(--ai-mixed) 7%,var(--card))}
+.aicat.m .dot{background:var(--ai-mixed)} .aicat.m .lbl{color:var(--ai-mixed)}
+.aicat.c{border-color:color-mix(in srgb,var(--ai-canon) 38%,var(--line));background:color-mix(in srgb,var(--ai-canon) 7%,var(--card))}
+.aicat.c .dot{background:var(--ai-canon)} .aicat.c .lbl{color:var(--ai-canon)}
+.aibar{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:10px 0 3px;background:var(--line)}
+.aibar i{display:block;height:100%}
+.ailegend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--muted);margin-bottom:2px}
+.ailegend span{display:flex;align-items:center;gap:5px}
+.ailegend i{width:7px;height:7px;border-radius:50%;display:block}
+.aiexc{margin-top:9px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:9px 11px}
+.aiexc summary{cursor:pointer;list-style:none;font-size:12px;color:var(--muted)}
+.aiexc summary::-webkit-details-marker{display:none}
+.aiexc summary::before{content:'▸ ';color:var(--muted)}
+.aiexc[open] summary::before{content:'▾ '}
+.aiexc .ln{font-size:11.5px;color:var(--muted);line-height:1.75;margin-top:6px;word-break:break-word}
+.aiok{border-radius:10px;border:1px solid var(--line);background:var(--card);padding:10px 12px;font-size:12px;color:var(--muted);margin-top:10px}
+@media(max-width:420px){.aicat .lbl{min-width:44px}.aicat .range{font-size:12.5px}}
 .searchrow{display:flex;gap:0;padding:20px 0 8px;border-bottom:2px solid var(--ink);margin-bottom:4px}
 .searchrow input{flex:1;border:none;background:none;font-size:16px;padding:12px 2px;color:var(--ink);outline:none}
 .searchrow button{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;padding:0 4px}
@@ -151,6 +188,8 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .minit a{color:var(--accent);text-decoration:none;font-size:12px}
 #toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:10px 22px;border-radius:22px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
 #toast.on{opacity:1}
+/* v2.10.1：面板打开时把 toast 抬到底部按钮之上，避免遮住「写入」等主操作 */
+body.panel-open #toast{bottom:96px}
 @supports(padding:max(0px)){.wrap{padding-bottom:max(60px,env(safe-area-inset-bottom))}}
 
 /* ===== 顶部入口按钮 / 来源筛选 / 标注 ===== */
@@ -354,7 +393,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.10.0', AT_BUILD='20260925c';
+var AT_VERSION='2.10.1', AT_BUILD='20260925d';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -2567,6 +2606,21 @@ function downloadBackup(){
 
 /* ---------- 启动 ---------- */
 applyTheme((function(){ try{ return localStorage.getItem('at_theme')||'dark'; }catch(e){ return 'dark'; } })());
+/* v2.10.1：任何 .mask 面板出现/消失时同步 body 标记 —— 让 toast 抬高，不遮面板底部主按钮。
+   用 MutationObserver 而不是在每个开关面板处埋点，覆盖面更全（含未来新增的面板）。 */
+(function(){
+  var sync=function(){
+    try{
+      var has=!!document.querySelector('.mask');
+      if(has) document.body.classList.add('panel-open');
+      else document.body.classList.remove('panel-open');
+    }catch(e){}
+  };
+  try{
+    new MutationObserver(sync).observe(document.body,{childList:true,subtree:true});
+    sync();
+  }catch(e){}
+})();
 renderList();
 /* v2.6.0：启动后小批量静默补封面（每会话最多 6 部；离线自动跳过；失败 24h 退避） */
 setTimeout(function(){
@@ -3717,22 +3771,26 @@ setTimeout(function(){
     if (s.pv) { toast('预览模式：先加入片单再导入'); return; }
     closeM('at270AiMask');
     var prev = AT270.aiPasteFor(s);
-    var wrap = makeEl('<div id="at270AiMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">AI 结果导入</h3>' +
-      '<button type="button" id="at270AiX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
-      '<div class="mini">把 AI 关于《' + esc(s.title) + '》原创集的回答<b style="color:var(--ink)">原文整段贴进来</b>即可，不用整理格式。例如：<br>' +
-      '<span style="color:var(--muted)">「1-10集为漫改，11-15集是TV原创，16集半原创」</span><br>' +
-      '识别到 <b style="color:var(--ink)">TV原创</b> 会被「隐藏 TV原创」自动跳过。</div>' +
-      '<textarea id="at270AiText" rows="7" placeholder="在此粘贴 AI 的回答…">' + esc(prev && prev.raw || '') + '</textarea>' +
-      '<div class="syrow"><button type="button" class="sybtn" id="at270AiHelp">看看要 AI 怎么说</button>' +
-      '<button type="button" class="sybtn" id="at270AiDemo">填个示例</button>' +
-      (prev ? '<button type="button" class="sybtn" id="at270AiClear">清除已存结果</button>' : '') + '</div>' +
-      '<div class="divi"></div>' +
-      '<div id="at270AiPrev"></div>' +
+    var epsN = (s.eps || []).length;
+    /* ===== v2.10.1 重做版 =====
+       旧版要「粘贴 → 点预览识别 → 点写入」三步，结果还是三行灰字。
+       新版：粘贴即自动识别（防抖 260ms），结果直接渲染成分类色卡，
+             主按钮只有「写入」，另有「复制提问」帮你拿到 AI 回答。 */
+    var wrap = makeEl('<div id="at270AiMask" class="mask"><div class="panel aiwrap">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline">' +
+        '<h3 style="margin:0">AI 结果导入</h3>' +
+        '<button type="button" id="at270AiX" aria-label="关闭" style="background:none;border:none;font-size:22px;line-height:1;color:var(--muted);padding:2px 4px">×</button>' +
+      '</div>' +
+      '<p class="aihint">把 AI 对《' + esc(s.title) + '》原创集的回答<b style="color:var(--ink)">整段贴进来</b>，自动认集号，不用整理格式。</p>' +
+      '<textarea id="at270AiText" class="aibox" placeholder="例：1-10集漫改，11-15集TV原创，16集半原创" >' + esc(prev && prev.raw || '') + '</textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:10px">' +
+        '<button type="button" class="sybtn" id="at270AiHelp" style="flex:1">复制提问给 AI</button>' +
+        (prev ? '<button type="button" class="sybtn" id="at270AiClear">清除已存结果</button>' : '') +
+      '</div>' +
+      '<div id="at270AiPrev" class="aiflow"></div>' +
       '<div class="msg" id="at270AiMsg"></div>' +
-      '<div class="row2"><button type="button" class="b2" id="at270AiCancel">取消</button>' +
-      '<button type="button" class="b1" id="at270AiPrevBtn">预览识别</button>' +
-      '<button type="button" class="b1" id="at270AiApply" style="display:none">写入</button></div>' +
+      '<div class="row2"><button type="button" class="b2" id="at270AiCancel" style="flex:0 0 34%">取消</button>' +
+      '<button type="button" class="b1" id="at270AiApply" disabled style="flex:1;opacity:.45">写入</button></div>' +
       '</div></div>');
     document.body.appendChild(wrap);
     wrap.addEventListener('click', function (e) { if (e.target === wrap) wrap.remove(); });
@@ -3740,61 +3798,117 @@ setTimeout(function(){
     $('at270AiCancel').addEventListener('click', function () { wrap.remove(); });
 
     var last = null;
+    var applyBtn = $('at270AiApply');
+
+    function setApply(on) {
+      applyBtn.disabled = !on;
+      applyBtn.style.opacity = on ? '' : '.45';
+    }
+
+    /* 分类色卡：把集号数组渲染成「TV原创 11-15 (5集)」这样一行一色 */
+    function catCard(cls, label, arr) {
+      if (!arr || !arr.length) return '';
+      return '<div class="aicat ' + cls + '">' +
+        '<span class="dot"></span>' +
+        '<span class="lbl">' + label + '</span>' +
+        '<span class="range">' + esc(fgFmt(arr)) + '</span>' +
+        '<span class="cnt">' + arr.length + ' 集</span>' +
+        '</div>';
+    }
+
     function showPreview() {
+      /* v2.10.1：防抖定时器可能在面板已关闭后才触发（元素已移除）→ 先判断存活。
+         否则会抛 "Cannot read properties of null (reading 'value')"。 */
+      var ta = $('at270AiText');
+      if (!ta || !wrap.parentNode) return;
       var msg = $('at270AiMsg'), box = $('at270AiPrev');
-      var txt = $('at270AiText').value || '';
-      if (!txt.trim()) { msg.textContent = '还没贴内容'; msg.style.color = 'var(--danger)'; return; }
+      if (!msg || !box) return;
+      var txt = ta.value || '';
+      if (!txt.trim()) {
+        box.innerHTML = '';
+        msg.textContent = '';
+        setApply(false); last = null;
+        return;
+      }
       var r = aiParse(txt);
       last = r;
       var nF = r.filler.length, nM = r.mixed.length, nC = r.canon.length;
+
       if (!r.hitCount) {
-        box.innerHTML = '<div class="mini" style="color:var(--danger)">没认出任何一条。可以换成这种写法试试：<br>「1-10集漫改，11-15集TV原创，16集半原创」</div>';
-        msg.textContent = '无法识别'; msg.style.color = 'var(--danger)';
-        $('at270AiApply').style.display = 'none';
+        box.innerHTML = '<div class="aiok" style="color:var(--danger)">没认出任何集号。换个写法试试：「1-10集漫改，11-15集TV原创，16集半原创」</div>';
+        msg.textContent = '';
+        setApply(false);
         return;
       }
-      var epsN = (s.eps || []).length;
-      var outOfRange = epsN ? r.filler.concat(r.mixed, r.canon).filter(function (n) { return n > epsN; }) : [];
-      var h = '<div class="mini"><b style="color:var(--ink)">识别结果</b>：TV原创 <b style="color:var(--ink)">' + nF + '</b> 集 · 半原创 <b style="color:var(--ink)">' + nM + '</b> 集 · 漫改 <b style="color:var(--ink)">' + nC + '</b> 集</div>';
-      if (nF) h += '<div class="mini">TV原创：' + esc(fgFmt(r.filler).slice(0, 160)) + '</div>';
-      if (nM) h += '<div class="mini">半原创：' + esc(fgFmt(r.mixed).slice(0, 160)) + '</div>';
-      if (nC) h += '<div class="mini">漫改：' + esc(fgFmt(r.canon).slice(0, 160)) + '</div>';
-      if (outOfRange.length) h += '<div class="mini" style="color:var(--danger)">⚠ 有 ' + outOfRange.length + ' 个集号超出本作集数（共 ' + epsN + ' 集），这些不会写入</div>';
-      if (r.unknownLines.length) {
-        h += '<div class="divi"></div><div class="mini" style="color:var(--danger)"><b>这几条没看懂</b>（不影响其余写入，可自己手动补）：</div>';
-        r.unknownLines.forEach(function (u) { h += '<div class="mini" style="color:var(--muted)">· ' + esc(u) + '</div>'; });
+      var inR = function (n) { return n >= 1 && n <= epsN; };
+      var F = r.filler.filter(inR), M = r.mixed.filter(inR), C = r.canon.filter(inR);
+      var drop = r.filler.concat(r.mixed, r.canon).filter(function (n) { return !inR(n); }).length;
+      var tot = F.length + M.length + C.length;
+
+      var h = '<div class="aihd"><span class="aitot">识别到 <b>' + tot + '</b> 集' +
+        (epsN ? '（全作 ' + epsN + ' 集）' : '') + '</span></div>';
+
+      /* 比例条：三类各占一段，一眼看出构成 */
+      if (tot) {
+        h += '<div class="aibar">';
+        if (nF) h += '<i style="background:var(--ai-filler);width:' + (nF / tot * 100) + '%"></i>';
+        if (nM) h += '<i style="background:var(--ai-mixed);width:' + (nM / tot * 100) + '%"></i>';
+        if (nC) h += '<i style="background:var(--ai-canon);width:' + (nC / tot * 100) + '%"></i>';
+        h += '</div>';
+      }
+      h += catCard('f', 'TV原创', F);
+      h += catCard('m', '半原创', M);
+      h += catCard('c', '漫改', C);
+
+      if (drop) h += '<div class="aiok" style="color:var(--danger)">有 ' + drop + ' 个集号超出本作范围（共 ' + epsN + ' 集），不会写入</div>';
+
+      /* 没认出来的行收进折叠区，不打扰主视线 */
+      if (r.unknownLines && r.unknownLines.length) {
+        var lines = r.unknownLines.map(function (u) { return '<div class="ln">· ' + esc(u) + '</div>'; }).join('');
+        h += '<details class="aiexc"><summary>' + r.unknownLines.length + ' 条没看懂（不影响其余写入）</summary>' + lines + '</details>';
       }
       box.innerHTML = h;
-      msg.textContent = ''; msg.style.color = '';
-      $('at270AiApply').style.display = '';
+      msg.textContent = '';
+      setApply(tot > 0);
     }
-    $('at270AiPrevBtn').addEventListener('click', showPreview);
+
+    /* 粘贴/输入即自动识别（防抖，避免边打边闪） */
+    var _aiT = null;
+    function queuePreview() {
+      clearTimeout(_aiT);
+      _aiT = setTimeout(showPreview, 260);
+    }
     $('at270AiText').addEventListener('paste', function () { setTimeout(showPreview, 60); });
-    $('at270AiText').addEventListener('input', function () { $('at270AiApply').style.display = 'none'; });
+    $('at270AiText').addEventListener('input', queuePreview);
+
+    /* 一键复制提问（多数浏览器需要用户手势，这里用点击后 copy + 兜底提示） */
     $('at270AiHelp').addEventListener('click', function () {
       var ask = '请列出动画《' + (s.nameJp || s.title) + '》TV版每一集是「漫画改编」还是「动画原创（TV原创）」，' +
-        '有半原创（部分原作+部分原创）也请标出。请只输出这类格式的短句，不要解释：\n' +
-        '1-10集漫改，11-15集TV原创，16集半原创';
-      var ta = $('at270AiText');
-      ta.value = '【把下面这段话发给 AI，再把 AI 的回答贴回这里】\n\n' + ask;
-      ta.style.color = 'var(--muted)';
-      ta.addEventListener('focus', function once() { ta.value = ''; ta.style.color = ''; ta.removeEventListener('focus', once); });
-      try { ta.select(); } catch (e) {}
+        '有半原创（部分原作+部分原创）也请标出。只输出这种短句，不要解释：1-10集漫改，11-15集TV原创，16集半原创';
+      var done = function () { toast('提问已复制，发给 AI 即可'); };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(ask).then(done, function () { fallback(); });
+        } else fallback();
+      } catch (e) { fallback(); }
+      function fallback() {
+        var ta = $('at270AiText');
+        ta.value = ask; ta.focus();
+        try { ta.select(); document.execCommand('copy'); done(); }
+        catch (e2) { toast('已填入输入框，请手动复制'); }
+      }
     });
-    $('at270AiDemo').addEventListener('click', function () {
-      var ta = $('at270AiText'); ta.style.color = '';
-      ta.value = '1-10集为漫改，11-15集是TV原创，16集半原创，17集以后都是漫改。';
-      showPreview();
-    });
+
     var bc = $('at270AiClear');
     if (bc) bc.addEventListener('click', function () {
       AT270.aiPasteClear(s); try { statInvalidate(s.sid); } catch (e) {}
       renderDetail(); wrap.remove(); toast('已清除本作的 AI 导入结果');
     });
-    $('at270AiApply').addEventListener('click', function () {
+
+    applyBtn.addEventListener('click', function () {
       var msg = $('at270AiMsg');
-      if (!last || !last.hitCount) { msg.textContent = '先点「预览识别」'; msg.style.color = 'var(--danger)'; return; }
-      var r = last, epsN = (s.eps || []).length;
+      if (!last || !last.hitCount) { showPreview(); return; }
+      var r = last;
       if (!epsN) { msg.textContent = '本作还没有剧集列表，先用「✎ 编辑集数」补上'; msg.style.color = 'var(--danger)'; return; }
       var inR = function (n) { return n >= 1 && n <= epsN; };
       var F = r.filler.filter(inR), M = r.mixed.filter(inR), C = r.canon.filter(inR);
@@ -3805,7 +3919,6 @@ setTimeout(function(){
         var k = (F.indexOf(e.s) >= 0) ? 'filler' : (M.indexOf(e.s) >= 0 ? 'semi' : (C.indexOf(e.s) >= 0 ? 'canon' : null));
         if (!k) return;
         /* 人工标注过的集不覆盖（尊重手改） */
-        if (e.src && e.srcAt && e.srcAt < (prev ? prev.at : 0)) { /* 旧 AI 结果可覆盖 */ }
         if (e.src === 'filler' || e.src === 'semi' || e.src === 'canon') {
           if (e.srcNote === 'AI 导入') { e.src = k; e.srcNote = 'AI 导入'; e.srcAt = Date.now(); cnt++; }
           return; /* 真正手改过的不动 */
@@ -3829,6 +3942,9 @@ setTimeout(function(){
       save(); renderDetail(); wrap.remove();
       toast('已写入 ' + cnt + ' 集：TV原创 ' + F.length + ' · 半原创 ' + M.length);
     });
+
+    /* 打开即有旧结果 → 直接渲染；否则聚焦等粘贴 */
+    if (prev && prev.raw) { setTimeout(showPreview, 40); }
     setTimeout(function () { try { $('at270AiText').focus(); } catch (e) {} }, 80);
   }
   window.aiPasteImport = openAiPaste;
