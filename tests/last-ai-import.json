@@ -1,0 +1,77 @@
+{
+  "at": "2026-09-24T15:37:30.147Z",
+  "results": [
+    {
+      "id": "1",
+      "name": "解析器单元用例全通过（8 例）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "2",
+      "name": "含糊输入：认得部分 + 列出没懂的（纯叙述不误报）",
+      "ok": true,
+      "detail": "{\"f\":[11,12,13,14,15],\"unk\":[\"TV原创的其他几集我记不清了。\"],\"hits\":5}"
+    },
+    {
+      "id": "3",
+      "name": "详情页出现「AI 结果导入」入口",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "4",
+      "name": "粘贴面板可打开",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "5",
+      "name": "预览显示识别结果（TV原创5/半原创1/漫改20）",
+      "ok": true,
+      "detail": "识别结果：TV原创 5 集 · 半原创 1 集 · 漫改 20 集TV原创：11-15半原创：16漫改：1-10,17-26"
+    },
+    {
+      "id": "6",
+      "name": "写入成功：11-15→TV原创、16→半原创、其余→漫改",
+      "ok": true,
+      "detail": "{\"ep5\":{\"src\":\"canon\",\"note\":\"AI 导入\"},\"ep12\":{\"src\":\"filler\",\"note\":\"AI 导入\"},\"ep16\":{\"src\":\"semi\",\"note\":\"AI 导入\"},\"ep20\":{\"src\":\"canon\",\"note\":\"AI 导入\"},\"maskGone\":true,\"filler\":\"11-15\",\"mixed\":\"16\",\"stored\":true}"
+    },
+    {
+      "id": "7",
+      "name": "汇总串与 AI 库已落盘",
+      "ok": true,
+      "detail": "filler=11-15 mixed=16 stored=true"
+    },
+    {
+      "id": "8",
+      "name": "集级来源显示「AI 导入」依据",
+      "ok": true,
+      "detail": "{\"info\":{\"src\":\"filler\",\"by\":\"ai\",\"note\":\"AI 导入\"},\"text\":\"TV原创（AI 导入） · 判定依据：AI 导入 · 点击修改\",\"byText\":\"AI 导入\"}"
+    },
+    {
+      "id": "9",
+      "name": "不覆盖真正的「人工标注」（第20集保持 TV原创）",
+      "ok": true,
+      "detail": "{\"src\":\"filler\",\"note\":\"我自己核对的\"}"
+    },
+    {
+      "id": "10",
+      "name": "超范围集号给出提示且不写入",
+      "ok": true,
+      "detail": "识别结果：TV原创 11 集 · 半原创 0 集 · 漫改 0 集TV原创：1-5,900-905⚠ 有 6 个集号超出本作集数（共 26 集），这些不会写入"
+    },
+    {
+      "id": "11",
+      "name": "可清除已存 AI 结果",
+      "ok": true,
+      "detail": "{\"had\":true,\"now\":false}"
+    },
+    {
+      "id": "12",
+      "name": "全程无页面级 JS 错误",
+      "ok": true,
+      "detail": "pageErrors=0"
+    }
+  ]
+}

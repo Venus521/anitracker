@@ -296,6 +296,7 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
       <button class="ty" onclick="healThisCover()" title="从 Bangumi 重新拉取本作封面并保存到本地（离线时提示重试）">⟳ 重拉封面</button>
       <button class="ty" onclick="fgOneShow()" id="btnFgCalibrate" title="用离线 Anime Filler Guide 数据校准本作原创集标注（TV原创/半原创）">⟳ 来源校准</button>
+      <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
       <button class="ty" onclick="assocUi()" id="btnAssoc" style="display:none" title="把这个本地添加的番关联到 Bangumi 条目，用于自动补齐剧集列表（不涉及账号同步）">⌁ 关联Bangumi</button>
     </div>
     <div class="statgrid" id="dStats"></div>
@@ -343,7 +344,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.8.0', AT_BUILD='20260924a';
+var AT_VERSION='2.9.0', AT_BUILD='20260924c';
 /* ===== Bangumi 同步开关：2026-09-24 恢复（v2.8.0）。
    9/15 曾因「瘦身」临时改为 false；现已配合网络层重做恢复启用。
    如再需临时隐藏：把 true 改回 false 并刷新即可。 ===== */
@@ -429,7 +430,7 @@ function pct(s){ return s.total? Math.min(100,Math.round((cntWatched(s)/s.total)
    优先级：人工标注 > 标题【动画原创】 > 显式数据 > 校准区间 > 待核 */
 function srcInfoOf(s,e){
   if(!e) return {src:'unknown',by:'none',note:''};
-  if(e.src==='canon'||e.src==='filler'||e.src==='semi') return {src:e.src,by:'manual',note:e.srcNote||''};
+  if(e.src==='canon'||e.src==='filler'||e.src==='semi') return {src:e.src,by:(e.srcNote==='AI 导入'||e.srcNote==='AI 导入（其余按漫改）')?'ai':'manual',note:e.srcNote||''};
   var tt=String(e.t||'');
   if(tt.indexOf('【动画原创】')>=0) return {src:(e.type==='semi'?'semi':'filler'),by:'title',note:''};
   if(e.type==='filler'||e.type==='semi'||e.type==='movie') return {src:e.type,by:'data',note:''};
@@ -444,7 +445,7 @@ function epTypeOf(s,e){ return srcInfoOf(s,e).src; }
 function srcDisplayName(k){ return TYPE_NAME[k]||'待核'; }
 function srcBasisText(s,e){
   var inf=srcInfoOf(s,e);
-  var by={manual:'人工标注',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',none:'暂无依据'}[inf.by]||inf.by;
+  var by={manual:'人工标注',ai:'AI 导入',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',none:'暂无依据'}[inf.by]||inf.by;
   return srcDisplayName(inf.src)+(inf.note?('（'+inf.note+'）'):'')+' · 判定依据：'+by+' · 点击修改';
 }
 function visEps(s){ var list=(s.eps||[]); if(!anyHide()) return list; return list.filter(function(e){ return !isHiddenSrc(srcInfoOf(s,e).src); }); }
@@ -1589,7 +1590,7 @@ function fgClearCache(){
 }
 
 /* ===== v2.3 来源标注编辑器（集级） ===== */
-function srcByText(by){ return ({manual:'人工标注',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',none:'暂无依据'})[by]||'—'; }
+function srcByText(by){ return ({manual:'人工标注',ai:'AI 导入',title:'标题含【动画原创】',data:'标注数据',calib:'AFG 校准',none:'暂无依据'})[by]||'—'; }
 function webCheck(kind){ /* v2.4.2 联网查证：公开分集资料跳转（不依赖 Bangumi） */
   var s=bySid(curSid); if(!s) return;
   var q=encodeURIComponent(String(s.title||s.nameJp||'').trim());
@@ -1610,7 +1611,7 @@ function editSrc(epNum){
   var opts=[['canon','漫改'],['filler','TV原创'],['semi','半原创'],['unknown','待核']];
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 '+e.s+' 集 · 来源标注</h3>'+
     '<button onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
-    '<div class="mini">当前：<b style="color:var(--ink)">'+esc(srcDisplayName(inf.src))+'</b> · 依据：'+esc(srcByText(inf.by))+(inf.note?(' · '+esc(inf.note)):'')+(e.src?' · <span style="color:var(--accent)">人工标注</span>':'')+'</div>'+
+    '<div class="mini">当前：<b style="color:var(--ink)">'+esc(srcDisplayName(inf.src))+'</b> · 依据：'+esc(srcByText(inf.by))+(inf.note?(' · '+esc(inf.note)):'')+(inf.by==='ai'?' · <span style="color:var(--accent)">AI 导入</span>':(e.src?' · <span style="color:var(--accent)">人工标注</span>':''))+'</div>'+
     '<div class="srcopts" id="seOps">'+opts.map(function(o){
       var on=((e.src&&e.src===o[0])||(!e.src&&inf.src===o[0]&&o[0]!=='unknown')||(!e.src&&inf.src==='unknown'&&o[0]==='unknown'));
       return '<button class="srcopt'+(on?' on':'')+'" onclick="__pickSe(this,\''+o[0]+'\')">'+o[1]+'</button>';
@@ -1663,6 +1664,9 @@ function showSrcTools(){
     '<div class="mini"><b style="color:var(--ink)">① 数据源校准</b>：用离线 Anime Filler Guide 数据标出 TV原创/半原创 区间（区间外记为漫改）。</div>'+
     '<div class="syrow"><button class="sybtn acc" id="stFg">⟳ AFG 校准本作</button></div>'+
     '<div class="divi"></div>'+
+    '<div class="mini"><b style="color:var(--ink)">①·B AI 结果导入</b>（v2.9.0）：自动库查不到的新番/冷门番，把 AI 的回答原文贴进来即可自动识别。优先级最高，覆盖自动查到的。</div>'+
+    '<div class="syrow"><button class="sybtn acc" id="stAi">✧ 粘贴 AI 结果</button></div>'+
+    '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">② 批量套用标签</b>（适合整部忠实原作的番）：</div>'+
     '<div class="rangeline">范围：<label><input type="radio" name="stSc" value="unknown" checked/> 仅待核集</label><label><input type="radio" name="stSc" value="all"/> 整部</label>'+
     '<label><input type="radio" name="stSc" value="range"/> 第 <input id="stA" type="number" min="1" value="1"/> 至 <input id="stB" type="number" min="1" value="'+epsN+'"/> 集</label></div>'+
@@ -1678,6 +1682,7 @@ function showSrcTools(){
   var stChoice='';
   window.__pickSt=function(btn,k){ stChoice=k; var ops=box.querySelectorAll('#stOps .srcopt'); for(var i=0;i<ops.length;i++) ops[i].classList.remove('on'); btn.classList.add('on'); };
   box.querySelector('#stFg').onclick=async function(){ __closeSrcTools(); await fgOneShow(); };
+  var _stAi=box.querySelector('#stAi'); if(_stAi) _stAi.onclick=function(){ __closeSrcTools(); try{ aiPasteImport(); }catch(e){ toast('AI 导入模块未就绪'); } };
   box.querySelector('#stApply').onclick=function(){
     var m=box.querySelector('#stMsg');
     if(!stChoice){ m.textContent='先选一个标签'; m.style.color='var(--danger)'; return; }
@@ -3300,7 +3305,7 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
     box.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 ' + e.s + ' 集 · 编辑</h3>' +
       '<button type="button" onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
-      '<div class="mini">当前：<b style="color:var(--ink)">' + esc(srcDisplayName(inf.src)) + '</b> · 依据：' + esc(srcByText(inf.by)) + (inf.note ? (' · ' + esc(inf.note)) : '') + (e.src ? ' · <span style="color:var(--accent)">人工标注</span>' : '') + '</div>' +
+      '<div class="mini">当前：<b style="color:var(--ink)">' + esc(srcDisplayName(inf.src)) + '</b> · 依据：' + esc(srcByText(inf.by)) + (inf.note ? (' · ' + esc(inf.note)) : '') + (inf.by === 'ai' ? ' · <span style="color:var(--accent)">AI 导入</span>' : (e.src ? ' · <span style="color:var(--accent)">人工标注</span>' : '')) + '</div>' +
       '<div class="srcopts" id="seOps">' + opts.map(function (o) {
         var on = ((e.src && e.src === o[0]) || (!e.src && inf.src === o[0] && o[0] !== 'unknown') || (!e.src && inf.src === 'unknown' && o[0] === 'unknown'));
         return '<button type="button" class="srcopt' + (on ? ' on' : '') + '" onclick="__pickSe(this,\'' + o[0] + '\')">' + o[1] + '</button>';
@@ -3802,6 +3807,381 @@ setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRu
     };
   })();
   window._at270ToolToggle = function () { window._at270ToolOpen = true; window.renderSrcBar(); };
+
+  /* =====================================================================
+     十二·五、AI 粘贴导入（v2.9.0）
+     用途：新番/冷门番自动查不到时，把 AI 的回答原文贴进来，本模块解析成
+     「第N集=TV原创/半原创/漫改」并写入本地库（AI 结果优先，覆盖自动查到的）。
+     设计原则：尽量解析 + 明确回报哪几条没懂（不整段拒绝）。
+     ===================================================================== */
+  var AI_PASTE_KEY = 'at_ai_paste';   /* {slug: {f,m,c,at,t,raw}}AI 结果长期库，优先级最高 */
+
+  function aiPasteAll() { return lsGet(AI_PASTE_KEY, {}); }
+  function aiPasteKey(s) {
+    if (!s) return '';
+    return String(s.sid || normTxt(s.title) || '').slice(0, 80);
+  }
+  function aiPastePut(s, rec) {
+    var all = aiPasteAll(); all[aiPasteKey(s)] = rec;
+    lsSet(AI_PASTE_KEY, all);
+    return rec;
+  }
+  AT270.aiPasteAll = aiPasteAll;
+  AT270.aiPasteFor = function (s) { return aiPasteAll()[aiPasteKey(s)] || null; };
+  AT270.aiPasteClear = function (s) {
+    var all = aiPasteAll(); var k = aiPasteKey(s);
+    if (all[k]) { delete all[k]; lsSet(AI_PASTE_KEY, all); return true; }
+    return false;
+  };
+
+  /* —— 解析引擎 ———————————————————————————————————————————
+     能吃下的写法（中英混排、有无"第""集"都行）：
+       "1-10集为漫改，11-15为TV原创，16集半原创"
+       "第 1、2、3 集是原创；第4集漫改"
+       "TV原创：11-15, 23, 45-47"
+       "【动画原创】第12集 ／ 12话 原创 ／ 12 (Filler)"
+       "ep1-5 manga canon, ep6 filler"
+     输出：{filler:[], mixed:[], canon:[], unknownLines:[], total}
+     分类口径与项目一致：TV原创→filler，半原创→mixed，漫改→canon
+
+     核心思路：先按「子句」切（逗号/顿号/分号/换行都切），再对每个子句
+     分别判分类。关键点：子句只含集号不带分类词时，继承「它前面的分类词」
+     —— 这样 "TV原创：11,12,13" 才能正确归到 TV原创 而不是漫改。
+     ————————————————————————————————————————————————————— */
+  var AI_CAT = {
+    filler: ['tv原创', 'tv 原创', '动画原创', '動畫原創', '原创', '原創', 'filler', 'fillers', 'anime original'],
+    mixed: ['mixed canon/filler', 'mixed canon', 'anime canon', '混合原创', '半原创', '半原創', '半改', 'mixed'],
+    canon: ['manga canon', '漫画改编', '漫改', '原作改编', '原作', '原著', '漫画', 'manga', 'canon']
+  };
+  /* 关键词探测顺序：长词优先，防止 "mixed canon" 被 "canon" 抢走 */
+  var AI_WORDS = [
+    ['mixed canon/filler', 'mixed'], ['mixed canon', 'mixed'], ['anime canon', 'mixed'],
+    ['动画原创', 'filler'], ['動畫原創', 'filler'], ['tv 原创', 'filler'], ['tv原创', 'filler'],
+    ['混合原创', 'mixed'], ['半原创', 'mixed'], ['半原創', 'mixed'], ['半改', 'mixed'],
+    ['漫画改编', 'canon'], ['manga canon', 'canon'], ['原作改编', 'canon'],
+    ['漫改', 'canon'], ['原作', 'canon'], ['原著', 'canon'], ['漫画', 'canon'], ['canon', 'canon'],
+    ['filler', 'filler'], ['anime original', 'filler'], ['原创', 'filler'], ['原創', 'filler'],
+    ['manga', 'canon'], ['mixed', 'mixed']
+  ];
+  /* 在一个子句里找分类词；返回 {cat, at, len} 或 null（at 为命中位置，用于切分） */
+  function aiFindCat(seg) {
+    var low = String(seg || '').toLowerCase();
+    var best = null;
+    for (var i = 0; i < AI_WORDS.length; i++) {
+      var w = AI_WORDS[i][0], cat = AI_WORDS[i][1];
+      var at = low.indexOf(w);
+      if (at < 0) continue;
+      if (!best || at < best.at || (at === best.at && w.length > best.len)) {
+        best = { cat: cat, at: at, len: w.length, word: w };
+      }
+    }
+    return best;
+  }
+  /* 把一段集号文本解析成数字数组：支持 3 / 3-7 / 第3集 / 3、4、5 / 3,4,5 / 3~7 / 3–7 */
+  function aiNumsOf(txt) {
+    var out = [], consumed = [];
+    var s = String(txt || '');
+    /* 归一：全角逗号顿号→半角逗号；各种连接符→ '-' */
+    s = s.replace(/[、，,;；／\/]/g, ',').replace(/[～~—－–−_至到]/g, '-').replace(/[（）()【】\[\]《》]/g, ' ');
+    var m;
+    /* ① 先抓区间（含 "第1至第10集" / "1-10集" / "1到10"） */
+    var reRange = /(\d{1,4})\s*(?:集|话|話|集数|ep|episode)?\s*-\s*(?:第)?\s*(\d{1,4})\s*(?:集|话|話|ep|episode)?/gi;
+    while ((m = reRange.exec(s)) !== null) {
+      var a = +m[1], b = +m[2];
+      if (a > b) { var t = a; a = b; b = t; }
+      /* 明显不是区间（如 2024-2025 年份对）就跳过：集号超过 3000 不认 */
+      if (b > 3000 || a < 1) continue;
+      for (var k = a; k <= b; k++) out.push(k);
+      consumed.push(m[0]);
+    }
+    /* ② 剩下文本里的零散单集号（必须先剔除已消化的区间，否则 1-10 会再抓出 1 和 10） */
+    var rest = s;
+    for (var c = 0; c < consumed.length; c++) rest = rest.replace(consumed[c], ' ');
+    var reOne = /\d{1,4}/g;
+    while ((m = reOne.exec(rest)) !== null) {
+      var n = +m[0];
+      if (n >= 1 && n <= 3000) out.push(n);
+    }
+    var uniq = [];
+    out.forEach(function (n) { if (uniq.indexOf(n) < 0) uniq.push(n); });
+    uniq.sort(function (x, y) { return x - y; });
+    return uniq;
+  }
+  /* 主解析（v2.9.0 定稿）：按「位置最近」给每个集号打分类标签。
+     步骤：① 逐行 → ② 找出该行所有分类词的位置 → ③ 找出该行所有集号/区间的位置
+     → ④ 每个集号归属「离它最近的那个分类词」。
+     这样同时解决：逗号继承（"TV原创：11,12,13"）、后置词（"1,2,3集是原创"）、
+     一句多类（"原创：45-47 半原创：50"）三种情况，不需要特判。 */
+  function aiParse(text) {
+    var raw = String(text || '').replace(/\r/g, '');
+    var filler = [], mixed = [], canon = [], unknownLines = [];
+    var anyHit = 0;
+    var lines = raw.split(/\n+/);
+    lines.forEach(function (lnRaw) {
+      var ln = lnRaw.trim();
+      if (!ln) return;
+      /* 项目自己的【动画原创】前缀先转成普通写法 */
+      ln = ln.replace(/【动画原创】/g, '动画原创 ');
+      var low = ln.toLowerCase();
+
+      /* ① 找出所有分类词出现位置（长词优先，同位置取长；已被吃掉的区间不重复计） */
+      var marks = [];
+      AI_WORDS.forEach(function (pair) {
+        var w = pair[0], cat = pair[1], from = 0, at;
+        while ((at = low.indexOf(w, from)) >= 0) {
+          marks.push({ at: at, len: w.length, cat: cat, word: w });
+          from = at + w.length;
+        }
+      });
+      /* 去掉被更长词包含的短词（如 "canon" 落在 "manga canon" 里） */
+      marks = marks.filter(function (a) {
+        for (var i = 0; i < marks.length; i++) {
+          var b = marks[i];
+          if (b === a) continue;
+          if (b.at <= a.at && b.at + b.len >= a.at + a.len && b.len > a.len) return false;
+        }
+        return true;
+      });
+      marks.sort(function (x, y) { return x.at - y.at; });
+
+      /* ② 找出所有集号与区间（连同它们在原文里的位置） */
+      /* 归一：只在"副本"上找数字，位置与原文一致（替换都等长或仅去标点，需保持长度）
+         为稳妥起见：先把各种连接符换成等长的 '-'，全角逗号换成等长 ','，再扫描 */
+      var scan = ln.replace(/[～~—－–−]/g, '-').replace(/[、，]/g, ',');
+      /* 硬边界：逗号/顿号/分号/句号/箭头 切成"子句"。
+         归属规则：集号先看自己所在子句有没有分类词；有就用它。
+         没有的话，再往前面的子句找最近的一个分类词（"TV原创：11,12,13" 的 12/13）。
+         但若自己所在子句的"更后面"有分类词，且前面子句也没有 → 用后面的
+         （"1,2,3集是原创" 里 1、2 所在子句无词、前面也无词 → 借后面子句的"原创"）。 */
+      var segs = [], segStarts = [0];
+      for (var si = 0; si < scan.length; si++) {
+        if (/[,\uFF0C\u3001;\uFF1B\u3002!！?？\/\uFF0F|]/.test(scan.charAt(si))) segStarts.push(si + 1);
+      }
+      segStarts.push(scan.length);
+      var segOf = [];
+      for (var sg = 0; sg < segStarts.length - 1; sg++) {
+        for (var p = segStarts[sg]; p < segStarts[sg + 1]; p++) segOf[p] = sg;
+      }
+      var lastSeg = segStarts.length - 2;
+      segOf[scan.length] = lastSeg;
+
+      var spans = [];
+      var reRange = /(\d{1,4})\s*(?:集|话|話|集数|ep|episode)?\s*-\s*(?:第)?\s*(\d{1,4})\s*(?:集|话|話|ep|episode)?/gi;
+      var m;
+      while ((m = reRange.exec(scan)) !== null) {
+        var a = +m[1], b = +m[2];
+        if (a > b) { var t = a; a = b; b = t; }
+        if (b > 3000 || a < 1) continue;
+        if (b - a > 2000) continue;
+        /* 正则尾部 \s* 会多吃空格，导致 sp.end 越界到下一个分类词上，
+           使 "45-47 半原创" 的区间误判为半原创。这里把尾随空白去掉。 */
+        var mTxt = m[0].replace(/\s+$/, '');
+        for (var k = a; k <= b; k++) spans.push({ n: k, at: m.index, end: m.index + mTxt.length, seg: segOf[m.index] });
+      }
+      /* 剔除已被区间覆盖的数字，再抓零散单集号 */
+      var covers = spans.map(function (s) { return { a: s.at, b: s.end }; });
+      var reOne = /\d{1,4}/g;
+      while ((m = reOne.exec(scan)) !== null) {
+        var pos = m.index, inside = false;
+        for (var ci = 0; ci < covers.length; ci++) { if (pos >= covers[ci].a && pos < covers[ci].b) { inside = true; break; } }
+        if (inside) continue;
+        var n2 = +m[0];
+        if (n2 >= 1 && n2 <= 3000) spans.push({ n: n2, at: pos, end: pos + m[0].length, seg: segOf[pos] });
+      }
+      /* 该行连一个集号都没有：若它"看起来像在讲分类"就记为没懂，否则静默忽略。
+         marks 已在上方算好，这里直接用。 */
+      if (!spans.length) {
+        if ((marks.length || /\d/.test(ln)) && unknownLines.indexOf(ln) < 0) unknownLines.push(ln);
+        return;
+      }
+
+      /* 分类词按子句归档：segMarks[seg] = [mark…] */
+      var segMarks = {};
+      marks.forEach(function (mk) { var s2 = segOf[mk.at]; (segMarks[s2] = segMarks[s2] || []).push(mk); });
+      var maxSeg = lastSeg;
+
+      var lineHit = false;
+      spans.forEach(function (sp) {
+        if (!marks.length) return;
+        var pick = null;
+        /* ① 本子句内的分类词：优先取集号「前面最近」的；前面没有才取后面的。
+             这样 "原创：45-47 半原创：50"（空格分隔、无逗号）里
+             45-47 归前面的"原创"、50 归前面的"半原创"，而不是都归最近的词。 */
+        var mine = segMarks[sp.seg];
+        if (mine && mine.length) {
+          for (var i = 0; i < mine.length; i++) {
+            var mk2 = mine[i];
+            if (mk2.at <= sp.end) {           /* 在集号之前（含紧邻） */
+              if (!pick || mk2.at > pick.at) pick = mk2;
+            }
+          }
+          if (!pick) {                        /* 没前置 → 取后面最近的 */
+            for (var j2 = 0; j2 < mine.length; j2++) {
+              var mk3 = mine[j2];
+              if (!pick || mk3.at < pick.at) pick = mk3;
+            }
+          }
+        }
+        /* ② 前面最近的子句里的分类词（继承列表标签） */
+        if (!pick) {
+          for (var s3 = sp.seg - 1; s3 >= 0; s3--) {
+            if (segMarks[s3] && segMarks[s3].length) { pick = segMarks[s3][segMarks[s3].length - 1]; break; }
+          }
+          /* ③ 前面也没有 → 用后面最近的子句（后置写法） */
+          if (!pick) {
+            for (var s4 = sp.seg + 1; s4 <= maxSeg; s4++) {
+              if (segMarks[s4] && segMarks[s4].length) { pick = segMarks[s4][0]; break; }
+            }
+          }
+        }
+        if (!pick) return;
+        lineHit = true; anyHit++;
+        var bucket = pick.cat === 'filler' ? filler : (pick.cat === 'mixed' ? mixed : canon);
+        if (bucket.indexOf(sp.n) < 0) bucket.push(sp.n);
+      });
+      /* 本行一个集号都没归好，但仍"看起来像在讲分类" → 记为没懂：
+         a) 含分类词但找不到任何集号（"TV原创的那几集我记不清了"）
+         b) 含数字但完全没分类词（"大概 70 多集吧"）
+         纯叙述、既无分类词也无数字的行（"画质很好"）不算"没懂"，静默忽略。 */
+      if (!lineHit && (marks.length || /\d/.test(ln)) && unknownLines.indexOf(ln) < 0) unknownLines.push(ln);
+    });
+    var sortU = function (a) { a.sort(function (x, y) { return x - y; }); return a; };
+    /* 互斥：一个集号只归一类，优先级 TV原创 > 半原创 > 漫改（越"想跳过"越优先） */
+    var seen = {};
+    var f2 = [], m2 = [], c2 = [];
+    sortU(filler).forEach(function (n) { if (!seen[n]) { seen[n] = 1; f2.push(n); } });
+    sortU(mixed).forEach(function (n) { if (!seen[n]) { seen[n] = 1; m2.push(n); } });
+    sortU(canon).forEach(function (n) { if (!seen[n]) { seen[n] = 1; c2.push(n); } });
+    /* 没懂的行：去重、限量 */
+    var uniqUnk = [];
+    unknownLines.forEach(function (u) { u = String(u).trim().slice(0, 60); if (u && uniqUnk.indexOf(u) < 0) uniqUnk.push(u); });
+    return { filler: f2, mixed: m2, canon: c2, unknownLines: uniqUnk.slice(0, 12), hitCount: anyHit, raw: raw };
+  }
+  AT270.aiParse = aiParse;
+
+  /* —— 打开粘贴面板 —— */
+  function openAiPaste() {
+    var s = bySid(curSid);
+    if (!s) { toast('先打开一部番的详情页'); return; }
+    if (s.pv) { toast('预览模式：先加入片单再导入'); return; }
+    closeM('at270AiMask');
+    var prev = AT270.aiPasteFor(s);
+    var wrap = makeEl('<div id="at270AiMask" class="mask"><div class="panel">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">AI 结果导入</h3>' +
+      '<button type="button" id="at270AiX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div class="mini">把 AI 关于《' + esc(s.title) + '》原创集的回答<b style="color:var(--ink)">原文整段贴进来</b>即可，不用整理格式。例如：<br>' +
+      '<span style="color:var(--muted)">「1-10集为漫改，11-15集是TV原创，16集半原创」</span><br>' +
+      '识别到 <b style="color:var(--ink)">TV原创</b> 会被「隐藏 TV原创」自动跳过。</div>' +
+      '<textarea id="at270AiText" rows="7" placeholder="在此粘贴 AI 的回答…">' + esc(prev && prev.raw || '') + '</textarea>' +
+      '<div class="syrow"><button type="button" class="sybtn" id="at270AiHelp">看看要 AI 怎么说</button>' +
+      '<button type="button" class="sybtn" id="at270AiDemo">填个示例</button>' +
+      (prev ? '<button type="button" class="sybtn" id="at270AiClear">清除已存结果</button>' : '') + '</div>' +
+      '<div class="divi"></div>' +
+      '<div id="at270AiPrev"></div>' +
+      '<div class="msg" id="at270AiMsg"></div>' +
+      '<div class="row2"><button type="button" class="b2" id="at270AiCancel">取消</button>' +
+      '<button type="button" class="b1" id="at270AiPrevBtn">预览识别</button>' +
+      '<button type="button" class="b1" id="at270AiApply" style="display:none">写入</button></div>' +
+      '</div></div>');
+    document.body.appendChild(wrap);
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) wrap.remove(); });
+    $('at270AiX').addEventListener('click', function () { wrap.remove(); });
+    $('at270AiCancel').addEventListener('click', function () { wrap.remove(); });
+
+    var last = null;
+    function showPreview() {
+      var msg = $('at270AiMsg'), box = $('at270AiPrev');
+      var txt = $('at270AiText').value || '';
+      if (!txt.trim()) { msg.textContent = '还没贴内容'; msg.style.color = 'var(--danger)'; return; }
+      var r = aiParse(txt);
+      last = r;
+      var nF = r.filler.length, nM = r.mixed.length, nC = r.canon.length;
+      if (!r.hitCount) {
+        box.innerHTML = '<div class="mini" style="color:var(--danger)">没认出任何一条。可以换成这种写法试试：<br>「1-10集漫改，11-15集TV原创，16集半原创」</div>';
+        msg.textContent = '无法识别'; msg.style.color = 'var(--danger)';
+        $('at270AiApply').style.display = 'none';
+        return;
+      }
+      var epsN = (s.eps || []).length;
+      var outOfRange = epsN ? r.filler.concat(r.mixed, r.canon).filter(function (n) { return n > epsN; }) : [];
+      var h = '<div class="mini"><b style="color:var(--ink)">识别结果</b>：TV原创 <b style="color:var(--ink)">' + nF + '</b> 集 · 半原创 <b style="color:var(--ink)">' + nM + '</b> 集 · 漫改 <b style="color:var(--ink)">' + nC + '</b> 集</div>';
+      if (nF) h += '<div class="mini">TV原创：' + esc(fgFmt(r.filler).slice(0, 160)) + '</div>';
+      if (nM) h += '<div class="mini">半原创：' + esc(fgFmt(r.mixed).slice(0, 160)) + '</div>';
+      if (nC) h += '<div class="mini">漫改：' + esc(fgFmt(r.canon).slice(0, 160)) + '</div>';
+      if (outOfRange.length) h += '<div class="mini" style="color:var(--danger)">⚠ 有 ' + outOfRange.length + ' 个集号超出本作集数（共 ' + epsN + ' 集），这些不会写入</div>';
+      if (r.unknownLines.length) {
+        h += '<div class="divi"></div><div class="mini" style="color:var(--danger)"><b>这几条没看懂</b>（不影响其余写入，可自己手动补）：</div>';
+        r.unknownLines.forEach(function (u) { h += '<div class="mini" style="color:var(--muted)">· ' + esc(u) + '</div>'; });
+      }
+      box.innerHTML = h;
+      msg.textContent = ''; msg.style.color = '';
+      $('at270AiApply').style.display = '';
+    }
+    $('at270AiPrevBtn').addEventListener('click', showPreview);
+    $('at270AiText').addEventListener('paste', function () { setTimeout(showPreview, 60); });
+    $('at270AiText').addEventListener('input', function () { $('at270AiApply').style.display = 'none'; });
+    $('at270AiHelp').addEventListener('click', function () {
+      var ask = '请列出动画《' + (s.nameJp || s.title) + '》TV版每一集是「漫画改编」还是「动画原创（TV原创）」，' +
+        '有半原创（部分原作+部分原创）也请标出。请只输出这类格式的短句，不要解释：\n' +
+        '1-10集漫改，11-15集TV原创，16集半原创';
+      var ta = $('at270AiText');
+      ta.value = '【把下面这段话发给 AI，再把 AI 的回答贴回这里】\n\n' + ask;
+      ta.style.color = 'var(--muted)';
+      ta.addEventListener('focus', function once() { ta.value = ''; ta.style.color = ''; ta.removeEventListener('focus', once); });
+      try { ta.select(); } catch (e) {}
+    });
+    $('at270AiDemo').addEventListener('click', function () {
+      var ta = $('at270AiText'); ta.style.color = '';
+      ta.value = '1-10集为漫改，11-15集是TV原创，16集半原创，17集以后都是漫改。';
+      showPreview();
+    });
+    var bc = $('at270AiClear');
+    if (bc) bc.addEventListener('click', function () {
+      AT270.aiPasteClear(s); try { statInvalidate(s.sid); } catch (e) {}
+      renderDetail(); wrap.remove(); toast('已清除本作的 AI 导入结果');
+    });
+    $('at270AiApply').addEventListener('click', function () {
+      var msg = $('at270AiMsg');
+      if (!last || !last.hitCount) { msg.textContent = '先点「预览识别」'; msg.style.color = 'var(--danger)'; return; }
+      var r = last, epsN = (s.eps || []).length;
+      if (!epsN) { msg.textContent = '本作还没有剧集列表，先用「✎ 编辑集数」补上'; msg.style.color = 'var(--danger)'; return; }
+      var inR = function (n) { return n >= 1 && n <= epsN; };
+      var F = r.filler.filter(inR), M = r.mixed.filter(inR), C = r.canon.filter(inR);
+      /* AI 结果优先：写入 at_ai_paste 覆盖层，并落到集级（集级标注优先级最高） */
+      aiPastePut(s, { f: F, m: M, c: C, at: Date.now(), t: s.title, raw: r.raw.slice(0, 4000) });
+      var cnt = 0;
+      (s.eps || []).forEach(function (e) {
+        var k = (F.indexOf(e.s) >= 0) ? 'filler' : (M.indexOf(e.s) >= 0 ? 'semi' : (C.indexOf(e.s) >= 0 ? 'canon' : null));
+        if (!k) return;
+        /* 人工标注过的集不覆盖（尊重手改） */
+        if (e.src && e.srcAt && e.srcAt < (prev ? prev.at : 0)) { /* 旧 AI 结果可覆盖 */ }
+        if (e.src === 'filler' || e.src === 'semi' || e.src === 'canon') {
+          if (e.srcNote === 'AI 导入') { e.src = k; e.srcNote = 'AI 导入'; e.srcAt = Date.now(); cnt++; }
+          return; /* 真正手改过的不动 */
+        }
+        e.src = k; e.srcNote = 'AI 导入'; e.srcAt = Date.now();
+        cnt++;
+      });
+      /* 兜底：AI 只给了原创集、没提其余 → 其余按漫改（与 AFG 区间外口径一致） */
+      var covered = F.concat(M, C);
+      if (F.length || M.length) {
+        (s.eps || []).forEach(function (e) {
+          if (covered.indexOf(e.s) >= 0) return;
+          if (e.src === 'filler' || e.src === 'semi' || e.src === 'canon') return;
+          e.src = 'canon'; e.srcNote = 'AI 导入（其余按漫改）'; e.srcAt = Date.now(); cnt++;
+        });
+      }
+      /* 同步刷新剧集级的汇总串（列表角标用它） */
+      try { s.filler = fgFmt(F); s.mixed = fgFmt(M); s.aiAt = Date.now(); } catch (e) {}
+      s.updAt = Date.now(); try { statInvalidate(s.sid); } catch (e) {}
+      try { logEdit(s.sid, 'AI 导入', 'TV原创 ' + F.length + ' · 半原创 ' + M.length + ' · 漫改 ' + C.length + (r.unknownLines.length ? ('（未识别 ' + r.unknownLines.length + ' 条）') : '')); } catch (e) {}
+      save(); renderDetail(); wrap.remove();
+      toast('已写入 ' + cnt + ' 集：TV原创 ' + F.length + ' · 半原创 ' + M.length);
+    });
+    setTimeout(function () { try { $('at270AiText').focus(); } catch (e) {} }, 80);
+  }
+  window.aiPasteImport = openAiPaste;
+  AT270.aiPaste = openAiPaste;
 
   /* =====================================================================
      十三、启动：迁移 + 数据版本 + 一次性自动校准

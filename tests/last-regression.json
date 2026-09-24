@@ -1,17 +1,17 @@
 {
- "t": "2026-09-24T14:49:03.519Z",
+ "t": "2026-09-24T15:39:01.135Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "893874B vs 893874B"
+   "detail": "917140B vs 917140B"
   },
   {
    "id": "01",
    "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.8.0 json=2.8.0"
+   "detail": "page=2.9.0 json=2.9.0"
   },
   {
    "id": "02",
@@ -41,7 +41,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "29ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "53ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -65,7 +65,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "23ms"
+   "detail": "20ms"
   },
   {
    "id": "19",
