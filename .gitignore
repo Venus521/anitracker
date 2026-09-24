@@ -15,3 +15,6 @@ dist/
 !tracker-icon-512.png
 !tracker-filler-data.js
 docs/shots/v250-preview.png
+
+# v2.10.0：改动前的完整备份目录（仅本地回滚用，不入库）
+_backup_v2100_pre/

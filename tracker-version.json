@@ -1,7 +1,7 @@
 {
     "app": "anitracker",
-    "version": "2.9.3",
-    "build": "20260925b",
-    "note": "纯记录定位：移除详情页的「▶ 去门户播放」按钮及其 playInPortal() 函数——本作只做观看记录的追踪，不再负责跳转播放。门户相关的「B站追番导入」保留（那是导入，不是播放）。详情页按钮区现为：编辑集数 / 来源校准 / AI 结果导入 / 重拉封面（+ 关联 Bangumi 时出现的拉取/推送）。v2.9.2 的同步频率分层改版、v2.9.0 的「AI 结果导入」全部保留。",
-    "ts": 1790262500000
+    "version": "2.10.0",
+    "build": "20260925c",
+    "note": "方向转向【账号】：删掉 Bangumi 观看进度双向同步（拉取/推送/台账/回滚）与 WebDAV 文件同步（含明文密码隐患），把早已写好的邮箱注册登录扶正为右上角「账号」一级入口。面板重排为：状态条 → 账号（常开置顶）→ 本地备份（常开）→ 高级设置（折叠）。入口按钮由「同步」改名为「账号」。详情页移除「拉取Bangumi进度 / 推送Bangumi」两按钮。重要边界：Bangumi 的【导入/关联】链路完整保留（bgmSid / bgmQueue / bgmFetch / bgmPullEpisodeList / bgmFillEpisodes / bgmAttach / bgmAttachGroup），否则搜索添加与关联会失效。顺带修复 CBSync.isOn 未导出导致状态条永远显示「云同步未开」的静默 bug（cloudbase-sync.js 补 isOn/current 导出）。数据仍存于腾讯云开发 CloudBase（环境 cloud1-d7gsn5t0w6407b963，ap-shanghai）。",
+    "ts": 1790292000000
 }

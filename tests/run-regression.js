@@ -27,8 +27,9 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
   /* 版本断言不写死具体号：只要求「页面 AT_VERSION === tracker-version.json 的 version」
      且形如 x.y.z。这样每次发版不必回来改测试（v2.8.0 起）。 */
   check('01', '版本一致（页面 === JSON）', vm && vm[1] === vj.version && /^\d+\.\d+\.\d+$/.test(vj.version), 'page=' + (vm && vm[1]) + ' json=' + vj.version);
-  /* v2.8.0：BGMSYNC 恢复为 true（9/15 曾临时改为 false）；bgmGet 已死代码移除仍应不复活 */
-  check('02', 'BGMSYNC=true 已恢复；bgmGet 仍不存在', /var BGMSYNC=true;/.test(ix) && ix.indexOf('function bgmGet') < 0);
+  /* v2.10.0：同步移除后 BGMSYNC 开关一并删除；bgmGet 是历史死代码，不应复活 */
+  check('02', 'v2.10.0 已无 BGMSYNC 开关；bgmGet 死代码未复活',
+    ix.indexOf('BGMSYNC') < 0 && ix.indexOf('function bgmGet') < 0);
 
   /* 用绝对路径起服务：裸 'python' / 'node' 在非交互环境下常不在 PATH，会导致
      ERR_CONNECTION_REFUSED（v2.8.0 实测踩到）。 */
@@ -76,52 +77,82 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     await page.goto('http://127.0.0.1:8094/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(1100);
 
-    // T10 同步面板（v2.9.2：不再隐藏一切，改为「状态条 + 常开档 + 折叠档」）
-    // 打开面板即应看到状态条、本地备份、Bangumi 卡；低频档默认折叠但存在。
-    await page.evaluate(() => syncOpen('bgm')); await sleep(900);
-    const syncPanel = await page.evaluate(() => {
+    // ===== v2.10.0：同步已移除，账号上位 =====
+    // T10 账号面板结构：状态条 + 账号卡（常开置顶）+ 本地备份（常开）+ 1 个折叠档（高级设置）
+    await page.evaluate(() => openAccount()); await sleep(900);
+    const acctPanel = await page.evaluate(() => {
       const folds = Array.from(document.querySelectorAll('details.syfold'));
+      const h3 = document.querySelector('.panel h3');
+      const acctCard = document.getElementById('syCardAcct');
+      const backupCard = document.getElementById('syExport') ? document.getElementById('syExport').closest('.sycard') : null;
+      const kids = Array.from(document.querySelectorAll('.panel > *'));
+      // 顺序断言：状态条 -> 账号卡 -> 本地备份 -> 高级设置（账号必须排在备份之前）
+      const ord = el => kids.indexOf(el);
       return {
+        title: h3 ? h3.textContent.trim() : '',
         status: (document.querySelector('.systatus .txt') || {}).textContent || '',
-        hasPrimary: !!document.getElementById('syPrimary'),
+        hasAcctCard: !!acctCard,
+        acctBeforeBackup: !!(acctCard && backupCard && ord(acctCard) >= 0 && ord(backupCard) >= 0 && ord(acctCard) < ord(backupCard)),
+        hasCbArea: !!document.getElementById('cbArea'),
         hasExport: !!document.getElementById('syExport'),
-        hasBgmCard: !!document.getElementById('syCardBgm'),
+        hasImport: !!document.getElementById('syImport'),
         foldCount: folds.length,
-        foldOpen: folds.filter(d => d.open).map(d => d.getAttribute('data-fold')),
-        foldAll: folds.map(d => d.getAttribute('data-fold')).sort(),
-        topLabel: (document.querySelector('[aria-label="同步中心"]') || {}).textContent || ''
+        // 折叠档只有 1 个（高级设置）；是否默认展开取决于用户的记忆偏好，这里不强求
+        foldTag: folds.map(d => (d.querySelector('summary') || {}).textContent || '').join('|'),
+        topLabel: (document.querySelector('[aria-label="账号"]') || {}).textContent || ''
       };
     });
-    check('10', '同步面板：状态条 + 主行动 + 本地备份 + Bangumi 卡常开，3 个低频档默认折叠',
-      /Bangumi/.test(syncPanel.status) && syncPanel.hasPrimary && syncPanel.hasExport && syncPanel.hasBgmCard &&
-      syncPanel.foldCount === 3 && syncPanel.foldOpen.length === 0 &&
-      JSON.stringify(syncPanel.foldAll) === JSON.stringify(['adv', 'cloud', 'ledger']) &&
-      /同步/.test(syncPanel.topLabel),
-      JSON.stringify(syncPanel).slice(0, 300));
+    check('10', 'v2.10.0 账号面板：标题「账号」+ 状态条 + 账号卡在本地备份之前（常开）+ 仅 1 个折叠档',
+      acctPanel.title === '账号' && /未登录|已登录/.test(acctPanel.status) &&
+      acctPanel.hasAcctCard && acctPanel.acctBeforeBackup && acctPanel.hasCbArea &&
+      acctPanel.hasExport && acctPanel.hasImport &&
+      acctPanel.foldCount === 1 && /高级设置/.test(acctPanel.foldTag) &&
+      /账号/.test(acctPanel.topLabel),
+      JSON.stringify(acctPanel).slice(0, 340));
 
-    // T10a 折叠档展开后内容确实存在（不是被删掉，只是收起）
+    // T10a 高级设置展开后内容确实存在（不是被删掉，只是收起）
     await page.evaluate(() => { document.querySelectorAll('details.syfold').forEach(d => { d.open = true; }); });
     await sleep(400);
     const foldContent = await page.evaluate(() => ({
-      hasLedger: !!document.getElementById('syLedger'),
-      hasCloud: !!document.getElementById('cbArea'),
       hasRelay: !!document.getElementById('optRelay'),
-      hasNoSync: !!document.getElementById('optNoSync')
+      hasNoSync: !!document.getElementById('optNoSync'),
+      hasAdvUnmapped: !!document.getElementById('advUnmapped')
     }));
-    check('10a', '折叠档展开后内容都在（台账/云同步/中继/免绑定搜索）—— 只是收起，不是删掉',
-      foldContent.hasLedger && foldContent.hasCloud && foldContent.hasRelay && foldContent.hasNoSync,
+    check('10a', '高级设置展开后内容都在（中继 / 免绑定搜索 / 未关联统计）—— 只是收起，不是删掉',
+      foldContent.hasRelay && foldContent.hasNoSync && foldContent.hasAdvUnmapped,
       JSON.stringify(foldContent));
 
-    // T10b 旧版「精简总开关」已彻底移除
-    const legacyGone = await page.evaluate(() => ({
-      offFn: (typeof syncOff === 'function') ? syncOff() : 'missing',
-      hasOldBtn: !!document.getElementById('optSyncOffBtn'),
-      hasOldReopen: !!document.getElementById('optSyncOn'),
-      lsFlag: localStorage.getItem('at_sync_off')
-    }));
-    check('10b', 'v2.9.1 精简开关已移除（syncOff() 恒 false、无旧按钮、localStorage 标记已清）',
-      legacyGone.offFn === false && !legacyGone.hasOldBtn && !legacyGone.hasOldReopen && legacyGone.lsFlag === null,
-      JSON.stringify(legacyGone));
+    // T10b 同步功能已彻底移除（代码级，不只是藏起来）
+    const syncGone = await page.evaluate(() => {
+      const names = ['syncRun', 'bgmPullProgress', 'bgmPushOneShow', 'bgmPullAll', 'bgmPushAll',
+        'bgmRollback', 'bgmRetry', 'renderLedger', 'syncLogAll', 'bgmBoundHtml', 'bgmUnboundHtml',
+        'syncHealth', 'syncFoldPref', 'playInPortal'];
+      const alive = names.filter(n => typeof window[n] === 'function');
+      return {
+        alive,
+        hasSsCard: !!document.getElementById('syCardBgm'),
+        hasLedger: !!document.getElementById('syLedger'),
+        oldFlag: localStorage.getItem('at_sync_off'),
+        // v2.10.0 入口改名后，「同步」字样不该再出现在顶栏
+        topHasSync: /同步/.test((document.querySelector('.topbtn.wide') || {}).textContent || '')
+      };
+    });
+    check('10b', 'v2.10.0 同步功能已移除（14 个函数全不存在、无 Bangumi 卡/台账、顶栏无「同步」）',
+      syncGone.alive.length === 0 && !syncGone.hasSsCard && !syncGone.hasLedger &&
+      !syncGone.topHasSync && syncGone.oldFlag === null,
+      JSON.stringify(syncGone).slice(0, 300));
+
+    // T10c 导入链路必须幸存（这是「连代码一起删」最危险的地方：bgm* 前缀不能通配删）
+    const importAlive = await page.evaluate(() => {
+      const need = ['bgmSid', 'bgmQueue', 'bgmFetch', 'bgmPullEpisodeList', 'bgmFillEpisodes', 'bgmAttach', 'bgmAttachGroup'];
+      return {
+        missing: need.filter(n => typeof window[n] !== 'function'),
+        gw: typeof GW !== 'undefined'
+      };
+    });
+    check('10c', 'v2.10.0 导入链路幸存（7 个 bgm* 函数 + GW 网关都在，未被连带删除）',
+      importAlive.missing.length === 0 && importAlive.gw === true,
+      JSON.stringify(importAlive));
     await page.evaluate(() => window.__closeSync()); await sleep(300);
 
     // T11 搜索分季（mock 4 条 → 同系列 3 部分组 + 单条平铺）
@@ -171,24 +202,25 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     const marked = await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('tr_shows')).filter(x => String(x.bgmId) === '900003')[0]; return s && Object.keys(s.statuses || {}).length === 1; });
     check('14', '预览不可标记；加入片单后可标记且持久（8集）', /预览模式/.test(pvToast) && stStill0 && committed && marked, 'pvToast=' + pvToast.slice(0, 40) + ' committed=' + committed + ' marked=' + marked);
 
-    // T15 同步行为：本地有 token 时，标记应触发 Bangumi /collections 请求
-    // （v2.8.0：BGMSYNC=true，同步链路重新启用；mock 已把 api.bgm.tv 指到本地 8092）
-    // v2.9.2：不再有「精简态」这种东西，默认就是完整链路可用。
+    // T15 v2.10.0：标记已看【不再】产生任何 Bangumi 写入请求（同步已移除，这是本版的核心行为变更）
     await page.evaluate(() => localStorage.setItem('at_bgm_token', 'dummy-token-should-not-be-used'));
     await page.evaluate(() => openDetail('900001')); await sleep(600);
     mockReqs = 0;
     await page.evaluate(() => { const els = document.querySelectorAll('#dGroups .eprow'); els[2] && els[2].click(); });
-    await sleep(3500);
-    check('15', '有 token 时标记发出 /collections 请求（无「精简态」拦截）', mockReqs > 0, 'mockReqs=' + mockReqs);
-
-    // T15b 详情页同步按钮按「本作是否关联 Bangumi」显隐（v2.9.2 新增）
-    // 关联的：bgmId=900001 的番 → 两个同步按钮可见
-    const btnVis = await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('#vDetail [data-bgm-sync]'));
-      return { n: btns.length, shown: btns.filter(b => b.style.display !== 'none').length };
+    await sleep(2500);
+    const markedLocal = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('tr_shows')).filter(x => String(x.bgmId) === '900001')[0];
+      return s ? Object.keys(s.statuses || {}).length : -1;
     });
-    // 未关联的：手动添加的本地番（sid 形如 man-xxx，无 bgmId）→ 两个同步按钮隐藏
-    // 必须走 addShow() 走内存态，直接改 localStorage 的话 shows[] 不会刷新，openDetail 会静默返回。
+    check('15', 'v2.10.0 标记已看：本地记录生效，但不再发出任何 Bangumi 写请求',
+      mockReqs === 0 && markedLocal >= 1,
+      'mockReqs=' + mockReqs + ' localMarked=' + markedLocal);
+
+    // T15b 详情页不再有「拉取/推送 Bangumi」按钮；「关联 Bangumi」对本地番仍可用
+    const btnGone = await page.evaluate(() => ({
+      syncBtns: document.querySelectorAll('#vDetail [data-bgm-sync]').length,
+      anySyncText: /拉取Bangumi进度|推送Bangumi/.test(document.getElementById('vDetail').textContent)
+    }));
     const localSid = await page.evaluate(() => {
       const now = Date.now();
       const fake = { sid: 'man-' + now, title: '本地测试番' + now, nameJp: '', cover: '', year: '2026',
@@ -198,27 +230,14 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
       return fake.sid;
     });
     await page.evaluate(sid => openDetail(sid), localSid); await sleep(700);
-    const btnVisNoBgm = await page.evaluate(() => ({
-      sid: curSid,
-      hasBgm: !!(bySid(curSid) && (bySid(curSid).bgmId || bgmSid(bySid(curSid)))),
-      n: document.querySelectorAll('#vDetail [data-bgm-sync]').length,
-      shown: Array.from(document.querySelectorAll('#vDetail [data-bgm-sync]')).filter(b => b.style.display !== 'none').length
-    }));
-    check('15b', '详情页同步按钮：关联 Bangumi 的番显示，本地番（man-）隐藏',
-      btnVis.n === 2 && btnVis.shown === 2 && btnVisNoBgm.sid === localSid && btnVisNoBgm.hasBgm === false &&
-      btnVisNoBgm.n === 2 && btnVisNoBgm.shown === 0,
-      'linked=' + JSON.stringify(btnVis) + ' local=' + JSON.stringify(btnVisNoBgm));
-
-    // T15c v2.9.3：纯记录定位 —— 「去门户播放」按钮与 playInPortal() 必须不存在
-    const portalGone = await page.evaluate(() => ({
-      btn: !!document.querySelector('#vDetail [onclick*="playInPortal"]'),
-      anyBtn: /去门户播放/.test(document.getElementById('vDetail').textContent),
-      fn: typeof window.playInPortal,
-      gwStillThere: typeof GW !== 'undefined'   /* 门户导入还在用 GW，不能连带删掉 */
-    }));
-    check('15c', 'v2.9.3 纯记录：详情页无「去门户播放」按钮，playInPortal 已移除（GW 保留给 B站导入）',
-      portalGone.btn === false && portalGone.anyBtn === false && portalGone.fn === 'undefined' && portalGone.gwStillThere === true,
-      JSON.stringify(portalGone));
+    const assocVis = await page.evaluate(() => {
+      const b = document.getElementById('btnAssoc');
+      return { sid: curSid, hasBtn: !!b, shown: !!(b && b.style.display !== 'none') };
+    });
+    check('15b', 'v2.10.0 详情页：拉取/推送按钮已移除；本地番仍显示「关联Bangumi」',
+      btnGone.syncBtns === 0 && btnGone.anySyncText === false &&
+      assocVis.sid === localSid && assocVis.hasBtn === true && assocVis.shown === true,
+      'gone=' + JSON.stringify(btnGone) + ' assoc=' + JSON.stringify(assocVis));
 
     // T16 未开播条目提示（v2.4.4 行为保持）
     await page.evaluate(() => { showAdd(); document.getElementById('qKw').value = '空条目'; doBgmSearch(); });

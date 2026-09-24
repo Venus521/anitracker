@@ -153,7 +153,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #toast.on{opacity:1}
 @supports(padding:max(0px)){.wrap{padding-bottom:max(60px,env(safe-area-inset-bottom))}}
 
-/* ===== v2.3：同步入口 / 来源筛选 / 台账 / 标注 ===== */
+/* ===== 顶部入口按钮 / 来源筛选 / 标注 ===== */
 .topbtn.wide{width:auto;border-radius:22px;padding:0 14px;gap:6px;font-size:13px;color:var(--ink);border-color:var(--ink);display:inline-flex;height:40px}
 .topbtn.wide .ic{font-size:14px}
 .srcbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 10px}
@@ -171,7 +171,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .srccov b{color:var(--ink);font-weight:600}
 .srccov .lnk{color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;font-weight:600}
 .sycard{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;background:var(--card)}
-/* v2.9.2 同步面板：顶部一句话状态条 + 折叠档视觉 */
+/* 面板视觉：顶部一句话状态条 + 卡片 + 折叠档（v2.10.0 沿用，服务于「账号」面板） */
 .systatus{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:0 0 4px;background:var(--card)}
 .systatus .dot{font-size:13px;line-height:1}
 .systatus .txt{font-size:12px;color:var(--ink);font-weight:600;flex:1;min-width:0}
@@ -279,7 +279,7 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
     <div class="top">
       <div class="brand">追迹<small>ANITRACKER</small></div>
       <div style="display:flex;gap:10px">
-        <button class="topbtn wide" onclick="openSync()" aria-label="同步中心" title="同步中心：Bangumi / 云同步 / 备份"><span class="ic">⇅</span>同步</button>
+        <button class="topbtn wide" onclick="openAccount()" aria-label="账号" title="账号：登录 / 注册 / 本地备份"><span class="ic">☺</span>账号</button>
         <button class="topbtn" id="themeBtn" onclick="cycleTheme()" aria-label="切换主题" title="切换深色/浅色主题">☀</button>
         <button class="topbtn" onclick="showAdd()" aria-label="添加番剧">＋</button>
         <button class="topbtn" onclick="randomPlay()" aria-label="随机播放" title="随机挑一部（在看/想看）">🎲</button>
@@ -307,7 +307,6 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
       <button class="ty" onclick="fgOneShow()" id="btnFgCalibrate" title="用离线 Anime Filler Guide 数据校准本作原创集标注（TV原创/半原创）">⟳ 来源校准</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
       <button class="ty" onclick="healThisCover()" title="从 Bangumi 重新拉取本作封面并保存到本地（离线时提示重试）">⟳ 重拉封面</button>
-      <button class="ty" data-bgm-sync="1" onclick="bgmPullProgress()" style="display:none" title="从 Bangumi 拉取本作进度（只补不删）">⟳ 拉取Bangumi进度</button><button class="ty" data-bgm-sync="1" onclick="bgmPushOneShow()" style="display:none" title="把本作进度推送到 Bangumi（先比对差异，只推增量）">↑ 推送Bangumi</button>
       <button class="ty" onclick="assocUi()" id="btnAssoc" style="display:none" title="把这个本地添加的番关联到 Bangumi 条目，用于自动补齐剧集列表（不涉及账号同步）">⌁ 关联Bangumi</button>
     </div>
     <div class="statgrid" id="dStats"></div>
@@ -346,7 +345,7 @@ var _quotaWarned=0;
 function wr(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){
   if(e&&(e.name==='QuotaExceededError'||e.code===22)&&Date.now()-_quotaWarned>300000){
     _quotaWarned=Date.now();
-    try{ toast('存储空间已满——本地约 250 部封顶，请导出备份（⇅里）并移除部分番剧'); }catch(e2){}
+    try{ toast('存储空间已满——本地约 250 部封顶，请点右上「账号」→ 导出备份，并移除部分番剧'); }catch(e2){}
   }
 } }
 function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove('on'); },2200); }
@@ -355,59 +354,44 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.9.3', AT_BUILD='20260925b';
-/* ===== Bangumi 同步开关：2026-09-24 恢复（v2.8.0）。
-   9/15 曾因「瘦身」临时改为 false；现已配合网络层重做恢复启用。
-   如再需临时隐藏：把 true 改回 false 并刷新即可。 ===== */
-var BGMSYNC=true;
-/* ===== v2.9.2 同步「按需取用」改版 =====
-   v2.9.1 曾用「默认关闭总开关」隐藏同步 UI —— 那只是把累赘挪到看不见的地方，问题没解决。
-   本版改为【频率分层】：
-     · 面板顶部一条「一句话状态」，一眼知道现在是什么状况（绑定没绑定、上次同步成没成）
-     · 常用档（本地备份 / Bangumi 进度）默认展开
-     · 低频档（账号云同步 / 同步记录 / 高级设置）默认折叠，想用点开
-     · 全局唯一一个「主行动」按钮，随状态变化（去绑定 / 立即同步 / 检查网络）
-   所有功能默认都在，不做隐藏；折叠只影响视觉层次。
-   旧的 at_sync_off 开关保留读取兼容（老用户若开过，首次进入自动清掉并恢复完整 UI）。 */
-function syncOff() { return false; }        /* 恒为 false：不再支持整体隐藏 */
-function syncOffSet(off) { syncFoldPref(off ? 'off' : 'on'); }
-/* 折叠偏好：记住用户每次展开/收起哪几档（不是隐藏，只是记忆视觉状态） */
-var SYNC_FOLD_KEY = 'at_sync_fold';
-function syncFoldPref(v) {
+var AT_VERSION='2.10.0', AT_BUILD='20260925c';
+/* ===== v2.10.0：方向转向【账号】 =====
+   v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
+   但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
+     ① Bangumi 观看进度双向同步（拉取/推送/台账/回滚）
+     ② WebDAV 文件同步（tracker-sync.json，还明文存密码）
+     ③ 账号云同步（邮箱注册登录，东西早写好了，却藏在折叠档里）
+   本版做三件事：删掉 ① 和 ②，把 ③ 扶正成右上角「账号」。
+   理由：① 是给「在 Bangumi 上也在看」的人用的，本作定位是纯记录；
+        ② 是账号系统的劣质代替品（要自己搭 WebDAV，密码还不安全）；
+        ③ 才是「换设备接着看」的正解。
+   ---- 保留边界（重要） ----
+   Bangumi 的【导入/关联】链路完整保留：bgmSid / bgmQueue / bgmFetch /
+   bgmPullEpisodeList / bgmFillEpisodes / bgmAttach / bgmAttachGroup。
+   它们也读 token，但用途是「把番和剧集列表填进片单」，不是「同步观看进度」。
+   删了它们会导致搜索添加、关联 Bangumi、来源校准全部失效。 */
+/* 账号面板折叠偏好（只有本地备份这一档可折叠，其余常开） */
+function acctFoldPref(v) {
   try {
     if (v === undefined) {
-      var s = localStorage.getItem(SYNC_FOLD_KEY);
-      var d = { bgm: false, cloud: true, ledger: true, adv: true };
-      if (!s) return d;
-      var o = JSON.parse(s);
-      return { bgm: !!o.bgm, cloud: o.cloud === undefined ? true : !!o.cloud, ledger: o.ledger === undefined ? true : !!o.ledger, adv: o.adv === undefined ? true : !!o.adv };
+      var s = localStorage.getItem('at_acct_fold');
+      return s ? !!JSON.parse(s) : false;
     }
-    localStorage.setItem(SYNC_FOLD_KEY, JSON.stringify(v));
+    localStorage.setItem('at_acct_fold', JSON.stringify(!!v));
   } catch (e) {}
 }
-/* 兼容旧开关：若曾被打开过，清掉标记并恢复完整 UI（这是本版要撤掉的错误做法） */
-try {
-  if (localStorage.getItem('at_sync_off') !== null) {
-    localStorage.removeItem('at_sync_off');
-    localStorage.removeItem(SYNC_FOLD_KEY);
-  }
-} catch (e) {}
-/* 同步健康状态：给面板顶部那句「一句话状态」用 */
-function syncHealth() {
-  var tk = '';
-  try { tk = (localStorage.getItem('at_bgm_token') || '').trim(); } catch (e) {}
-  var last = rd('tr_synclast', null);
-  var h = { bgmBound: !!tk, lastAt: '', lastOk: null, lastText: '', cloudOn: false };
-  if (last && last.at) {
-    h.lastAt = last.at;
-    var d = (Date.now() - new Date(last.at).getTime()) / 1000;
-    h.lastText = d < 90 ? '刚刚' : (d < 3600 ? Math.round(d / 60) + ' 分钟前' : (d < 86400 ? Math.round(d / 3600) + ' 小时前' : Math.round(d / 86400) + ' 天前'));
-    h.lastOk = true;
-  }
-  try { h.cloudOn = !!(window.CBSync && CBSync.isOn && CBSync.isOn()); } catch (e) {}
+/* 账号面板顶部状态：登录了就显示是谁，没登录就引导注册 */
+function acctStatus() {
+  var h = { signedIn: false, who: '', cloudOn: false };
+  try {
+    if (window.CBSync && typeof CBSync.current === 'function') {
+      var u = CBSync.current();
+      if (u) { h.signedIn = true; h.who = u.username || u.email || ''; }
+    }
+    if (window.CBSync && typeof CBSync.isOn === 'function') h.cloudOn = !!CBSync.isOn();
+  } catch (e) {}
   return h;
 }
-try{ if(!BGMSYNC){ Array.prototype.forEach.call(document.querySelectorAll('[data-bgm-sync]'),function(el){ el.remove(); }); } }catch(_eSync){}
 /* v2.4.2：系列级统一分类（整部标一个类型）已按需求移除，类型只在集级存在 */
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
 var HIDE_SRC=(function(){ try{ var h=JSON.parse(localStorage.getItem('at_hide_src')||'null'); if(h&&typeof h==='object') return {filler:!!h.filler,semi:!!h.semi}; }catch(e){} return {filler:false,semi:false}; })();
@@ -908,13 +892,7 @@ function renderDetail(){
     covBox.innerHTML=_hidHtml; covBox.style.display=_hidHtml?'':'none';
   }
   var _ba=document.getElementById('btnAssoc'); if(_ba){ _ba.style.display=(s.bgmId||bgmSid(s))?'none':''; }
-  /* v2.9.2：拉取/推送只在「本作真的关联了 Bangumi」时才出现——本地添加的番不该看到两个永远点不动的按钮 */
-  try{
-    var _hasBgm=!!(s.bgmId||bgmSid(s));
-    Array.prototype.forEach.call(document.querySelectorAll('#vDetail [data-bgm-sync], #vDetail [data-bgm-need]'),function(el){
-      el.style.display=_hasBgm?'':'none';
-    });
-  }catch(e){}
+  /* v2.10.0：拉取/推送按钮已随「同步」一并移除，这里不再需要显隐控制 */
   renderParts();
   renderHist(s);
   renderGrid();
@@ -949,7 +927,7 @@ function markNextEp(){
   setEpStat(s,next,'watched');
   s.status=(s.status||'watching')==='want'?'watching':s.status;
   s.updAt=Date.now(); save(); renderDetail();
-  bgmPushEp(s,next);
+  /* v2.10.0：不再把「已看」写回 Bangumi（同步已移除），本地记录到此为止 */
   toast('第 '+next+' 集已标记已看');
 }
 function renderHist(s){
@@ -977,7 +955,7 @@ function renderHist(s){
         '<span>'+(x.t?fmtTs(x.t):'早期记录')+'</span></div>';
     }).join('');
 }
-function setStatus(f){ var s=bySid(curSid); if(s&&s.pv){ toast('预览模式：先「加入片单」再改状态'); return; } s.status=f; s.updAt=Date.now(); save(); renderDetail(); bgmPushStatus(s); }
+function setStatus(f){ var s=bySid(curSid); if(s&&s.pv){ toast('预览模式：先「加入片单」再改状态'); return; } s.status=f; s.updAt=Date.now(); save(); renderDetail(); /* v2.10.0：不再写回 Bangumi */ }
 /* 繁简/日文汉字归一化（番剧名高频字），搜索词与库名双方都过 norm 再匹配 */
 var TS_MAP={'賊':'贼','門':'门','東':'东','車':'车','馬':'马','鳥':'鸟','龍':'龙','戰':'战','國':'国','劍':'剑','傳':'传','記':'记','錄':'录','師':'师','銀':'银','戀':'恋','愛':'爱','萬':'万','無':'无','業':'业','煉':'炼','術':'术','衛':'卫','鐵':'铁','彈':'弹','藥':'药','種':'种','話':'话','學':'学','體':'体','點':'点','擊':'击','電':'电','機':'机','場':'场','雲':'云','樂':'乐','聖':'圣','護':'护','靈':'灵','獸':'兽','麗':'丽','夢':'梦','漢':'汉','語':'语','讀':'读','書':'书','畫':'画','飛':'飞','網':'网','練':'练','級':'级','約':'约','紅':'红','純':'纯','紙':'纸','細':'细','繼':'继','續':'续','與':'与','計':'计','讓':'让','變':'变','貝':'贝','貨':'货','貴':'贵','買':'买','費':'费','資':'资','質':'质','賭':'赌','軍':'军','輕':'轻','輸':'输','農':'农','進':'进','遊':'游','運':'运','過':'过','達':'达','遠':'远','適':'适','選':'选','遺':'遗','邊':'边','郵':'邮','鄉':'乡','醫':'医','釋':'释','鋼':'钢','錢':'钱','錦':'锦','鍵':'键','鎖':'锁','鏡':'镜','關':'关','際':'际','難':'难','雙':'双','靜':'静','韓':'韩','頭':'头','頻':'频','顆':'颗','題':'题','顏':'颜','願':'愿','類':'类','風':'风','飯':'饭','館':'馆','驅':'驱','魚':'鱼','鳴':'鸣','龜':'龟','戦':'战','悪':'恶','絵':'绘','桜':'樱','気':'气','園':'园','隊':'队','沢':'泽','宮':'宫','転':'转','亜':'亚','鈴':'铃','島':'岛','楓':'枫','瀬':'濑','麗':'丽','緋':'绯','彗':'彗','喰':'喰','瀧':'泷','嵐':'岚','榊':'榊','暁':'晓','薔':'蔷','薇':'薇','優':'优','億':'亿','兒':'儿','廳':'厅','強':'强','彈':'弹','徵':'征','恆':'恒','掛':'挂','擁':'拥','棄':'弃','歷':'历','歸':'归','毀':'毁','滅':'灭','營':'营','環':'环','發':'发','監':'监','瞭':'了','矚':'瞩','碼':'码','禍':'祸','稱':'称','窮':'穷','築':'筑','簡':'简','簽':'签','編':'编','總':'总','縮':'缩','織':'织','罰':'罚','聯':'联','臟':'脏','舍':'舍','藝':'艺','蝕':'蚀','製':'制','複':'复','覇':'霸','說':'说','調':'调','談':'谈','論':'论','賽':'赛','贏':'赢','蹤':'踪','身':'身','載':'载','輝':'辉','迥':'迥','透':'透','週':'周','運':'运','隨':'随','隱':'隐','雜':'杂','雞':'鸡','餘':'余','驚':'惊','鬥':'斗','魂':'魂','鮮':'鲜','鳳':'凤','鴉':'鸦','黑':'黑','鼓':'鼓','齊':'齐'};
 function norm(s){
@@ -1080,11 +1058,11 @@ function cycleEp(n){
   setEpStat(s,n,NEXT_EP[String(cur)]);
   s.status=(s.status||'watching')==='want'?'watching':s.status; s.updAt=Date.now();
   save(); renderDetail();
-  if(epStat(s,n)) bgmPushEp(s,n);
+  /* v2.10.0：不再把单集进度写回 Bangumi */
 }
 function delShow(){
   var s=bySid(curSid);
-  if(!confirm('从片单移除《'+s.title+'》？（云端同步文件保留）')) return;
+  if(!confirm('从片单移除《'+s.title+'》？')) return;
   shows=shows.filter(function(x){ return String(x.sid)!==String(curSid); });
   save(); backList(); toast('已移除');
 }
@@ -1224,19 +1202,13 @@ function renderAddHint(){
   var el=document.getElementById('addHint'); if(!el) return;
   if(el._offline){ el.innerHTML='<span style="color:var(--danger)">在线搜索暂不可用（网络问题）</span>——本地结果照常，可正常添加'; return; }
   el.innerHTML=bgmTok()
-    ? '搜索源：本地库（离线可用）+ Bangumi 在线（已绑定，可同步进度）'
-    : '搜索源：本地库（离线可用）+ Bangumi 在线（<b style="color:var(--ink)">免绑定直接搜</b>）；绑定 token 仅用于进度同步（可选）';
+    ? '搜索源：本地库（离线可用）+ Bangumi 在线'
+    : '搜索源：本地库（离线可用）+ Bangumi 在线（<b style="color:var(--ink)">免绑定直接搜</b>）；绑定 token 仅用于拉取剧集列表（可选）';
 }
 function setAddOffline(off){ var el=document.getElementById('addHint'); if(el){ el._offline=!!off; renderAddHint(); } }
-function logAdd(title,note,ok){
-  try{
-    var e=syncLogNew('add','添加条目');
-    e.ok=ok?1:0; e.fail=ok?0:1;
-    e.note='来源：'+note;
-    e.items.push({title:title,ep:'',ok:!!ok,err:''});
-    syncLogCommit(e);
-  }catch(e2){}
-}
+/* v2.10.0：logAdd 原本只往「同步台账」写一条记录；台账已移除，这里保留空实现
+   以免散落的调用点报错（保留函数名，语义上不再做任何事）。 */
+function logAdd(title,note,ok){} /* eslint-disable-line no-unused-vars */
 async function addLibFromSearch(btn,id){
   if(btn){ btn.disabled=true; btn.textContent='添加中…'; }
   var before=shows.length;
@@ -1251,7 +1223,7 @@ async function doBgmSearch(){
   var msg=document.getElementById('srMsg'), list=document.getElementById('srList');
   if(!kw){ msg.textContent='先输入番名'; return; }
   if(!SEARCH_NOSYNC() && !bgmTok()){
-    msg.innerHTML='「免绑定搜索」已关闭（可在同步中心 → 高级设置 重新开启），或绑定 Bangumi 后重试';
+    msg.innerHTML='「免绑定搜索」已关闭（可在「账号」→ 高级设置 重新开启），或绑定 Bangumi 后重试';
     return;
   }
   pushSearchHist(kw); renderSearchHist(); setAddOffline(false); renderAddHint();
@@ -1349,7 +1321,7 @@ function manualAdd(){
   for(var i=1;i<=total;i++) eps.push({s:i,t:'第 '+i+' 集'});
   addShow({ sid:'man-'+Date.now(), title:tt, nameJp:'', cover:'', year:String(y).trim().slice(0,4), total:total, eps:eps, statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'手动添加', manual:1 });
 }
-/* ---- 关联 Bangumi（本地添加的番之后可同步） ---- */
+/* ---- 关联 Bangumi（本地添加的番，关联后自动补齐剧集列表） ---- */
 function __closeAssoc(){ var m=document.getElementById('assocMask'); if(m) m.remove(); }
 function assocUi(){
   var s=bySid(curSid); if(!s) return;
@@ -1357,7 +1329,7 @@ function assocUi(){
   var wrap=document.createElement('div'); wrap.id='assocMask'; wrap.className='mask';
   var box=document.createElement('div'); box.className='panel';
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">关联 Bangumi 条目</h3><button onclick="__closeAssoc()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
-    '<div class="mini">为《'+esc(s.title)+'》找到 Bangumi 条目即可同步它的进度（搜索免绑定）。</div>'+
+    '<div class="mini">为《'+esc(s.title)+'》找到 Bangumi 条目即可自动补齐剧集列表（搜索免绑定）。</div>'+
     '<div class="searchrow"><input id="assocKw" value="'+esc(s.title)+'" style="caret-color:var(--accent)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();assocSearch();}"/><button onclick="assocSearch()">搜索</button></div>'+
     '<div class="msg" id="assocMsg"></div><div id="assocList"></div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -1383,7 +1355,7 @@ async function assocSearch(){
 }
 function assocPick(bid){
   var s=bySid(curSid); if(!s) return;
-  if(!confirm('把《'+s.title+'》关联到 Bangumi 条目 #'+bid+'？\n关联后可在同步中心拉取/推送它的进度。')) return;
+  if(!confirm('把《'+s.title+'》关联到 Bangumi 条目 #'+bid+'？\n关联后会自动补齐它的剧集列表。')) return;
   s.bgmId=String(bid);
   s.source=(s.source?(s.source+' + '):'')+'关联 Bangumi #'+bid;
   s.updAt=Date.now(); save();
@@ -1764,7 +1736,7 @@ function showSrcTools(){
   };
 }
 
-/* ===== v2.3 评分编辑（同步时会推送到 Bangumi） ===== */
+/* ===== 评分编辑（本机记录；v2.10.0 起不再推送到 Bangumi） ===== */
 function editRate(){
   var s=bySid(curSid); if(!s) return;
   if(s.pv){ toast('预览模式：先「加入片单」再评分'); return; }
@@ -1783,7 +1755,7 @@ function getCensorship(title){
 }
 /* v2.4.2：fgType（整部类型猜测表）已随系列级分类移除 */
 
-/* ---- Bangumi 账号同步（v2.3 模块：节流/台账/重试/回滚，见下方同步中心）---- */
+/* ---- Bangumi 连接层（v2.10.0：节流 + 请求封装 + 错误翻译；只服务导入/关联）---- */
 
 function fCnt(s){ /* 列表行来源角标：TV原创/半原创 计数 + 删减提示 */
   var censor = getCensorship(s.title);
@@ -1795,39 +1767,15 @@ function fCnt(s){ /* 列表行来源角标：TV原创/半原创 计数 + 删减�
   return badge + censorBadge;
 }
 
-/* ---------- Bangumi 账号同步（v2.3） ---------- */
+/* ---------- Bangumi 连接层（v2.10.0：只服务于「导入/关联」，不再有观看进度同步） ---------- */
 function bgmTok(){ return (localStorage.getItem('at_bgm_token')||'').trim(); }
 function bgmAuth(){ return { 'Authorization':'Bearer '+bgmTok(), 'Content-Type':'application/json' }; }
 function bgmSid(s){ var b=String(s.bgmId||'').replace(/[^0-9]/g,''); if(b) return b;
   if(/^(int|man)/i.test(String(s.sid))) return '';
   return String(s.sid).replace(/[^0-9]/g,''); }
 
-/* ===== 同步台账（持久化 at_sync_log，上限 80 条）===== */
-var LOGK='at_sync_log';
-function syncLogAll(){ try{ return JSON.parse(localStorage.getItem(LOGK)||'[]'); }catch(e){ return []; } }
-function syncLogSave(all){ try{ localStorage.setItem(LOGK,JSON.stringify(all.slice(-80))); return true; }catch(e){ return false; } }
-function syncLogNew(kind,title,mode){ return {id:'LG'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),at:new Date().toISOString(),kind:kind,title:title||'',mode:mode||'',ok:0,fail:0,items:[],note:'',rolledBack:false}; }
-function syncLogCommit(entry){
-  var all=syncLogAll();
-  if(entry.auto){
-    var last=all[all.length-1];
-    if(last&&last.auto&&last.kind===entry.kind&&last.day===entry.day){
-      last.items=last.items.concat(entry.items);
-      if(last.items.length>300) last.items=last.items.slice(-300);
-      last.ok+=entry.ok; last.fail+=entry.fail; last.at=entry.at;
-      syncLogSave(all); return last;
-    }
-  }
-  all.push(entry); syncLogSave(all); return entry;
-}
-function syncLogUpdate(id,fn){ var all=syncLogAll(); for(var i=0;i<all.length;i++){ if(all[i].id===id){ fn(all[i]); syncLogSave(all); return all[i]; } } return null; }
-function _lgDay(){ var d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
-function bgmLogAuto(title,ep,ok,err){
-  var e=syncLogNew('bgm-ep-auto','单集自动同步'); e.auto=true; e.day=_lgDay();
-  e.ok=ok?1:0; e.fail=ok?0:1; e.at=new Date().toISOString();
-  e.items.push({title:title,ep:ep,ok:ok,err:err||''});
-  syncLogCommit(e);
-}
+/* v2.10.0 移除：同步台账（at_sync_log）整套 —— syncLogAll/Save/New/Commit/Update、
+   bgmLogAuto、renderLedger。台账是给「双向同步」留审计用的；同步没了，台账也就没有消费者。 */
 
 /* ===== 节流请求（写 >=1100ms / 读 >=350ms；429/网络错指数退避重试）===== */
 var _bgmChain=Promise.resolve(), _bgmLast=0;
@@ -1844,7 +1792,7 @@ function bgmErrText(e){
   var m=String(e.message||e);
   if(e.bgmCode==='NET'||e.name==='TypeError'||e.name==='AbortError'||m.indexOf('Failed to fetch')>=0) return '网络不可达（检查网络/代理后重试）';
   if(e.bgmCode==='RATE'||m.indexOf('429')>=0) return '触发接口限流（已自动重试，仍失败请稍后再试）';
-  if(e.bgmCode==='AUTH'||m.indexOf('401')>=0||m.indexOf('403')>=0) return '凭据失效——请在同步中心重新绑定 token';
+  if(e.bgmCode==='AUTH'||m.indexOf('401')>=0||m.indexOf('403')>=0) return '凭据失效——请在 Bangumi 设置页重新生成并替换令牌';
   if(m.indexOf('HTTP 404')>=0) return '条目或章节不存在（可能已下架/改版，或本地映射过期）';
   if(m.indexOf('HTTP 400')>=0) return '请求被拒绝（条目未收藏或章节ID无效）';
   return m;
@@ -1866,47 +1814,13 @@ function bgmFetch(path,opt,opts){
   }
   return loop();
 }
-var _bgmEnsured={};
-function bgmSubjectBody(s){ var map={want:1,done:2,watching:3,drop:5}; var body={type:map[s.status||'watching']||3,private:false}; if(s.rating) body.rate=Math.round(s.rating); return body; }
-function bgmEnsureSubject(s){
-  var sid=bgmSid(s); if(!sid) return Promise.reject(mkBErr('BAD','这不是 Bangumi 添加的番（缺条目ID）'));
-  if(_bgmEnsured[sid]) return Promise.resolve();
-  return bgmFetch('/users/-/collections/'+sid,{method:'POST',headers:bgmAuth(),body:JSON.stringify(bgmSubjectBody(s))}).then(function(){ _bgmEnsured[sid]=1; });
+function testMsgSetter(box,sel){
+  return function(t,ok){ if(!box) return; var el=box.querySelector(sel); if(!el) return; el.textContent=t; el.style.color=ok?'#7a9a6a':'var(--danger)'; };
 }
-function bgmPatchEps(sid,eids,type){
-  if(!eids.length) return Promise.resolve(0);
-  var chunks=[], per=80, i;
-  for(i=0;i<eids.length;i+=per){ chunks.push(eids.slice(i,i+per)); }
-  var chain=Promise.resolve(), done=0;
-  chunks.forEach(function(ch){
-    chain=chain.then(function(){
-      return bgmFetch('/users/-/collections/'+sid+'/episodes',{method:'PATCH',headers:bgmAuth(),body:JSON.stringify({episode_id:ch,type:type})});
-    }).then(function(){ done+=ch.length; });
-  });
-  return chain.then(function(){ return done; });
-}
-/* v2.4.4：移除无引用的 bgmGet（死代码清理，回归测试锁定） */
-function bgmPushEp(s,epNum){ /* 标记单集看过→Bangumi（写入台账，不静默） */
-  if(!BGMSYNC) return;
-  var tk=bgmTok(); if(!tk) return;
-  var sid=bgmSid(s); if(!sid) return;
-  var n2=+epNum;
-  var ep=(s.eps||[]).find(function(e){ return +e.s===n2; }); if(!ep) return;
-  if(!ep.bid){ bgmLogAuto(s.title,n2,false,'缺 Bangumi 章节ID（先「拉取全部进度」补齐）'); return; }
-  var st=epStat(s,n2); if(!st) return;
-  bgmEnsureSubject(s).then(function(){
-    return bgmFetch('/users/-/collections/-/episodes/'+ep.bid,{method:'PUT',headers:bgmAuth(),body:JSON.stringify({type:2})});
-  }).then(function(){ bgmLogAuto(s.title,n2,true,''); })
-    .catch(function(e){ var t=bgmErrText(e); bgmLogAuto(s.title,n2,false,t); try{ toast('Bangumi 同步失败：'+t+'（同步中心可重试）'); }catch(_){} });
-}
-function bgmPushStatus(s){ /* 收藏状态/评分 → Bangumi */
-  if(!BGMSYNC) return;
-  var tk=bgmTok(); if(!tk) return;
-  var sid=bgmSid(s); if(!sid) return;
-  bgmFetch('/users/-/collections/'+sid,{method:'POST',headers:bgmAuth(),body:JSON.stringify(bgmSubjectBody(s))})
-    .then(function(){ _bgmEnsured[sid]=1; })
-    .catch(function(e){ var t=bgmErrText(e); bgmLogAuto(s.title,'状态',false,t); try{ toast('Bangumi 状态同步失败：'+t); }catch(_){} });
-}
+/* v2.10.0 移除：bgmSubjectBody / bgmEnsureSubject / bgmPatchEps / bgmPushEp / bgmPushStatus
+   —— 这几个函数的作用是「把本作的收藏状态、评分、单集看过标记写回 Bangumi」。
+   它们是「双向同步」的写入端；本作定位改为纯记录后，不再有东西需要写回 Bangumi。
+   注意：它们依赖的底层 bgmFetch/bgmQueue 保留，因为导入链路还要用。 */
 function rebaseEps(s,newTotal){ /* 编辑集数：重建 eps 保留已有标记 */
   var old=s.eps||[], oldSt=s.statuses||{}, oldH=s.hist||[];
   var eps=[];
@@ -1921,272 +1835,22 @@ function rebaseEps(s,newTotal){ /* 编辑集数：重建 eps 保留已有标记 
   s.hist=(oldH||[]).filter(function(x){ return x.ep<=newTotal; });
   s.updAt=Date.now(); statInvalidate(s.sid);
 }
-async function bgmPullShow(s,opts){
-  opts=opts||{};
-  var sid=bgmSid(s); if(!sid) throw mkBErr('BAD','这不是 Bangumi 添加的番（缺条目ID）');
-  var ent=syncLogNew(opts.kind||'bgm-pull-one','拉取《'+s.title+'》',opts.mode||'');
-  var added=0, removed=0;
-  try{
-    var col=null;
-    try{ col=await bgmFetch('/users/-/collections/'+sid,{headers:bgmAuth()},{read:true}); }
-    catch(e){ if(String(e.message||e).indexOf('404')<0) throw e; }
-    if(col){
-      var mapR={1:'want',2:'done',3:'watching',5:'drop'};
-      if(col.type===4){ ent.items.push({title:s.title,ep:'状态',ok:true,err:'远端为「搁置」，本应用无此状态，未改动'}); }
-      else if(mapR[col.type]&&(s.status||'watching')!==mapR[col.type]){ s.status=mapR[col.type]; ent.items.push({title:s.title,ep:'状态→'+ST_NAME[mapR[col.type]],ok:true,err:''}); }
-      if(col.rate) s.rating=col.rate;
-      ent.note='远端：type='+col.type+' · ep_status='+(col.ep_status==null?'-':col.ep_status)+' · rate='+(col.rate||0);
-    }
-    if((s.eps||[]).some(function(e2){ return e2.bid===undefined; })){
-      window.__bgmTmpMap={};
-      var off=0;
-      while(true){
-        var er=await bgmFetch('/episodes?subject_id='+sid+'&limit=100&offset='+off,null,{read:true});
-        var arr=(er&&er.data)||[];
-        var map2=window.__bgmTmpMap||{};
-        arr.forEach(function(e3){ var k=(e3.sort!==undefined&&+e3.sort>0)?+e3.sort:e3.ep; if(k&&!map2[k]) map2[k]=e3.id; });
-        window.__bgmTmpMap=map2;
-        if(arr.length<100||off>=3000) break; off+=100;
-      }
-      var map3=window.__bgmTmpMap||{}; window.__bgmTmpMap=null;
-      (s.eps||[]).forEach(function(e2){ if(e2.bid===undefined&&map3[e2.s]) e2.bid=map3[e2.s]; });
-    }
-    var page=await bgmFetch('/users/-/collections/'+sid+'/episodes?limit=1000&offset=0',{headers:bgmAuth()},{read:true});
-    var watchedIds={};
-    (((page||{}).data)||[]).forEach(function(it){ if(it.type===2&&it.episode&&it.episode.id) watchedIds[it.episode.id]=1; });
-    (s.eps||[]).forEach(function(e2){ if(e2.bid&&watchedIds[e2.bid]&&epStat(s,e2.s)===null){ setEpStat(s,e2.s,'watched'); added++; } });
-    if(opts.align){
-      (s.eps||[]).forEach(function(e2){
-        var v=epStat(s,e2.s);
-        if(v==='watched'&&e2.bid&&!watchedIds[e2.bid]){ setEpStat(s,e2.s,null); removed++; }
-      });
-    }
-    ent.ok=1+added+removed;
-    if(added||removed) ent.items.push({title:s.title,ep:'补 '+added+' / 取消 '+removed,ok:true,err:''});
-    s.updAt=Date.now(); statInvalidate(s.sid); save();
-    if(opts.log!==false) syncLogCommit(ent);
-    return {added:added,removed:removed};
-  }catch(e){
-    ent.fail=1; ent.items.push({title:s.title,ep:'',ok:false,err:bgmErrText(e)});
-    if(opts.log!==false) syncLogCommit(ent);
-    throw e;
-  }
-}
-async function bgmPullProgress(){
-  if(!BGMSYNC) return;
-  var s=bySid(curSid); if(!s) return;
-  if(!bgmTok()){ toast('先在「同步」中心绑定 Bangumi token'); openSync('bgm'); return; }
-  if(!bgmSid(s)){ toast('这条不是 Bangumi 添加的番，无法拉取'); return; }
-  toast('正在拉取 Bangumi 进度…');
-  try{
-    var r=await bgmPullShow(s,{kind:'bgm-pull-one'});
-    renderDetail();
-    toast(r.added?('已从 Bangumi 补标 '+r.added+' 集'):('Bangumi 没有更多进度'+(r.removed?('；已对齐取消 '+r.removed+' 集'):'')));
-  }catch(e){ toast('拉取失败：'+bgmErrText(e)); }
-}
-async function bgmPushShow(s,opts){
-  opts=opts||{};
-  var sid=bgmSid(s); if(!sid) throw mkBErr('BAD','缺条目ID');
-  var ent=syncLogNew(opts.kind||'bgm-push-one','推送《'+s.title+'》');
-  var pushed=0, skipped=0;
-  var undo={sid:sid,pushed:[],subject:{prev:null,applied:false}};
-  try{
-    var col=null;
-    try{ col=await bgmFetch('/users/-/collections/'+sid,{headers:bgmAuth()},{read:true}); }
-    catch(e){ if(String(e.message||e).indexOf('404')<0) throw e; }
-    undo.subject.prev=col?col.type:null;
-    if((s.eps||[]).some(function(e2){ return e2.bid===undefined; })){
-      window.__bgmTmpMap2={};
-      var off2=0;
-      while(true){
-        var er2=await bgmFetch('/episodes?subject_id='+sid+'&limit=100&offset='+off2,null,{read:true});
-        var arr2=(er2&&er2.data)||[];
-        var map4=window.__bgmTmpMap2||{};
-        arr2.forEach(function(e3){ var k=(e3.sort!==undefined&&+e3.sort>0)?+e3.sort:e3.ep; if(k&&!map4[k]) map4[k]=e3.id; });
-        window.__bgmTmpMap2=map4;
-        if(arr2.length<100||off2>=3000) break; off2+=100;
-      }
-      var map5=window.__bgmTmpMap2||{}; window.__bgmTmpMap2=null;
-      (s.eps||[]).forEach(function(e2){ if(e2.bid===undefined&&map5[e2.s]) e2.bid=map5[e2.s]; });
-    }
-    var page=await bgmFetch('/users/-/collections/'+sid+'/episodes?limit=1000&offset=0',{headers:bgmAuth()},{read:true});
-    var remote={};
-    (((page||{}).data)||[]).forEach(function(it){ if(it.episode&&it.episode.id) remote[it.episode.id]=it.type; });
-    var wantType={want:1,done:2,watching:3,drop:5}[s.status||'watching']||3;
-    if(!col||col.type!==wantType||(s.rating&&(col.rate||0)!==Math.round(s.rating))){
-      await bgmFetch('/users/-/collections/'+sid,{method:'POST',headers:bgmAuth(),body:JSON.stringify(bgmSubjectBody(s))});
-      _bgmEnsured[sid]=1; undo.subject.applied=true;
-    }
-    var toPush=[];
-    (s.eps||[]).forEach(function(e2){
-      if(epStat(s,e2.s)!=='watched') return;
-      if(!e2.bid){ skipped++; return; }
-      var rv=remote[e2.bid];
-      if(rv!==2){ toPush.push(e2.bid); undo.pushed.push({eid:e2.bid,prev:(rv===undefined?null:rv)}); }
-    });
-    if(toPush.length){ pushed=await bgmPatchEps(sid,toPush,2); }
-    ent.ok=(pushed?1:0)+(undo.subject.applied?1:0);
-    if(pushed||undo.subject.applied||skipped) ent.items.push({title:s.title,ep:'+'+pushed+' 集'+(skipped?('（'+skipped+' 集缺章节ID跳过）'):''),ok:true,err:'',undo:undo});
-    ent.note='远端原有 '+Object.keys(remote).length+' 个章节状态';
-    if(opts.log!==false) syncLogCommit(ent);
-    return {pushed:pushed,skipped:skipped,entry:ent.id,undo:undo};
-  }catch(e){
-    ent.fail=1; ent.items.push({title:s.title,ep:'',ok:false,err:bgmErrText(e),undo:undo});
-    if(opts.log!==false) syncLogCommit(ent);
-    throw e;
-  }
-}
-async function bgmPushOneShow(){
-  if(!BGMSYNC) return;
-  var s=bySid(curSid); if(!s) return;
-  if(!bgmTok()){ toast('先在「同步」中心绑定 Bangumi token'); openSync('bgm'); return; }
-  if(!bgmSid(s)){ toast('这条不是 Bangumi 添加的番，无法推送'); return; }
-  toast('正在推送《'+s.title+'》…');
-  try{
-    var r=await bgmPushShow(s,{kind:'bgm-push-one'});
-    toast('已推送 '+r.pushed+' 集'+(r.skipped?('，跳过 '+r.skipped):''));
-  }catch(e){ toast('推送失败：'+bgmErrText(e)); }
-}
-function testMsgSetter(box,sel){
-  return function(t,ok){ if(!box) return; var el=box.querySelector(sel); if(!el) return; el.textContent=t; el.style.color=ok?'#7a9a6a':'var(--danger)'; };
-}
-async function bgmPullAll(box){
-  if(!BGMSYNC) return;
-  var msg=testMsgSetter(box,'#syBgmMsg');
-  if(!bgmTok()){ msg('先绑定 token',false); return; }
-  var targets=shows.filter(function(s){ return !!bgmSid(s); });
-  if(!targets.length){ msg('片单里没有 Bangumi 添加的番',false); return; }
-  var align=false; var cb=box&&box.querySelector('#syAlign'); if(cb) align=cb.checked;
-  var ent=syncLogNew('bgm-pull-all','拉取全部进度',align?'align':'add');
-  var okN=0, failN=0, addT=0, rmT=0, i;
-  for(i=0;i<targets.length;i++){
-    msg('拉取中 '+(i+1)+'/'+targets.length+'：《'+targets[i].title+'》…',true);
-    try{
-      var r=await bgmPullShow(targets[i],{log:false,align:align});
-      okN++; addT+=r.added; rmT+=r.removed;
-      ent.items.push({title:targets[i].title,ep:'补 '+r.added+' / 取消 '+r.removed,ok:true,err:''});
-    }catch(e){ failN++; ent.items.push({title:targets[i].title,ep:'',ok:false,err:bgmErrText(e)}); }
-  }
-  ent.ok=okN; ent.fail=failN; ent.note='共 '+targets.length+' 部 · 补标 '+addT+' 集 · 对齐取消 '+rmT+' 集';
-  syncLogCommit(ent);
-  renderList(); if(document.getElementById('vDetail').style.display!=='none') renderDetail();
-  msg('完成：成功 '+okN+' / 失败 '+failN+' · 补标 '+addT+' 集'+(rmT?(' · 取消 '+rmT+' 集'):'')+'。明细见「同步记录」', true);
-  if(box) renderLedger(box);
-}
-function bgmPushAll(){
-  if(!BGMSYNC) return;
-  if(!bgmTok()){ toast('先绑定 Bangumi token'); return; }
-  var targets=shows.filter(function(s){ return !!bgmSid(s); });
-  if(!targets.length){ toast('片单里没有 Bangumi 添加的番'); return; }
-  var totalEps=0;
-  targets.forEach(function(s){ totalEps+=(s.eps||[]).filter(function(e2){ return epStat(s,e2.s)==='watched'; }).length; });
-  if(!confirm('把本地进度推送到 Bangumi：\n· '+targets.length+' 部番\n· 本地共 '+totalEps+' 集已看\n\n只推送与 Bangumi 的差异，不删除远端数据；\n失败项可在「同步记录」重试或回滚。继续？')) return;
-  var cb=document.getElementById('syncMask');
-  toast('推送中…（完成后可在「同步」里看记录）');
-  var ent=syncLogNew('bgm-push-all','推送全部到 Bangumi');
-  var okN=0, failN=0, pushT=0, i;
-  (async function(){
-    for(i=0;i<targets.length;i++){
-      try{
-        var r=await bgmPushShow(targets[i],{log:false});
-        okN++; pushT+=r.pushed;
-        ent.items.push({title:targets[i].title,ep:'+'+r.pushed+' 集',ok:true,err:'',undo:r.undo});
-      }catch(e){ failN++; ent.items.push({title:targets[i].title,ep:'',ok:false,err:bgmErrText(e)}); }
-    }
-    ent.ok=okN; ent.fail=failN; ent.note='共 '+targets.length+' 部 · 本次推送 '+pushT+' 集';
-    syncLogCommit(ent);
-    toast('推送完成：'+pushT+' 集 · 成功 '+okN+' / 失败 '+failN);
-    var b2=document.getElementById('syncMask'); if(b2) renderLedger(b2);
-  })();
-}
-async function bgmRollback(id){
-  if(!BGMSYNC) return;
-  var box=document.getElementById('syncMask');
-  var all=syncLogAll(), ent=null, i;
-  for(i=0;i<all.length;i++){ if(all[i].id===id) ent=all[i]; }
-  if(!ent) return;
-  if(ent.rolledBack){ toast('这条记录已经回滚过'); return; }
-  var undos=[];
-  (ent.items||[]).forEach(function(it){ if(it.undo) undos.push(it.undo); });
-  if(!undos.length){ toast('这条记录没有可回滚的推送操作'); return; }
-  if(!confirm('回滚这次推送？将尽力把 Bangumi 恢复为推送前的状态。\n（本次新建的收藏无法在 Bangumi 删除，会保留并注明）')) return;
-  var rev=0, fail=0, notes=[];
-  for(i=0;i<undos.length;i++){
-    var u=undos[i];
-    try{
-      var byPrev={};
-      u.pushed.forEach(function(p){ var k=(p.prev==null?'0':String(p.prev)); (byPrev[k]=byPrev[k]||[]).push(p.eid); });
-      for(var k2 in byPrev){
-        await bgmPatchEps(u.sid,byPrev[k2],parseInt(k2,10));
-        rev+=byPrev[k2].length;
-      }
-      if(u.subject&&u.subject.applied){
-        if(u.subject.prev==null){ notes.push('有 1 部番的收藏为本次新建，官方 API 不支持删除收藏，无法恢复为空'); }
-        else {
-          await bgmFetch('/users/-/collections/'+u.sid,{method:'POST',headers:bgmAuth(),body:JSON.stringify({type:u.subject.prev})});
-        }
-      }
-    }catch(e){ fail++; notes.push('回滚存在失败项：'+bgmErrText(e)); }
-  }
-  syncLogUpdate(id,function(e3){ e3.rolledBack=true; e3.note=(e3.note?e3.note+' · ':'')+'已回滚 '+rev+' 项'+(fail?('，失败 '+fail):'')+(notes.length?('（'+notes.slice(0,2).join('；')+'）'):''); });
-  toast('回滚完成：恢复 '+rev+' 项'+(fail?('，失败 '+fail):''));
-  if(box) renderLedger(box);
-}
-async function bgmRetry(id){
-  if(!BGMSYNC) return;
-  var box=document.getElementById('syncMask');
-  var all=syncLogAll(), ent=null, i;
-  for(i=0;i<all.length;i++){ if(all[i].id===id) ent=all[i]; }
-  if(!ent) return;
-  var failed=(ent.items||[]).filter(function(it){ return !it.ok; });
-  if(!failed.length){ toast('这条记录没有失败项'); return; }
-  var again=syncLogNew('bgm-retry','重试「'+ent.title+'」');
-  var okN=0, failN=0;
-  for(i=0;i<failed.length;i++){
-    var it=failed[i];
-    var s=shows.filter(function(x){ return x.title===it.title; })[0];
-    if(!s){ failN++; again.items.push({title:it.title,ep:it.ep,ok:false,err:'找不到对应番（可能已移除）'}); continue; }
-    try{
-      if(ent.kind==='bgm-pull-all'||ent.kind==='bgm-pull-one'){ var r=await bgmPullShow(s,{log:false}); okN++; again.items.push({title:s.title,ep:'补 '+r.added,ok:true,err:''}); }
-      else if(ent.kind==='bgm-ep-auto'){
-        var ep=(s.eps||[]).filter(function(x){ return x.s===it.ep; })[0];
-        if(!ep||!ep.bid){ failN++; again.items.push({title:s.title,ep:it.ep,ok:false,err:'缺章节ID'}); continue; }
-        await bgmEnsureSubject(s);
-        await bgmFetch('/users/-/collections/-/episodes/'+ep.bid,{method:'PUT',headers:bgmAuth(),body:JSON.stringify({type:2})});
-        okN++; again.items.push({title:s.title,ep:it.ep,ok:true,err:''});
-      }
-      else { var r2=await bgmPushShow(s,{log:false}); okN++; again.items.push({title:s.title,ep:'+'+r2.pushed,ok:true,err:''}); }
-    }catch(e){ failN++; again.items.push({title:s.title,ep:it.ep,ok:false,err:bgmErrText(e)}); }
-  }
-  again.ok=okN; again.fail=failN; syncLogCommit(again);
-  toast('重试完成：成功 '+okN+' / 失败 '+failN);
-  if(box) renderLedger(box);
-}
-function __lgToggle(el){ var d=el.parentNode.querySelector('.lgdet'); if(d) d.classList.toggle('open'); }
-function renderLedger(box){
-  var el=box?box.querySelector('#syLedger'):null; if(!el) return;
-  var all=syncLogAll().slice(-15).reverse();
-  if(!all.length){ el.innerHTML='<div class="mini" style="color:var(--muted)">还没有记录。云同步、备份导入、添加条目等操作都会留痕。</div>'; return; }
-  function fmt(at){ try{ return new Date(at).toLocaleString('zh-CN',{hour12:false}); }catch(e){ return at||''; } }
-  function kindName(k){ var m={'bgm-push-all':'推送全部','bgm-pull-all':'拉取全部','bgm-push-one':'单番推送','bgm-pull-one':'单番拉取','bgm-ep-auto':'单集自动同步','bgm-retry':'重试','add':'添加条目','portal':'门户导入','douban':'豆瓣导入','webdav':'WebDAV','cloud':'账号云同步'}; return m[k]||k; }
-  el.innerHTML=all.map(function(e3){
-    var rTxt=e3.fail?('失败 '+e3.fail+(e3.ok?(' / 成功 '+e3.ok):'')):('成功 '+e3.ok);
-    var det='';
-    (e3.items||[]).slice(0,40).forEach(function(it){
-      det+='<div class="lgitem"><span>'+esc(it.title||'')+(it.ep?(' · '+esc(String(it.ep))):'')+'</span>'+(it.ok?'<span style="flex:none;color:#7a9a6a">✓</span>':'<span class="e">'+esc(it.err||'失败')+'</span>')+'</div>';
-    });
-    if((e3.items||[]).length>40) det+='<div class="lgitem"><span>…还有 '+(e3.items.length-40)+' 条</span></div>';
-    var actions='';
-    if(BGMSYNC&&e3.fail) actions+='<button class="sybtn sm" onclick="bgmRetry(\''+e3.id+'\')">重试失败项</button> ';
-    var canUndo=BGMSYNC&&(e3.kind==='bgm-push-all'||e3.kind==='bgm-push-one')&&(e3.items||[]).some(function(it){ return it.undo&&it.undo.pushed&&it.undo.pushed.length; })&&!e3.rolledBack;
-    if(canUndo) actions+='<button class="sybtn sm" onclick="bgmRollback(\''+e3.id+'\')">回滚本次</button> ';
-    if(e3.rolledBack) actions+='<span class="tiny" style="color:#7a9a6a">已回滚</span>';
-    return '<div class="lgrow"><div class="lg1" onclick="__lgToggle(this)">'+
-      '<span class="t">'+esc(kindName(e3.kind))+(e3.title?(' · '+esc(e3.title)):'')+'</span>'+
-      '<span class="r"><span class="'+(e3.fail?'er':'ok')+'">'+rTxt+'</span> · '+esc(fmt(e3.at))+'</span></div>'+
-      '<div class="lgdet">'+(e3.note?('<div class="tiny" style="margin:2px 0 4px">'+esc(e3.note)+'</div>'):'')+det+(actions?('<div class="syrow" style="margin-top:6px">'+actions+'</div>'):'')+'</div></div>';
-  }).join('');
-}
+/* v2.10.0 移除：观看进度双向同步整套 ——
+   bgmPullShow / bgmPullProgress / bgmPushShow / bgmPushOneShow /
+   bgmPullAll / bgmPushAll / bgmRollback / bgmRetry / renderLedger。
+   这些是「从 Bangumi 读进度」和「把进度写回 Bangumi」的两端，以及给它们做
+   审计与失败重试的台账 UI。本作定位为纯记录后，这整套不再需要。
+   连带失效的 UI：详情页「拉取Bangumi进度 / 推送Bangumi」两按钮（已删）、
+   账号面板里的 Bangumi 绑定卡与同步记录档（已删）。
+   保留：bgmFetch / bgmQueue / bgmPullEpisodeList / bgmFillEpisodes /
+   bgmAttach / bgmAttachGroup —— 导入与关联链路仍依赖它们。 */
+/* ===== v2.10.0 误删恢复 =====
+   上面那次「按 bgm* 边界做区间删除」时，删除区间的结束标记打在了 healThisCover 上，
+   于是夹在中间的一批与同步无关的工具函数被连带切掉。以下按备份原样恢复：
+     testMsgSetter（同步面板用的小工具，保留以防旧引用）
+     editTotal / cacheCover / upHttps / coverNeedsHeal / _cTry / _cTrySet /
+     coverCanAuto / coverMark / _searchCoverByTitle / healCoverFor
+   其中「编辑集数」按钮和「重拉封面」功能直接依赖它们，缺了会报 is not defined。 */
 function editTotal(){ /* 国内外集数不一致：手动修正，保留标记 */
   var s=bySid(curSid); if(!s) return;
   var n=prompt('设定本地集数\n（Bangumi 原始记录：'+(s.bgmTotal||s.total)+' 集）\n国内平台删减/合并/未播完时改成实际数：', s.total);
@@ -2281,6 +1945,10 @@ async function healCoverFor(s,opts){
     return true;
   }catch(e){ return false; }
 }
+/* 封面自愈：v2.10.0 误删后按备份原样恢复。
+   教训：本段曾被上面那次「按 bgm* 边界删除」连带切掉——删除区间的结束标记
+   （healThisCover）恰好位于 coverHealAll 之后，所以它被划进了删除范围。
+   这类「区间删除」必须同时检查被删区间内是否有非目标函数。 */
 var _coverHealRunning=false;
 async function coverHealAll(manual,limit){
   if(_coverHealRunning){ if(manual) toast('封面补齐正在进行…'); return; }
@@ -2402,8 +2070,9 @@ function addShow(item){
   backList();
 }
 
-/* ---------- WebDAV 同步 ---------- */
-function openSync(f){ syncOpen(f); }
+/* v2.10.0：入口改名「同步」→「账号」。保留 openSync 作为别名，避免旧调用报错。 */
+function openSync(f){ openAccount(f); }
+function openAccountAlias(f){ openAccount(f); }
 /* 网关基址：页面本身由网关(:3000)服务时用相对路径，其余（本机8089/8766、GitHub Pages）直连本机网关 */
 var GW=(function(){ try{ if(location.port==='3000') return ''; }catch(e){} return 'http://localhost:3000'; })();
 async function syncFromPortal(box){
@@ -2769,70 +2438,12 @@ function importDoubanFile(box,ev){
   };
   rd2.readAsText(f,'utf-8');
 }
-function bgmUnboundHtml(){
-  return '<h4>① Bangumi 账号 <span class="st" style="color:var(--danger)">未绑定 — 搜索免绑定可用；绑定后启用进度同步</span></h4>'+
-    '<div class="bd"><div style="background:rgba(122,154,106,.10);border:1px solid rgba(122,154,106,.45);border-radius:10px;padding:10px 12px;margin:0 0 8px">'+
-    '<div style="font-weight:700;color:var(--ink);margin-bottom:6px">1 分钟绑定（只需一次）</div>'+
-    '<ol style="margin:0 0 6px 18px;padding:0;color:var(--muted);font-size:13px;line-height:1.75">'+
-    '<li>打开 <a href="https://bgm.tv/settings/services" target="_blank" rel="noopener" style="color:var(--accent)">bgm.tv/settings/services</a>（已登录会直达「网络服务」页）</li>'+
-    '<li>找到「<b style="color:var(--ink)">API 访问令牌</b>」→ 点「生成新的令牌」并复制</li>'+
-    '<li>粘到下面 → 点「保存并测试」</li></ol>'+
-    '<div style="font-size:12px;color:var(--danger)">进度同步依赖它（搜索免绑定，无需 token）；token 只存本机浏览器，不上传。</div></div>'+
-    '<label>BANGUMI ACCESS_TOKEN</label><input id="syBgm" type="password" placeholder="粘贴 access_token"/>'+
-    '<div class="syrow"><button class="sybtn pri" id="syBgmSaveTest">保存并测试</button></div>'+
-    '<div class="msg" id="bgmTestMsg"></div></div>';
-}
-function bgmBoundHtml(){
-  return '<h4>① Bangumi 账号 <span class="st" style="color:#7a9a6a">已绑定 ✓</span></h4>'+
-    '<div class="bd">'+
-    '<div class="mini" id="bgmWho">验证中…</div>'+
-    '<div class="syrow">'+
-      '<button class="sybtn acc" id="syPullAll">⟳ 拉取全部进度</button>'+
-      '<button class="sybtn" id="syPushAll">↑ 推送全部到 Bangumi</button>'+
-      '<button class="sybtn sm" id="syBgmChange">更换 token</button>'+
-    '</div>'+
-    '<div class="syrow" style="margin-top:6px"><label class="mini" style="display:flex;gap:6px;align-items:center;letter-spacing:0;margin:0"><input type="checkbox" id="syAlign" style="width:auto"/> 拉取时「完全对齐」：以 Bangumi 为准，清除本地多余的已看标记</label></div>'+
-    '<div class="syprog" id="syBgmMsg"></div>'+
-    '</div>';
-}
-function bindBgmCard(box, focus){
-  var card=box.querySelector('#syCardBgm'); if(!card) return;
-  function rebind(){ card.innerHTML=bgmTok()?bgmBoundHtml():bgmUnboundHtml(); bindBgmCard(box, focus); }
-  var btnST=card.querySelector('#syBgmSaveTest');
-  if(btnST){
-    btnST.onclick=function(){
-      var m=card.querySelector('#bgmTestMsg');
-      var t=(card.querySelector('#syBgm').value||'').trim();
-      if(!t){ m.textContent='先粘贴 token'; m.style.color='var(--danger)'; return; }
-      m.textContent='验证中…'; m.style.color='var(--muted)';
-      bgmQueue(function(){ return _bget(BAPI+'/me',{headers:{'Authorization':'Bearer '+t}}); },350).then(function(me){
-        try{ localStorage.setItem('at_bgm_token',t); if(me&&me.username) localStorage.setItem('at_bgm_un',me.username); }catch(e){}
-        toast('已绑定：'+((me&&(me.username||me.nickname))||'成功'));
-        rebind();
-      }).catch(function(e){ m.textContent='验证失败：'+bgmErrText(e)+'——确认 token 复制完整、网络可用后重试'; m.style.color='var(--danger)'; });
-    };
-  }
-  var pull=card.querySelector('#syPullAll');
-  if(pull) pull.onclick=function(){ bgmPullAll(box); };
-  var push=card.querySelector('#syPushAll');
-  if(push) push.onclick=function(){ bgmPushAll(); };
-  var chg=card.querySelector('#syBgmChange');
-  if(chg) chg.onclick=function(){ if(!confirm('更换 token？将清除当前绑定，然后粘贴新 token。')) return; try{ localStorage.removeItem('at_bgm_token'); localStorage.removeItem('at_bgm_un'); }catch(e){} rebind(); };
-  var who=card.querySelector('#bgmWho');
-  if(who){
-    bgmFetch('/me',{headers:bgmAuth()},{read:true}).then(function(me){
-      var lg=syncLogAll(); var lastTxt=lg.length?String(lg[lg.length-1].at||'').slice(0,16).replace('T',' '):'暂无';
-      who.innerHTML='已绑定：<b style="color:var(--ink)">'+esc((me&&(me.username||me.nickname))||'')+'</b> · 上次同步：'+esc(lastTxt);
-    }).catch(function(e){ who.innerHTML='<span style="color:var(--danger)">连接失败：'+esc(bgmErrText(e))+'</span>（可「更换 token」重新绑定）'; });
-  }
-  if(focus==='bgm'){ try{ setTimeout(function(){ card.scrollIntoView({block:'center',behavior:'smooth'}); },60); }catch(e){} }
-}
 function bindAdv(box){
   var cb=box.querySelector('#optNoSync');
   if(cb){ cb.checked=SEARCH_NOSYNC(); cb.onchange=function(){ setFlag('searchNoSync',cb.checked); toast(cb.checked?'已开启免绑定搜索':'已关闭：未绑定 Bangumi 时不能搜索'); }; }
   var q=box.querySelector('#advUnmapped');
   if(q){ var n=shows.filter(function(s){ return !bgmSid(s); }).length;
-    q.textContent=n?('本地添加、未关联 Bangumi：'+n+' 部（详情页可用「⌁ 关联Bangumi」补齐，之后即可同步）'):'全部番剧均已关联 Bangumi 或为 Bangumi 来源'; }
+    q.textContent=n?('本地添加、未关联 Bangumi：'+n+' 部（详情页可用「⌁ 关联Bangumi」补齐剧集列表）'):'全部番剧均已关联 Bangumi 或为 Bangumi 来源'; }
   /* v2.8.0：CORS 中继（进阶可选项；Bangumi 连不上时首选开代理，而非填这里） */
   var ri=box.querySelector('#optRelay'), rm=box.querySelector('#optRelayMsg');
   if(ri){
@@ -2848,49 +2459,38 @@ function bindAdv(box){
     };
   }
 }
-async function syncOpen(focus){
+/* ===== v2.10.0：账号面板（取代原「同步」面板） =====
+   结构上是个反转：v2.9.x 把账号塞在折叠档的最底下，本版把它放到第一屏、常开。
+   面板三块，按「你多久用一次」排：
+     ① 账号 —— 登录/注册，扶正的核心。登录后片单自动上云，换设备邮箱登回来即可。
+     ② 本地备份 —— 纯文件导出/导入，不依赖账号，留着当保险。
+     ③ 高级设置 —— 折叠。里面只剩「免绑定搜索」和代理/中继说明（都服务于 Bangumi 导入）。 */
+async function openAccount(focus){
   var old=document.getElementById('syncMask'); if(old) old.remove();
-  var cfg=rd(LS.cfg,null);
   var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask';
   var box=document.createElement('div'); box.className='panel';
-  var tk=bgmTok();
-  var last=rd('tr_synclast',null);
-  var H=syncHealth();
-  var FOLD=syncFoldPref();
-  /* v2.9.2：一条状态 + 两档常开 + 三档折叠。不再有「隐藏一切」的开关。 */
-  var statusIcon=H.bgmBound?'●':'○';
-  var statusColor=H.bgmBound?'#7a9a6a':'var(--muted)';
-  var statusTxt;
-  if(H.bgmBound){
-    statusTxt='Bangumi 已绑定'+(H.lastText?(' · 上次同步 '+H.lastText):' · 还没同步过')+(H.cloudOn?' · 云同步已开':'');
-  }else{
-    statusTxt='Bangumi 未绑定'+(H.lastText?(' · WebDAV 上次 '+H.lastText):'')+(H.cloudOn?' · 云同步已开':'');
-  }
-  /* 主行动按钮：随状态变 */
-  var primary;
-  if(!H.bgmBound) primary='<button class="sybtn pri" id="syPrimary">去绑定 Bangumi</button>';
-  else primary='<button class="sybtn pri" id="syPrimary">立即同步进度</button>';
-  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">同步</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
-    /* ① 一句话状态 —— 打开就知道现在什么状况 */
-    '<div class="systatus"><span class="dot" style="color:'+statusColor+'">'+statusIcon+'</span><span class="txt">'+esc(statusTxt)+'</span>'+primary+'</div>'+
-    '<div class="mini" style="margin:2px 0 12px;color:var(--muted)">数据存在<b style="color:var(--ink)">本机浏览器</b>。下面按「你多久用一次」排序，常用的直接摆着，少用的收起来。</div>'+
-    /* ② 常开档 A：本地备份（几乎人人偶尔要用） */
+  var H=acctStatus();
+  var fold=acctFoldPref();
+  var statusIcon=H.signedIn?'●':'○';
+  var statusColor=H.signedIn?'#7a9a6a':'var(--muted)';
+  var statusTxt=H.signedIn
+    ? ('已登录'+(H.who?('：'+H.who):'')+(H.cloudOn?' · 云同步已开':''))
+    : '未登录 · 片单只存在本机浏览器';
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">账号</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    /* ① 一句话状态 */
+    '<div class="systatus"><span class="dot" style="color:'+statusColor+'">'+statusIcon+'</span><span class="txt">'+esc(statusTxt)+'</span></div>'+
+    /* ② 账号区 —— 常开、置顶、第一屏 */
+    '<div class="sycard" id="syCardAcct">'+
+      '<h4>账号 <span class="st">'+(H.signedIn?'登录后片单自动上云，换设备用邮箱登回来就行':'注册一个，换手机/电脑都能接着看')+'</span></h4>'+
+      '<div id="cbArea"><div class="mini" style="color:var(--muted)">账号模块加载中…</div></div>'+
+    '</div>'+
+    /* ③ 本地备份 —— 常开，不依赖账号的保险 */
     '<div class="sycard"><h4>本地备份 <span class="st">导出 / 导入一个文件 · 不用账号</span></h4>'+
       '<div class="syrow"><button class="sybtn" id="syExport">导出全部数据</button><button class="sybtn" id="syImport">导入数据</button></div>'+
       '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
     '</div>'+
-    /* ③ 常开档 B：Bangumi 进度（要用的就是高频，绑定卡本来就自带引导，不需要再折叠） */
-    (BGMSYNC?'<div class="sycard" id="syCardBgm">'+(tk?bgmBoundHtml():bgmUnboundHtml())+'</div>':'')+
-    /* ④ 折叠档：账号云同步 */
-    '<details class="syfold"'+(FOLD.cloud?'':' open')+' data-fold="cloud"><summary>账号云同步 <span class="st">手机 / 电脑自动互通 · 需注册</span></summary>'+
-      '<div id="cbArea" style="margin-top:8px"><div class="mini" style="color:var(--muted)">云同步加载中…</div></div>'+
-    '</details>'+
-    /* ⑤ 折叠档：同步记录 */
-    '<details class="syfold"'+(FOLD.ledger?'':' open')+' data-fold="ledger"><summary>同步记录 <span class="st">最近 15 条 · 点标题展开明细</span></summary>'+
-      '<div class="ledger" id="syLedger" style="margin-top:8px"></div>'+
-    '</details>'+
-    /* ⑥ 折叠档：高级设置（代理 / 中继 / 免绑定搜索） */
-    '<details class="syfold"'+(FOLD.adv?'':' open')+' data-fold="adv"><summary>高级设置 <span class="st">代理 · 中继 · 连不上时看这里</span></summary>'+
+    /* ④ 高级设置 —— 折叠（服务导入链路，低频） */
+    '<details class="syfold"'+(fold?'':' open')+'><summary>高级设置 <span class="st">搜索 / 网络 · 连不上时看这里</span></summary>'+
       '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
       '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--hairline)">'+
         '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">Bangumi 连不上？</b></div>'+
@@ -2912,30 +2512,22 @@ async function syncOpen(focus){
   window.__closeSync=function(){ document.removeEventListener('keydown',escClose); if(wrap&&wrap.parentNode) wrap.remove(); };
   wrap.addEventListener('click',function(e){ if(e.target===wrap) window.__closeSync(); });
   document.addEventListener('keydown',escClose);
-  /* 折叠状态记忆：用户每次开合都记住，下次打开保持他习惯的样子 */
-  Array.prototype.forEach.call(box.querySelectorAll('details.syfold'),function(d){
-    d.addEventListener('toggle',function(){
-      var key=d.getAttribute('data-fold'); if(!key) return;
-      var cur=syncFoldPref(); cur[key]=!d.open; syncFoldPref(cur);
-    });
-  });
-  try{ if(window.CBSync) CBSync.mount(box); }catch(e){}
-  if(BGMSYNC) bindBgmCard(box, focus);
-  bindAdv(box);
-  renderLedger(box);
-  /* 主行动按钮 */
-  var _pb=box.querySelector('#syPrimary');
-  if(_pb) _pb.onclick=function(){
-    if(!H.bgmBound){
-      var c=box.querySelector('#syCardBgm'); if(c){ try{ c.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
-      var t=box.querySelector('#bgmTokInp, input[type=password], input[placeholder*="令牌"], input[placeholder*="token"]');
-      if(t){ try{ t.focus(); }catch(e){} }
-      else { toast('在下面「Bangumi 进度同步」里填令牌即可绑定'); }
-      return;
-    }
-    window.__closeSync();
-    try{ bgmPushAll(); }catch(e){ toast('推送失败：'+(e.message||e)); }
+  var foldEl=box.querySelector('details.syfold');
+  if(foldEl) foldEl.addEventListener('toggle',function(){ acctFoldPref(!foldEl.open); });
+  /* 账号模块挂载（登录/注册 UI 由 cloudbase-sync.js 提供） */
+  try{ if(window.CBSync && CBSync.mount) CBSync.mount(box); }catch(e){}
+  /* 登录态变化后刷新顶部状态条（否则登录完那句「未登录」还挂在那儿） */
+  window.__acctRefresh=function(){
+    var el=box.querySelector('#syCardAcct h4 .st'); if(!el) return;
+    var H2=acctStatus();
+    el.textContent=H2.signedIn?'登录后片单自动上云，换设备用邮箱登回来就行':'注册一个，换手机/电脑都能接着看';
+    var dot=box.querySelector('.systatus .dot'), txt=box.querySelector('.systatus .txt');
+    if(dot){ dot.textContent=H2.signedIn?'●':'○'; dot.style.color=H2.signedIn?'#7a9a6a':'var(--muted)'; }
+    if(txt){ txt.textContent=H2.signedIn?('已登录'+(H2.who?('：'+H2.who):'')+(H2.cloudOn?' · 云同步已开':'')):'未登录 · 片单只存在本机浏览器'; }
   };
+  setTimeout(function(){ try{ window.__acctRefresh(); }catch(e){} },900);
+  setTimeout(function(){ try{ window.__acctRefresh(); }catch(e){} },2500);
+  bindAdv(box);
   fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(v){
     var el=box.querySelector('#verLine'); if(!el||!v||!v.version) return;
     el.innerHTML='页面 v'+AT_VERSION+' · 服务端 v'+esc(String(v.version))+(String(v.version)===AT_VERSION?' <span style="color:#7a9a6a">✓ 一致</span>':' <span class="warn">版本不一致：刷新页面即可更新</span>');
@@ -2966,61 +2558,12 @@ function downloadBackup(){
   a.download='anitracker-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
   toast('备份已下载（'+Object.keys(JSON.parse(all).data).length+' 项）');
 }
-var _running=false;
-function syncRun(auto){
-  if(_running) return;
-  wr(LS.shows,shows); /* 内存快照回写，防漏 save */
-  var cfg=rd(LS.cfg,null);
-  if(!cfg||!cfg.url){ if(!auto) syncOpen(); else toast('尚未配置 WebDAV——点右上「同步」填写'); return; }
-  _running=true; if(!auto) toast('同步中…');
-  try{ cfg._p=atob(cfg.pass||''); }catch(e){ cfg._p=cfg.pass||''; }
-  var auth='Basic '+btoa(cfg.user+':'+cfg._p);
-  var local=rd(LS.shows,[]);
-  var meta=rd('tr_meta',{});
-  var pack={app:'anitracker',version:2,items:local.map(function(s){
-    var key=String(s.sid);
-    var same=(meta[key]!==undefined)&&JSON.stringify(meta[key].val)===JSON.stringify(s);
-    return {sid:key,t:same?meta[key].t:Date.now(),v:s};
-  })};
-  fetch(cfg.url+'/tracker-sync.json',{method:'GET',headers:{Authorization:auth},cache:'no-store'}).then(function(r){
-    if(r.status===404) return null;
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    return r.text();
-  }).then(function(txt){
-    var remote=null;
-    if(txt){ try{ remote=JSON.parse(txt); }catch(e){ throw new Error('云端文件损坏'); } }
-    if(!remote||!Array.isArray(remote.items)){
-      return fetch(cfg.url+'/tracker-sync.json',{method:'PUT',headers:{Authorization:auth,'Content-Type':'application/json'},body:JSON.stringify(pack)})
-        .then(function(r2){ if(!r2.ok) throw new Error('上传 HTTP '+r2.status); return {up:pack.items.length,down:0,conflict:0}; });
-    }
-    var map={},res={up:0,down:0,conflict:0};
-    pack.items.forEach(function(it){ map[it.sid]=it; });
-    remote.items.forEach(function(it){
-      it.sid=safeSid(it.sid); if(it.v) it.v.sid=it.v.sid===undefined?it.sid:safeSid(it.v.sid);
-      var lv=map[it.sid];
-      if(!lv){ map[it.sid]=it; res.down++; return; }
-      if(it.t>lv.t){ map[it.sid]=it; res.down++; } else if(it.t<lv.t){ res.up++; } else res.conflict++;
-    });
-    var merged={app:'anitracker',version:2,items:Object.keys(map).map(function(k){ return map[k]; })};
-    return fetch(cfg.url+'/tracker-sync.json',{method:'PUT',headers:{Authorization:auth,'Content-Type':'application/json'},body:JSON.stringify(merged)})
-      .then(function(r2){ if(!r2.ok) throw new Error('上传 HTTP '+r2.status);
-        var nm={};
-        merged.items.forEach(function(it){ nm[it.sid]={t:it.t,val:it.v};
-          var cur=bySid(it.sid);
-          if(!cur){ shows.push(it.v); } else if(JSON.stringify(cur)!==JSON.stringify(it.v)){ shows[shows.indexOf(cur)]=it.v; }
-        });
-        save();
-        wr(LS.meta,nm); /* 持久化时间戳账本，防两设备互覆盖 */
-        return res;
-      });
-  }).then(function(res){
-    wr('tr_synclast',{at:new Date().toISOString(),res:res});
-    toast('同步完成：上传 '+res.up+' / 下载 '+res.down+(res.conflict?(' · 冲突保留本地 '+res.conflict):''));
-    renderList();
-  }).catch(function(e){
-    toast(e.name==='TypeError'?'同步失败：网络不可达或被拦截（检查 WebDAV 地址）':'同步失败：'+(e.message||e));
-  }).finally(function(){ _running=false; });
-}
+/* v2.10.0 移除：WebDAV 文件同步整套 ——
+   syncRun() / tracker-sync.json 读写 / tr_meta 时间戳账本 / 6 分钟一次的后台自动同步。
+   移除理由有两层：
+     1. 它是「账号系统」的劣质代替品 —— 要用户自己去搞一个 WebDAV 空间，还得填地址账号密码；
+     2. 它把 WebDAV 密码用 btoa 明文存在 localStorage 里，本身是个安全隐患。
+   现在有真正的账号系统（cloudbase-sync.js），这套东西没有存在必要了。 */
 
 /* ---------- 启动 ---------- */
 applyTheme((function(){ try{ return localStorage.getItem('at_theme')||'dark'; }catch(e){ return 'dark'; } })());
@@ -3029,7 +2572,7 @@ renderList();
 setTimeout(function(){
   try{ if(!navigator.onLine) return; coverHealAll(false,6); }catch(e){}
 },4000);
-setInterval(function(){ var c=rd(LS.cfg,null); if(c&&c.url&&shows.length) syncRun(true); },6*60*1000);
+/* v2.10.0：后台定时同步已随 WebDAV 移除（账号云同步由 CBSync.autosync 在 save() 时触发） */
 </script>
 
 <style id="at270-css">

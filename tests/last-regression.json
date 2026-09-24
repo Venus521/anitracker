@@ -1,41 +1,47 @@
 {
- "t": "2026-09-24T17:34:31.905Z",
+ "t": "2026-09-24T18:24:20.023Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "923368B vs 923368B"
+   "detail": "897173B vs 897173B"
   },
   {
    "id": "01",
    "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.9.3 json=2.9.3"
+   "detail": "page=2.10.0 json=2.10.0"
   },
   {
    "id": "02",
-   "name": "BGMSYNC=true 已恢复；bgmGet 仍不存在",
+   "name": "v2.10.0 已无 BGMSYNC 开关；bgmGet 死代码未复活",
    "ok": true,
    "detail": ""
   },
   {
    "id": "10",
-   "name": "同步面板：状态条 + 主行动 + 本地备份 + Bangumi 卡常开，3 个低频档默认折叠",
+   "name": "v2.10.0 账号面板：标题「账号」+ 状态条 + 账号卡在本地备份之前（常开）+ 仅 1 个折叠档",
    "ok": true,
-   "detail": "{\"status\":\"Bangumi 未绑定\",\"hasPrimary\":true,\"hasExport\":true,\"hasBgmCard\":true,\"foldCount\":3,\"foldOpen\":[],\"foldAll\":[\"adv\",\"cloud\",\"ledger\"],\"topLabel\":\"⇅同步\"}"
+   "detail": "{\"title\":\"账号\",\"status\":\"已登录\",\"hasAcctCard\":true,\"acctBeforeBackup\":true,\"hasCbArea\":true,\"hasExport\":true,\"hasImport\":true,\"foldCount\":1,\"foldTag\":\"高级设置 搜索 / 网络 · 连不上时看这里\",\"topLabel\":\"☺账号\"}"
   },
   {
    "id": "10a",
-   "name": "折叠档展开后内容都在（台账/云同步/中继/免绑定搜索）—— 只是收起，不是删掉",
+   "name": "高级设置展开后内容都在（中继 / 免绑定搜索 / 未关联统计）—— 只是收起，不是删掉",
    "ok": true,
-   "detail": "{\"hasLedger\":true,\"hasCloud\":true,\"hasRelay\":true,\"hasNoSync\":true}"
+   "detail": "{\"hasRelay\":true,\"hasNoSync\":true,\"hasAdvUnmapped\":true}"
   },
   {
    "id": "10b",
-   "name": "v2.9.1 精简开关已移除（syncOff() 恒 false、无旧按钮、localStorage 标记已清）",
+   "name": "v2.10.0 同步功能已移除（14 个函数全不存在、无 Bangumi 卡/台账、顶栏无「同步」）",
    "ok": true,
-   "detail": "{\"offFn\":false,\"hasOldBtn\":false,\"hasOldReopen\":false,\"lsFlag\":null}"
+   "detail": "{\"alive\":[],\"hasSsCard\":false,\"hasLedger\":false,\"oldFlag\":null,\"topHasSync\":false}"
+  },
+  {
+   "id": "10c",
+   "name": "v2.10.0 导入链路幸存（7 个 bgm* 函数 + GW 网关都在，未被连带删除）",
+   "ok": true,
+   "detail": "{\"missing\":[],\"gw\":true}"
   },
   {
    "id": "11",
@@ -53,7 +59,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "31ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "21ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -63,21 +69,15 @@
   },
   {
    "id": "15",
-   "name": "有 token 时标记发出 /collections 请求（无「精简态」拦截）",
+   "name": "v2.10.0 标记已看：本地记录生效，但不再发出任何 Bangumi 写请求",
    "ok": true,
-   "detail": "mockReqs=2"
+   "detail": "mockReqs=0 localMarked=1"
   },
   {
    "id": "15b",
-   "name": "详情页同步按钮：关联 Bangumi 的番显示，本地番（man-）隐藏",
+   "name": "v2.10.0 详情页：拉取/推送按钮已移除；本地番仍显示「关联Bangumi」",
    "ok": true,
-   "detail": "linked={\"n\":2,\"shown\":2} local={\"sid\":\"man-1790271235618\",\"hasBgm\":false,\"n\":2,\"shown\":0}"
-  },
-  {
-   "id": "15c",
-   "name": "v2.9.3 纯记录：详情页无「去门户播放」按钮，playInPortal 已移除（GW 保留给 B站导入）",
-   "ok": true,
-   "detail": "{\"btn\":false,\"anyBtn\":false,\"fn\":\"undefined\",\"gwStillThere\":true}"
+   "detail": "gone={\"syncBtns\":0,\"anySyncText\":false} assoc={\"sid\":\"man-1790274201638\",\"hasBtn\":true,\"shown\":true}"
   },
   {
    "id": "16",
@@ -89,7 +89,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "18ms"
+   "detail": "13ms"
   },
   {
    "id": "19",

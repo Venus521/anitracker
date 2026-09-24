@@ -414,5 +414,14 @@
     };
   }
 
-  window.CBSync = { mount: mount, autosync: autosync, version: VERSION };
+  /* v2.10.0 新增：给 index.html 的「账号」面板用。
+     isOn()    —— 是否「已登录且曾经同步过」（即自动上传会生效）。
+                  注意：v2.9.x 的 index.html 曾在 try/catch 里调用 CBSync.isOn()，
+                  但本文件当时并未导出它，导致状态条永远显示「云同步未开」。
+                  这里补上导出，修掉那个静默失效。
+     current() —— 同步取当前登录用户（可能为 null），供面板顶部显示「已登录：xxx」。 */
+  function isOn(){ return !!lastInfo(); }
+  function current(){ return sess().catch(function(){ return null; }); }
+
+  window.CBSync = { mount: mount, autosync: autosync, version: VERSION, isOn: isOn, current: current };
 })();

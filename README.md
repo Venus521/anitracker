@@ -299,3 +299,36 @@ v2.9.1 的「精简总开关」是错的解法——它只是把累赘藏起来�
 - 门户相关的「B站追番导入」保留（那是**导入**，不是播放）
 - 详情页按钮区现为：`编辑集数 / 来源校准 / AI 结果导入 / 重拉封面`
   （+ 本作关联了 Bangumi 时才出现的 拉取/推送）
+
+## v2.10.0（2026-09-25）· 方向转向「账号」
+
+**把「同步」拆开：删掉进度同步与 WebDAV，把账号系统扶正。**
+
+顶栏入口按钮：**「⇅ 同步」→「☺ 账号」**。面板重排为：
+
+- **状态条**：`● 已登录：xxx` / `○ 未登录 · 片单只存在本机浏览器`
+- **账号**（常开、第一屏）：登录 / 注册（邮箱 + 密码 → 邮箱验证码 → 建号）
+- **本地备份**（常开）：导出 / 导入一个文件，不依赖账号
+- **高级设置**（折叠）：免绑定搜索 / 代理说明 / CORS 中继
+
+删掉的东西：
+
+- **Bangumi 观看进度双向同步** —— 拉取/推送/台账/回滚/绑定卡/同步记录，
+  连同 `BGMSYNC` 开关、`syncOff`/`syncFoldPref`/`syncHealth` 状态机
+- **WebDAV 文件同步** —— `syncRun()` / `tracker-sync.json` / `tr_meta` /
+  6 分钟后台定时器 / 配置面板（顺带清掉 `btoa` 明文存密码的隐患）
+- 详情页的「⟳ 拉取Bangumi进度」「↑ 推送Bangumi」两个按钮
+
+**保留边界（关键）**：Bangumi 的**导入 / 关联**链路完整保留 ——
+`bgmSid` `bgmQueue` `bgmFetch` `bgmPullEpisodeList` `bgmFillEpisodes`
+`bgmAttach` `bgmAttachGroup`。它们也读 token，但用途是「把番和剧集列表
+填进片单」，不是「同步观看进度」。**`bgm*` 前缀不能通配删**，删了搜索添加
+和关联 Bangumi 会一起坏。测试 `T10c` 专门守这条线。
+
+**顺带修的 bug**：`CBSync.isOn` 未导出，导致状态条永远显示「云同步未开」
+（调用被 try/catch 静默吞掉）。已补导出 `isOn()` / `current()`。
+
+数据仍在**腾讯云开发 CloudBase**（环境 `cloud1-d7gsn5t0w6407b963`，ap-shanghai），
+按 `ownerId` 隔离；key 是 `PublishableKey`，可安全放前端。
+
+测试：`run-regression.js` **23/23 PASS** · 双入口 md5 一致
