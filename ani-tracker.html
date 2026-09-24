@@ -343,9 +343,11 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.7.0', AT_BUILD='20260916d';
-/* ===== Bangumi 同步开关：2026-09-15 依用户要求先移除同步（搜索与剧集数据保留）。要恢复同步：把 false 改回 true 并刷新 ===== */
-var BGMSYNC=false;
+var AT_VERSION='2.8.0', AT_BUILD='20260924a';
+/* ===== Bangumi 同步开关：2026-09-24 恢复（v2.8.0）。
+   9/15 曾因「瘦身」临时改为 false；现已配合网络层重做恢复启用。
+   如再需临时隐藏：把 true 改回 false 并刷新即可。 ===== */
+var BGMSYNC=true;
 try{ if(!BGMSYNC){ Array.prototype.forEach.call(document.querySelectorAll('[data-bgm-sync]'),function(el){ el.remove(); }); } }catch(_eSync){}
 /* v2.4.2：系列级统一分类（整部标一个类型）已按需求移除，类型只在集级存在 */
 /* v2.3 来源筛选（全局持久）：隐藏 TV原创 / 半原创 */
@@ -1045,6 +1047,40 @@ function showAdd(){
   setTimeout(function(){ document.getElementById('qKw').focus(); },80);
 }
 var BAPI='https://api.bgm.tv/v0';
+/* ===== v2.8.0 网络层重做（2026-09-24）=====
+   背景：实测 api.bgm.tv 在国内直连不通（10s 超时）；原「公共 CORS 代理兜底」
+   （proxy.cors.sh / api.codetabs.com）也已失效。结果是每次请求白等 13 秒后
+   报一句含糊的「网络不可达」——这正是「同步做不好」的体感来源。
+
+   新策略：
+   1) 直连只给 3.5 秒（不再 8 秒），失败立刻进入下一步，绝不长时间空等；
+   2) 移除两个已死的公共代理；
+   3) 支持用户自填代理（设置 → 同步中心 → 高级设置），填了就直接走它；
+   4) 失败时给出可操作的中文诊断，而不是笼统的「网络不可达」。 */
+var NET_PROXY_KEY='at_net_proxy';
+function netProxyGet(){ try{ return (localStorage.getItem(NET_PROXY_KEY)||'').trim(); }catch(e){ return ''; } }
+function netProxySet(v){ try{ if(v){ localStorage.setItem(NET_PROXY_KEY,String(v).trim()); }else{ localStorage.removeItem(NET_PROXY_KEY); } }catch(e){} }
+/* 把用户填的代理地址规整为可用的 URL：允许 "127.0.0.1:7897" 这种简写 */
+function netProxyUrl(){
+  var p=netProxyGet(); if(!p) return '';
+  if(!/^https?:\/\//i.test(p)) p='http://'+p;
+  return p;
+}
+/* 诊断：把 fetch 异常翻译成「用户能照着做」的中文 */
+function netDiag(e,u){
+  var isBgm=(u||'').indexOf('bgm.tv')>=0;
+  if(e && (e.name==='AbortError'||e.name==='TimeoutError')){
+    return isBgm
+      ? '连不上 Bangumi（3.5 秒超时）。Bangumi 在国内需要代理访问——请在「设置 → 高级设置 → 自定义代理」填写你的代理地址（如 127.0.0.1:7897），或保持代理软件开启后重试。'
+      : '请求超时（3.5 秒），请检查网络后重试。';
+  }
+  if(e && e.name==='TypeError'){
+    return isBgm
+      ? '无法连接 Bangumi。常见原因：① 未开代理（Bangumi 国内需代理）② 代理地址填错 ③ 浏览器拦截。可在「设置 → 高级设置 → 自定义代理」填写代理地址后重试。'
+      : '网络不可达，请检查网络后重试。';
+  }
+  return (e && e.message) || '未知网络错误';
+}
 function _bget(u,opt){
   opt=opt||{}; opt.headers=opt.headers||{};
   if(u.indexOf('api.bgm.tv')>=0 && !opt.headers.Authorization){ var _tk=bgmTok(); if(_tk){ opt.headers=Object.assign({},opt.headers,{'Authorization':'Bearer '+_tk}); } }
@@ -1055,20 +1091,20 @@ function _bget(u,opt){
       return r.text().then(function(txt){ if(!txt) return null; try{ return JSON.parse(txt); }catch(e){ return null; } });
     },function(e){ clearTimeout(t); throw e; });
   };
-  var PROXIES=['https://proxy.cors.sh/','https://api.codetabs.com/v1/proxy/?'];
-  function _viaProxies(ms){ /* v2.4.3：代理兜底链（单跳超时 12s→6s，仅作超时兜底） */
-    var p=Promise.reject(new Error('skip-direct'));
-    PROXIES.forEach(function(b){ p=p.catch(function(){ return attempt(b,ms); }); });
-    return p;
+  var px=netProxyUrl();
+  if(px){
+    /* 用户配了代理：直接走它，3.5 秒上限 */
+    var opt2=Object.assign({},opt||{});
+    return attempt('',3500).catch(function(){
+      return attempt(px+'/'+u,3500).catch(function(e){ var ne=new Error(netDiag(e,u)); ne.name=e&&e.name||'Error'; ne.bgmCode='NET'; throw ne; });
+    });
   }
-  function _netErr(){ var e=new Error('网络不可达：直连与备用通道均失败——请检查网络/代理后重试'); e.name='TypeError'; return e; }
-  /* v2.4.3：每次请求都先直连（8 秒上限）；仅失败时走短超时代理兜底——不再有任何粘性状态
-     （修复「网络恢复后不刷新页面就一直失败」；此前一失败就整页禁用直连） */
-  return attempt('',8000).catch(function(e1){
+  /* 未配代理：只直连，3.5 秒，失败即给明确诊断（不再走已死的公共代理） */
+  return attempt('',3500).catch(function(e1){
     if(e1.name==='TypeError'||e1.name==='AbortError'){
-      return _viaProxies(5000).catch(function(){ throw _netErr(); }); /* v2.4.4：代理单跳 5s */
+      var ne=new Error(netDiag(e1,u)); ne.name=e1.name; ne.bgmCode='NET'; throw ne;
     }
-    throw e1; /* HTTP 状态错误：不切代理（代理不改变服务端语义） */
+    throw e1; /* HTTP 状态错误：不是网络问题，原样抛出 */
   });
 }
 /* 同名/异名分组：搜其中一个叫法，会把同组所有叫法都搜一遍再合并去重。
@@ -1304,21 +1340,82 @@ function assocPick(bid){
 }
 
 /* ==== Filler Guide 校准模块 ==== */
-/* 热门长篇中文名 → AFG slug 手工别名 */
+/* v2.8.0：别名表大幅扩充。本地库 slug 是中文拼音/中文名，与 AFG 英文 slug 天然对不上，
+   所以「热门番中文名 → AFG slug」这张表是命门。新增的 animefillerlist 数据集 slug 也一并覆盖。 */
 var FG_ALIAS = {
-  '海贼王':'one-piece','航海王':'one-piece',
-  '火影忍者':'naruto','火影忍者疾风传':'naruto-shippuden',
-  '死神':'bleach','境·界':'bleach',
-  '龙珠':'dragon-ball','龙珠z':'dragon-ball-z',
+  '海贼王':'one-piece','航海王':'one-piece','one piece':'one-piece',
+  '火影忍者':'naruto','naruto':'naruto',
+  '火影忍者疾风传':'naruto-shippuden','疾风传':'naruto-shippuden',
+  '博人传':'boruto','博人传-火影次世代':'boruto-naruto-next-generations',
+  '死神':'bleach','境·界':'bleach','bleach':'bleach',
+  '死神-千年血战篇':'bleach-thousand-year-blood-war',
+  '龙珠':'dragon-ball','龙珠z':'dragon-ball-z','龙珠超':'dragon-ball-super',
+  '龙珠gt':'dragon-ball-gt',
   '犬夜叉':'inuyasha',
-  '钢之炼金术师':'fullmetal-alchemist-brotherhood',
-  '钢之炼金术师fa':'fullmetal-alchemist-brotherhood',
+  '钢之炼金术师':'fullmetal-alchemist-brotherhood','钢之炼金术师fa':'fullmetal-alchemist-brotherhood',
+  '钢之炼金术师-fa':'fullmetal-alchemist-brotherhood',
   '妖精的尾巴':'fairy-tail','银魂':'gintama',
-  '进击的巨人':'attack-on-titan','咒术回战':'jujutsu-kaisen',
-  '鬼灭之刃':'demon-slayer','我的英雄学院':'my-hero-academia',
-  '东京喰种':'tokyo-ghoul','七大罪':'nanatsu-no-taizai',
-  '排球少年':'haikyuu','青之驱魔师':'blue-exorcist'
+  '进击的巨人':'attack-titan','进击的巨人-最终季':'attack-titan',
+  '咒术回战':'jujutsu-kaisen','鬼灭之刃':'demon-slayer-kimetsu-no-yaiba','鬼灭之刃-灶门炭治郎立志篇':'demon-slayer-kimetsu-no-yaiba',
+  '我的英雄学院':'my-hero-academia','东京喰种':'tokyo-ghoul','七大罪':'nanatsu-no-taizai',
+  '排球少年':'haikyuu','青之驱魔师':'blue-exorcist',
+  '名侦探柯南':'detective-conan','柯南':'detective-conan',
+  '黑色五叶草':'black-clover','黑色四叶草':'black-clover',
+  '黑色四叶草-魔法帝之剑':'black-clover',
+  '猎人':'hunter-x-hunter-2011','全职猎人':'hunter-x-hunter-2011','全职猎人-重制版':'hunter-x-hunter-2011',
+  'JOJO的奇妙冒险':'jojos-bizarre-adventure','jojo的奇妙冒险':'jojos-bizarre-adventure',
+  '一拳超人':'one-punch-man','我的英雄学院-第2季':'my-hero-academia',
+  '食戟之灵':'food-wars-shokugeki-no-soma','食戟之灵-第2季':'food-wars-shokugeki-no-soma',
+  '家庭教师reborn':'katekyo-hitman-reborn','家庭教师hitmanreborn':'katekyo-hitman-reborn',
+  '鲁路修':'code-geass','叛逆的鲁路修':'code-geass','反叛的鲁路修':'code-geass',
+  '游戏王':'yu-gi-oh-duel-monsters','游戏王决斗怪兽':'yu-gi-oh-duel-monsters',
+  '游戏王5ds':'yu-gi-oh-5ds','妖精的旋律':'elfen-lied',
+  '美少女战士':'bishoujo-senshi-sailor-moon','美少女战士crystal':'bishoujo-senshi-sailor-moon-crystal',
+  '圣斗士星矢':'saint-seiya','北斗神拳':'hokuto-no-ken',
+  '网球王子':'tennis-no-ojisama','黑子的篮球':'kuroko-no-basket',
+  '死神来了':'bleach','噬魂师':'soul-eater','妖精尾巴':'fairy-tail',
+  '驱魔少年':'d-gray-man','全职猎人剧场版':'hunter-x-hunter-2011',
+  '银魂-':'gintama','银魂°':'gintama','银魂-烙阳决战篇':'gintama',
+  '一拳超人-第二季':'one-punch-man','五等分的新娘':'gotoubun-no-hanayome',
+  '约定的梦幻岛':'yakusoku-no-neverland','约定的梦幻岛-第2季':'yakusoku-no-neverland',
+  '关于我转生变成史莱姆这档事':'tensura','转生史莱姆':'tensura',
+  'Re从零开始的异世界生活':'re-zero','从零开始的异世界生活':'re-zero',
+  'overlord':'overlord','不死者之王':'overlord',
+  '文豪野犬':'bungo-stray-dogs','文豪stray-dogs':'bungo-stray-dogs',
+  '辉夜大小姐想让我告白':'kaguya-sama-wa-kokurasetai','辉夜大小姐':'kaguya-sama-wa-kokurasetai',
+  '辉夜大小姐想让我告白-究极浪漫':'kaguya-sama-wa-kokurasetai',
+  '地错':'danmachi','在地下城寻求邂逅是否搞错了什么':'danmachi',
+  '刀剑神域':'sword-art-online','进击的巨人final-season':'attack-titan',
+  '东京复仇者':'tokyo-revengers','无职转生':'mushoku-tensei',
+  '灌篮高手':'slam-dunk','棋魂':'hikaru-no-go','足球小将':'captain-tsubasa',
+  '闪电十一人':'inazuma-eleven','宝可梦':'pokemon','精灵宝可梦':'pokemon',
+  '数码宝贝':'digimon-adventure','路飞':'one-piece'
 };
+
+/* v2.8.0：中文/日文标题 → 英文 slug 的松散兜底匹配。
+   数据集本身带英文标题 t，可做「番剧英文名/别名 ↔ 数据集标题」双向包含匹配。 */
+function fgLooseMatch(s){
+  var ds = window.AFG_FILLER || {};
+  var names = [];
+  if (s) [s.title, s.nameJp, s.titleEn, s.nameEn].forEach(function(x){ if(x) names.push(String(x)); });
+  if (s && s.aliases) try{ (Array.isArray(s.aliases)?s.aliases:[]).forEach(function(a){ names.push(String(a)); }); }catch(e){}
+  var norm = function(x){ return String(x).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g,''); };
+  var cands = names.map(norm).filter(function(x){ return x.length >= 3; });
+  if (!cands.length) return null;
+  var keys = Object.keys(ds);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i], entry = ds[k];
+    var t = norm(entry && entry.t || k);
+    if (!t || t.length < 3) continue;
+    for (var j = 0; j < cands.length; j++) {
+      var c = cands[j];
+      /* 只做足够长的包含匹配，避免 "naruto" 命中 "boruto" 这类误判 */
+      if (t === c) return { slug: k, data: entry };
+      if (c.length >= 6 && (t.indexOf(c) >= 0 || c.indexOf(t) >= 0)) return { slug: k, data: entry };
+    }
+  }
+  return null;
+}
 
 function fgParseFills(html){
   /* 严格解析: "N. (时长) 标题 *Filler | *Mixed Canon | *Canon" */
@@ -1352,7 +1449,7 @@ function fgSlug(title){
   return String(title||'').toLowerCase().replace(/[’'":]/g,'').replace(/[^\w\u4e00-\u9fa5]+/g,'-').replace(/^-+|-+$/g,'');
 }
 function fgLookupLocal(s){
-  /* 本地灌水库（Anime Filler Guide 离线快照）查表，零网络依赖 */
+  /* 本地灌水库（离线快照）查表，零网络依赖 */
   var ds = window.AFG_FILLER || {};
   var alias = FG_ALIAS[String(s.title || '').toLowerCase()] || null;
   var cands = [];
@@ -1361,6 +1458,8 @@ function fgLookupLocal(s){
   for (var i = 0; i < cands.length; i++) {
     if (ds[cands[i]]) return { slug: cands[i], data: ds[cands[i]] };
   }
+  /* v2.8.0：别名/英文名松散兜底匹配（大幅提升新数据集的命中率） */
+  try { var loose = fgLooseMatch(s); if (loose) return loose; } catch(e) {}
   return null;
 }
 async function fgFetchOne(show){
@@ -2603,6 +2702,33 @@ function bindAdv(box){
   var q=box.querySelector('#advUnmapped');
   if(q){ var n=shows.filter(function(s){ return !bgmSid(s); }).length;
     q.textContent=n?('本地添加、未关联 Bangumi：'+n+' 部（详情页可用「⌁ 关联Bangumi」补齐，之后即可同步）'):'全部番剧均已关联 Bangumi 或为 Bangumi 来源'; }
+  /* v2.8.0：自定义代理（Bangumi 国内需代理） */
+  var pi=box.querySelector('#optProxy'), pm=box.querySelector('#optProxyMsg');
+  if(pi){
+    var cur=netProxyGet(); pi.value=cur;
+    var showMsg=function(t,ok){ if(pm){ pm.textContent=t; pm.style.color=ok?'#7a9a6a':'var(--muted)'; } };
+    showMsg(cur?('当前：'+cur):'未设置（直连 Bangumi；若连不上请填写代理）');
+    var saveBtn=box.querySelector('#optProxySave');
+    if(saveBtn) saveBtn.onclick=function(){
+      var v=(pi.value||'').trim();
+      if(v && !/^https?:\/\//i.test(v) && !/^[\w\.\-]+:\d{2,5}$/.test(v)){
+        showMsg('格式看起来不对，应形如 127.0.0.1:7897 或 http://127.0.0.1:7897'); return;
+      }
+      netProxySet(v); showMsg(v?('已保存：'+v+'（可在上方测试）'):'已清空，恢复直连',true);
+      toast(v?'代理已保存':'代理已清空');
+    };
+    var testBtn=box.querySelector('#optProxyTest');
+    if(testBtn) testBtn.onclick=function(){
+      showMsg('正在测试…'); testBtn.disabled=true;
+      var v=(pi.value||'').trim(); var old=netProxyGet();
+      netProxySet(v);
+      _bget('/subjects/253').then(function(){
+        showMsg('✓ 连通！Bangumi 可以访问了',true); toast('代理可用');
+      }).catch(function(e){
+        showMsg('✗ 不通：'+((e&&e.message)||'未知错误'),false);
+      }).then(function(){ testBtn.disabled=false; if(!v) netProxySet(old); });
+    };
+  }
 }
 async function syncOpen(focus){
   var old=document.getElementById('syncMask'); if(old) old.remove();
@@ -2612,7 +2738,7 @@ async function syncOpen(focus){
   var tk=bgmTok();
   var last=rd('tr_synclast',null);
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">同步中心</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
-    '<div class="mini" style="margin-bottom:10px">数据保存在<b style="color:var(--ink)">本机浏览器</b>。同步只此一处：<b style="color:var(--ink)">账号云同步</b>（手机 / 电脑自动互通；邮箱注册，换机恢复）；另有本地备份与同步记录。</div>'+
+    '<div class="mini" style="margin-bottom:10px">数据保存在<b style="color:var(--ink)">本机浏览器</b>。三档同步，按需取用：<b style="color:var(--ink)">① 本地备份</b>（最省事，导出/导入一个文件）·<b style="color:var(--ink)">② Bangumi 进度同步</b>（把已看进度推到 Bangumi / 拉回来，需代理）· <b style="color:var(--ink)">③ 账号云同步</b>（手机电脑自动互通，需注册）。</div>'+
     (BGMSYNC?'<div class="sycard" id="syCardBgm">'+(tk?bgmBoundHtml():bgmUnboundHtml())+'</div>':'')+
     '<div class="sycard"><h4>同步记录 <span class="st">最近 15 条 · 点标题展开/收起明细</span></h4><div class="ledger" id="syLedger"></div></div>'+
     '<div class="sycard"><h4>账号云同步 <span class="st">手机 / 电脑自动互通（可选）</span></h4><div id="cbArea"><div class="mini" style="color:var(--muted)">云同步加载中…</div></div></div>'+
@@ -2622,6 +2748,15 @@ async function syncOpen(focus){
     '</div>'+
     '<details style="margin:0 0 10px"><summary style="cursor:pointer;color:var(--ink);font-weight:700;padding:6px 0">高级设置</summary>'+
       '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
+      '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--hairline)">'+
+        '<div class="mini" style="margin-bottom:6px"><b style="color:var(--ink)">自定义代理</b>（Bangumi 在国内需代理才能访问；留空则直连）</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<input type="text" id="optProxy" placeholder="例如 127.0.0.1:7897" style="flex:1;min-width:0" autocomplete="off"/>'+
+          '<button class="sybtn" id="optProxySave" style="white-space:nowrap">保存</button>'+
+          '<button class="sybtn" id="optProxyTest" style="white-space:nowrap">测试</button>'+
+        '</div>'+
+        '<div class="tiny" id="optProxyMsg" style="margin-top:6px;color:var(--muted)">未设置</div>'+
+      '</div>'+
       '<div class="tiny" id="advUnmapped" style="margin-top:8px"></div>'+
     '</details>'+
     '<div class="row2"><button class="b2" onclick="window.__closeSync()" style="width:100%">完成</button></div>'+

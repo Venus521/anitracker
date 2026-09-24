@@ -1,29 +1,29 @@
 {
- "t": "2026-09-16T01:35:55.401Z",
+ "t": "2026-09-24T14:31:50.748Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "879875B vs 879875B"
+   "detail": "890649B vs 890649B"
   },
   {
    "id": "01",
-   "name": "版本一致（2.7.0）",
+   "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.7.0 json=2.7.0"
+   "detail": "page=2.8.0 json=2.8.0"
   },
   {
    "id": "02",
-   "name": "BGMSYNC=false 开关存在；bgmGet 仍不存在",
+   "name": "BGMSYNC=true 已恢复；bgmGet 仍不存在",
    "ok": true,
    "detail": ""
   },
   {
    "id": "10",
-   "name": "同步 UI 已删（详情按钮/绑定卡/中心文案）",
+   "name": "同步 UI 已恢复（详情按钮/绑定卡/高级设置代理）",
    "ok": true,
-   "detail": "btn=true card=true"
+   "detail": "btn=true cardLen=198 proxy=true"
   },
   {
    "id": "11",
@@ -41,7 +41,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "39ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "36ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -51,9 +51,9 @@
   },
   {
    "id": "15",
-   "name": "同步已删：有 token 也不发任何 /collections 请求",
+   "name": "同步已恢复：有 token 时标记发出 /collections 请求",
    "ok": true,
-   "detail": "mockReqs=0"
+   "detail": "mockReqs=2"
   },
   {
    "id": "16",
@@ -65,7 +65,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "9528ms"
+   "detail": "47ms"
   },
   {
    "id": "19",
@@ -75,7 +75,7 @@
   },
   {
    "id": "20",
-   "name": "封面自愈入口就绪（chip/按钮/防裂图属性/函数）",
+   "name": "封面自愈入口就绪（补封面按钮/防裂图属性/函数）",
    "ok": true,
    "detail": "{\"chip\":true,\"btn\":true,\"rp\":\"no-referrer\",\"fn\":true}"
   },
@@ -105,9 +105,9 @@
   },
   {
    "id": "25",
-   "name": "无剧集+有总集数：显示拉取/关联入口而非误报",
+   "name": "无剧集+有总集数：给出补齐入口且不误报「全部标记过了」",
    "ok": true,
-   "detail": "暂无剧集数据 · 点此关联条目补齐"
+   "detail": "guide=true nbTxt="
   },
   {
    "id": "18",

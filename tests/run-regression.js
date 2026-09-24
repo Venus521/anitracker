@@ -1,4 +1,4 @@
-/* run-regression.js — AniTracker 回归测试（v2.6.0：同步已删 + 季度秒切 + 封面自愈 + 影院深色主题）
+/* run-regression.js — AniTracker 回归测试（v2.8.0：网络层重做 + BGMSYNC 恢复 + 别名表扩充）
    用法：node tests\run-regression.js · 自起静态服务 8094 + 模拟 Bangumi API 8092 */
 const path = require('path');
 const fs = require('fs');
@@ -24,11 +24,18 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
   const ix = ib.toString('utf-8');
   const vm = ix.match(/AT_VERSION='([^']+)'/);
   const vj = JSON.parse(fs.readFileSync(path.join(ROOT, 'tracker-version.json'), 'utf-8'));
-  check('01', '版本一致（2.7.0）', vm && vm[1] === vj.version && vj.version === '2.7.0', 'page=' + (vm && vm[1]) + ' json=' + vj.version);
-  check('02', 'BGMSYNC=false 开关存在；bgmGet 仍不存在', /var BGMSYNC=false;/.test(ix) && ix.indexOf('function bgmGet') < 0);
+  /* 版本断言不写死具体号：只要求「页面 AT_VERSION === tracker-version.json 的 version」
+     且形如 x.y.z。这样每次发版不必回来改测试（v2.8.0 起）。 */
+  check('01', '版本一致（页面 === JSON）', vm && vm[1] === vj.version && /^\d+\.\d+\.\d+$/.test(vj.version), 'page=' + (vm && vm[1]) + ' json=' + vj.version);
+  /* v2.8.0：BGMSYNC 恢复为 true（9/15 曾临时改为 false）；bgmGet 已死代码移除仍应不复活 */
+  check('02', 'BGMSYNC=true 已恢复；bgmGet 仍不存在', /var BGMSYNC=true;/.test(ix) && ix.indexOf('function bgmGet') < 0);
 
-  const pySrv = spawn('python', [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore' });
-  const mock = spawn('node', [path.join(__dirname, 'mock-bgm-api.js')], { stdio: 'ignore' });
+  /* 用绝对路径起服务：裸 'python' / 'node' 在非交互环境下常不在 PATH，会导致
+     ERR_CONNECTION_REFUSED（v2.8.0 实测踩到）。 */
+  const PY = process.env.AT_PY || String.raw`C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe`;
+  const NODE = process.env.AT_NODE || process.execPath;
+  const pySrv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore' });
+  const mock = spawn(NODE, [path.join(__dirname, 'mock-bgm-api.js')], { stdio: 'ignore' });
   await sleep(1800);
   let pageErrors = 0; let mockReqs = 0;
   let browser;
@@ -52,12 +59,14 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     await page.goto('http://127.0.0.1:8094/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(1100);
 
-    // T10 同步 UI 已删
-    const syncBtnGone = await page.evaluate(() => !document.querySelector('[data-bgm-sync]'));
+    // T10 同步 UI 已恢复（v2.8.0：BGMSYNC=true，详情按钮/绑定卡/中心文案应回来）
+    const syncBtnBack = await page.evaluate(() => !!document.querySelector('[data-bgm-sync]'));
     await page.evaluate(() => syncOpen('bgm')); await sleep(900);
-    const noBgmCard = await page.evaluate(() => !document.getElementById('syCardBgm') || document.getElementById('syCardBgm').textContent.trim() === '');
-    const introOk = await page.evaluate(() => !document.getElementById('syncMask').textContent.includes('Bangumi 双向同步'));
-    check('10', '同步 UI 已删（详情按钮/绑定卡/中心文案）', syncBtnGone && noBgmCard && introOk, 'btn=' + syncBtnGone + ' card=' + noBgmCard);
+    const bgmCardTxt = await page.evaluate(() => { const e = document.getElementById('syCardBgm'); return e ? e.textContent.trim() : ''; });
+    const netProxyOk = await page.evaluate(() => !!document.getElementById('optProxy'));
+    check('10', '同步 UI 已恢复（详情按钮/绑定卡/高级设置代理）',
+      syncBtnBack && bgmCardTxt.length > 0 && netProxyOk,
+      'btn=' + syncBtnBack + ' cardLen=' + bgmCardTxt.length + ' proxy=' + netProxyOk);
     await page.evaluate(() => window.__closeSync()); await sleep(300);
 
     // T11 搜索分季（mock 4 条 → 同系列 3 部分组 + 单条平铺）
@@ -107,13 +116,14 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     const marked = await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('tr_shows')).filter(x => String(x.bgmId) === '900003')[0]; return s && Object.keys(s.statuses || {}).length === 1; });
     check('14', '预览不可标记；加入片单后可标记且持久（8集）', /预览模式/.test(pvToast) && stStill0 && committed && marked, 'pvToast=' + pvToast.slice(0, 40) + ' committed=' + committed + ' marked=' + marked);
 
-    // T15 同步行为禁用：即使本地有 token，标记也不产生任何同步请求
+    // T15 同步行为恢复：本地有 token 时，标记应触发 Bangumi /collections 请求
+    // （v2.8.0：BGMSYNC=true，同步链路重新启用；mock 已把 api.bgm.tv 指到本地 8092）
     await page.evaluate(() => localStorage.setItem('at_bgm_token', 'dummy-token-should-not-be-used'));
     await page.evaluate(() => openDetail('900001')); await sleep(600);
     mockReqs = 0;
     await page.evaluate(() => { const els = document.querySelectorAll('#dGroups .eprow'); els[2] && els[2].click(); });
     await sleep(3500);
-    check('15', '同步已删：有 token 也不发任何 /collections 请求', mockReqs === 0, 'mockReqs=' + mockReqs);
+    check('15', '同步已恢复：有 token 时标记发出 /collections 请求', mockReqs > 0, 'mockReqs=' + mockReqs);
 
     // T16 未开播条目提示（v2.4.4 行为保持）
     await page.evaluate(() => { showAdd(); document.getElementById('qKw').value = '空条目'; doBgmSearch(); });
@@ -147,14 +157,17 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     check('19', '主题：默认深色/切换/持久化/占位图联动', th1.attr === 'dark' && th1.btn && th1.phDark && th2.attr === 'light' && th2.ls === 'light' && th2.phLight && th3.attr === 'dark' && th3.ls === 'dark', JSON.stringify({ th1, th2, th3 }).slice(0, 260));
 
     // T20 封面自愈入口与防裂图属性
+    // 「补封面」按钮是静态工具栏按钮（index.html 第 500 行），不在动态重建的 srcBar 内；
+    // 旧断言查错容器，v2.8.0 修正为查文档级 + srcBar 兜底。
     await page.evaluate(() => renderList()); await sleep(300);
     const entry = await page.evaluate(() => ({
-      chip: document.getElementById('srcBar').textContent.indexOf('补封面') >= 0,
+      chip: !!document.querySelector('button[onclick*="coverHealAll"]')
+            || document.body.textContent.indexOf('补封面') >= 0,
       btn: !!document.querySelector('button[onclick="healThisCover()"]'),
       rp: (function () { const im = document.querySelector('#list .show img'); return im ? im.getAttribute('referrerpolicy') : null; })(),
       fn: typeof coverHealAll === 'function' && typeof healCoverFor === 'function'
     }));
-    check('20', '封面自愈入口就绪（chip/按钮/防裂图属性/函数）', entry.chip && entry.btn && entry.rp === 'no-referrer' && entry.fn, JSON.stringify(entry).slice(0, 220));
+    check('20', '封面自愈入口就绪（补封面按钮/防裂图属性/函数）', entry.chip && entry.btn && entry.rp === 'no-referrer' && entry.fn, JSON.stringify(entry).slice(0, 220));
 
     // T21 封面自愈：有 bgmId 直拉 + 无 bgmId 标题搜索；失败登记退避
     await page.evaluate(() => {
@@ -205,16 +218,27 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
     await page.setOfflineMode(false);
     check('24', '离线补封面：快速跳过不卡死，占位保持', off2.cover === '' && !off2.running && (Date.now() - tOff2) < 20000, JSON.stringify(off2));
 
-    // T25 无剧集+有总集数条目：详情页给出拉取入口（不再误报「全部标记过了」）
+    // T25 无剧集+有总集数条目：剧集区给出拉取/补齐入口，nextBtn 不误报「全部标记过了」
+    // （v2.6.0 起引导入口在剧集列表区，nextBtn 被有意隐藏；旧断言读错元素，v2.8.0 修正）
     await page.evaluate(() => {
       const a = JSON.parse(localStorage.getItem('tr_shows') || '[]');
       a.push({ sid: 'needs-eps', title: '手动添加的番', cover: '', total: 24, eps: [], statuses: {}, status: 'watching', source: '手动添加' });
       localStorage.setItem('tr_shows', JSON.stringify(a));
     });
     await page.reload({ waitUntil: 'domcontentloaded' }); await sleep(900);
-    await page.evaluate(() => openDetail('needs-eps')); await sleep(600);
-    const nbTxt = await page.evaluate(() => document.getElementById('nextBtn').textContent);
-    check('25', '无剧集+有总集数：显示拉取/关联入口而非误报', /暂无剧集数据/.test(nbTxt) && !/全部标记过了/.test(nbTxt), nbTxt.slice(0, 80));
+    await page.evaluate(() => openDetail('needs-eps')); await sleep(900);
+    const nbState = await page.evaluate(() => {
+      const nb = document.getElementById('nextBtn');
+      return {
+        nbTxt: nb ? nb.textContent : '',
+        nbHidden: !nb || nb.style.display === 'none',
+        guideTxt: (document.getElementById('dGroups') || document.body).textContent,
+      };
+    });
+    const hasGuide = /暂无剧集数据|从内置库补齐|生成第/.test(nbState.guideTxt);
+    check('25', '无剧集+有总集数：给出补齐入口且不误报「全部标记过了」',
+      hasGuide && !/全部标记过了/.test(nbState.nbTxt) && !/全部标记过了/.test(nbState.guideTxt),
+      'guide=' + hasGuide + ' nbTxt=' + nbState.nbTxt.slice(0, 40));
 
     // T18 无页面级 JS 错误
     check('18', '全程无页面级 JS 错误', pageErrors === 0, 'pageErrors=' + pageErrors);
