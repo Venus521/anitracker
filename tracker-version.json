@@ -1,7 +1,7 @@
 {
     "app": "anitracker",
-    "version": "2.10.1",
-    "build": "20260925d",
-    "note": "AI 结果导入面板重做：粘贴即自动识别（防抖 260ms，去掉「预览识别」这一步），识别结果由三行灰字改为分类色卡（TV原创/半原创/漫改各一色块，含集号区间、集数、占比条），按钮从 5 个精简为 3 个（复制提问给 AI / 取消 / 写入），没认出来的行收进折叠区不再抢视线，超范围集号给出明确提示。顺带修两个真 bug：① 防抖定时器在面板关闭后触发会读 null 报「Cannot read properties of null」；② toast 浮层会遮住面板底部的主按钮（新增 body.panel-open 让 toast 抬高，用 MutationObserver 自动同步，覆盖所有面板）。解析器 aiParse 逻辑未改动。",
-    "ts": 1790295600000
+    "version": "2.11.0",
+    "build": "20260925e",
+    "note": "登录/注册重做（参考B站双Tab）+ 修5个注册链路真缺陷。① 双Tab：登录/注册明确分页，注册不再藏在「注册一个→」小字后面；② 发信要5~6秒（实测5237~5802ms）但旧版这期间 btn.disabled 从未置true，守卫形同虚设、可重复点击重复发信——改为点击瞬间真锁+「发送中…」+_sending重入锁；③ signUp 只返回内存闭包、无明文凭证，刷新/切后台即丢，而正常流程要去邮箱收信几十秒到几分钟——改为用 auth.resend 取可持久化 messageId 存 localStorage，刷新后用 auth.verifyOtp({token,messageId}) 重建，并自动跳回注册页预填邮箱提示「还差一步」；④ 注册时「顺便设用户名」的输入框 #cbNewName 代码里只读不写、从未渲染，永远拿到空值——已真正渲染；⑤ errText 旧版靠 helpMessage 中文命中，脆弱且会误判（真实 helpMessage 是「常见原因清单」，含「已过期」字样导致错码被误报成过期）——改为优先读 category/status/errorCode 结构化字段，并剥掉 Go 的 %!(EXTRA...) 残渣，保证不吐乱码。验证码文案与校验统一为 4–8 位。测试：register-logic 55/55、register-e2e 13/13、run-regression 23/23。",
+    "ts": 1790316158170
 }

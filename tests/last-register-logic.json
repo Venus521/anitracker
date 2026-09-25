@@ -1,0 +1,337 @@
+{
+ "at": "2026-09-25T06:06:26.016Z",
+ "pass": 55,
+ "total": 55,
+ "results": [
+  {
+   "id": "E1",
+   "name": "isEmail(\"a@b.co\") → true（常规邮箱）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "E2",
+   "name": "isEmail(\"user.name+tag@example.com\") → true（含点与 + 号）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "E3",
+   "name": "isEmail(\"not-an-email\") → false（没有 @ —— 故意不合法）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "E4",
+   "name": "isEmail(\"a@b\") → false（顶级域不足 2 位）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "E5",
+   "name": "isEmail(\"a@b.c\") → false（顶级域 1 位）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "E6",
+   "name": "isEmail(\"  a@b.co  \") → true（首尾空格应被 trim）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "E7",
+   "name": "isEmail(\"@b.co\") → false（缺本地部分）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "E8",
+   "name": "isEmail(\"a@.co\") → false（缺域名）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "E9",
+   "name": "isEmail(\"\") → false（空字符串）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "E10",
+   "name": "isEmail(\"a b@c.co\") → false（本地部分含空格）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "P1",
+   "name": "pwdOk(\"Probe0Testx\") → true（标准 11 位）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "P2",
+   "name": "pwdOk(\"123\") → false（太短（实测云端也不校验，靠前端拦））",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "P3",
+   "name": "pwdOk(\"abcdefgh\") → false（纯字母，无数字）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "P4",
+   "name": "pwdOk(\"12345678\") → false（纯数字，无字母）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "P5",
+   "name": "pwdOk(32位) → true（恰好 32 位）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "P6",
+   "name": "pwdOk(34位) → false（36 位，超上限）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "P7",
+   "name": "pwdOk(\"abcdefg1\") → true（恰好 8 位，边界）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "P8",
+   "name": "pwdOk(\"abcdef1\") → false（7 位，边界外）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "P9",
+   "name": "pwdOk(\"\") → false（空）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "U1",
+   "name": "userOk(\"abc123\") → true（恰好 6 位，边界内）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "U2",
+   "name": "userOk(\"abc12\") → false（5 位，边界外）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "U3",
+   "name": "userOk(\"abcde12345\") → true（11 位）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "U4",
+   "name": "userOk(\"user_name-1\") → true（含下划线与短横线）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "U5",
+   "name": "userOk(\"Abc123\") → false（大写开头 —— 故意不合法）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "U6",
+   "name": "userOk(\"1abcde\") → false（数字开头）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "U7",
+   "name": "userOk(\"用户名abc\") → false（含中文 —— 故意不合法）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "U8",
+   "name": "userOk(25位) → true（恰好 25 位）",
+   "ok": true,
+   "detail": "got=true"
+  },
+  {
+   "id": "U9",
+   "name": "userOk(26位) → false（26 位，超限）",
+   "ok": true,
+   "detail": "got=false"
+  },
+  {
+   "id": "C1",
+   "name": "cleanMsg 剥残渣：砍掉 %!(EXTRA 之后全部",
+   "ok": true,
+   "detail": "want=\"无效的验证码\" got=\"无效的验证码\""
+  },
+  {
+   "id": "C2",
+   "name": "cleanMsg 剥残渣：无残渣时原样返回",
+   "ok": true,
+   "detail": "want=\"正常的一句话\" got=\"正常的一句话\""
+  },
+  {
+   "id": "C3",
+   "name": "cleanMsg 剥残渣：%!s(MISSING) 也要砍",
+   "ok": true,
+   "detail": "want=\"类型错误\" got=\"类型错误\""
+  },
+  {
+   "id": "C4",
+   "name": "cleanMsg 剥残渣：空串安全",
+   "ok": true,
+   "detail": "want=\"\" got=\"\""
+  },
+  {
+   "id": "X1",
+   "name": "errText：验证码错 → 结构化 category 判定",
+   "ok": true,
+   "detail": "want=\"验证码不正确，请检查后重填\" got=\"验证码不正确，请检查后重填\""
+  },
+  {
+   "id": "X2",
+   "name": "errText：凭据错 → INVALID_CREDENTIALS",
+   "ok": true,
+   "detail": "want=\"邮箱/用户名或密码不正确\" got=\"邮箱/用户名或密码不正确\""
+  },
+  {
+   "id": "X3",
+   "name": "errText：同类里按「过期」细分",
+   "ok": true,
+   "detail": "want=\"验证码已过期，请重新获取\" got=\"验证码已过期，请重新获取\""
+  },
+  {
+   "id": "X4",
+   "name": "errText：伪造 messageId 也归为验证码类",
+   "ok": true,
+   "detail": "want=\"验证码不正确，请检查后重填\" got=\"验证码不正确，请检查后重填\""
+  },
+  {
+   "id": "X5",
+   "name": "errText：缺 messageId → 引导重新获取",
+   "ok": true,
+   "detail": "want=\"验证凭证已失效，请重新点「获取验证码」\" got=\"验证凭证已失效，请重新点「获取验证码」\""
+  },
+  {
+   "id": "X6",
+   "name": "errText：网络错",
+   "ok": true,
+   "detail": "want=\"网络不给力，请检查网络后重试\" got=\"网络不给力，请检查网络后重试\""
+  },
+  {
+   "id": "X7",
+   "name": "errText：限流 → 结构化判定",
+   "ok": true,
+   "detail": "want=\"操作太频繁，请等 1 分钟再试\" got=\"操作太频繁，请等 1 分钟再试\""
+  },
+  {
+   "id": "X8",
+   "name": "errText：已注册 → 结构化判定",
+   "ok": true,
+   "detail": "want=\"这个邮箱已经注册过了，可直接登录\" got=\"这个邮箱已经注册过了，可直接登录\""
+  },
+  {
+   "id": "L1",
+   "name": "兜底不吐 %!(EXTRA 残渣（输入含残渣也要洗干净）",
+   "ok": true,
+   "detail": "got=\"某个没见过的错误\""
+  },
+  {
+   "id": "L2",
+   "name": "兜底不吐 %!(EXTRA 残渣（输入含残渣也要洗干净）",
+   "ok": true,
+   "detail": "got=\"未知状况\""
+  },
+  {
+   "id": "L3",
+   "name": "兜底不吐 %!(EXTRA 残渣（输入含残渣也要洗干净）",
+   "ok": true,
+   "detail": "got=\"foo\""
+  },
+  {
+   "id": "S1",
+   "name": "发送期间立刻禁用按钮（不等 await）",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S2",
+   "name": "有 _sending 重入锁",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S3",
+   "name": "_sending 在成功与失败两条路径都复位",
+   "ok": true,
+   "detail": "出现次数=3"
+  },
+  {
+   "id": "S4",
+   "name": "注册状态持久化到 localStorage（跨刷新不丢）",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S5",
+   "name": "finishSignUp 支持无闭包时用 messageId 重建",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S6",
+   "name": "startSignUp 里调了 resend 取 messageId",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S7",
+   "name": "注册表单真的渲染了 #cbNewName（旧版只读不写）",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S8",
+   "name": "双 Tab 结构存在且注册面板默认隐藏",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S9",
+   "name": "验证码文案与校验一致（不再写死「6 位」）",
+   "ok": true,
+   "detail": "strip 注释后仍匹配到「6 位验证码」即失败"
+  },
+  {
+   "id": "S10",
+   "name": "旧的 cbRegBox 隐藏式注册已彻底移除",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S11",
+   "name": "刷新后回到注册页并预填邮箱",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "id": "S12",
+   "name": "旧的「写死正则」错误翻译已换成结构化优先",
+   "ok": true,
+   "detail": ""
+  }
+ ]
+}

@@ -1,17 +1,17 @@
 {
- "t": "2026-09-24T18:24:20.023Z",
+ "t": "2026-09-25T06:08:13.891Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "897173B vs 897173B"
+   "detail": "905411B vs 905411B"
   },
   {
    "id": "01",
    "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.10.0 json=2.10.0"
+   "detail": "page=2.11.0 json=2.11.0"
   },
   {
    "id": "02",
@@ -59,7 +59,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "21ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "26ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -77,7 +77,7 @@
    "id": "15b",
    "name": "v2.10.0 详情页：拉取/推送按钮已移除；本地番仍显示「关联Bangumi」",
    "ok": true,
-   "detail": "gone={\"syncBtns\":0,\"anySyncText\":false} assoc={\"sid\":\"man-1790274201638\",\"hasBtn\":true,\"shown\":true}"
+   "detail": "gone={\"syncBtns\":0,\"anySyncText\":false} assoc={\"sid\":\"man-1790316456645\",\"hasBtn\":true,\"shown\":true}"
   },
   {
    "id": "16",
@@ -89,7 +89,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "13ms"
+   "detail": "17ms"
   },
   {
    "id": "19",

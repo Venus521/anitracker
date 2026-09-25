@@ -231,6 +231,36 @@ details.syfold>summary+p,details.syfold>div:last-child{padding-bottom:12px}
 .sybtn.acc{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .sybtn:disabled{opacity:.45}
 .sybtn.sm{padding:7px 10px;font-size:11px;border-radius:8px;min-height:32px}
+/* ===== v2.11.0：账号面板的「登录 / 注册」双 Tab（参考 B 站）=====
+   要点：Tab 明确、当前项高亮、注册分两步有编号、验证码与「获取验证码」同行。 */
+.cbtabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 14px}
+.cbtab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:10px 4px;font:600 14px/1 var(--sans);color:var(--muted);cursor:pointer;transition:color .15s,border-color .15s;margin-bottom:-1px}
+.cbtab.on{color:var(--ink);border-bottom-color:var(--ink)}
+.cbtab:active{opacity:.7}
+.cbpane label{display:block;font-size:11px;color:var(--muted);margin:12px 0 5px;letter-spacing:.02em}
+.cbpane label:first-of-type{margin-top:0}
+.cbpane input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:14px/1.5 var(--sans);padding:12px 13px;outline:none;min-height:44px;transition:border-color .15s}
+.cbpane input:focus{border-color:var(--muted)}
+.cbpane input::placeholder{color:var(--muted);opacity:.7}
+/* 注册步骤小标题：带编号圆点，让人知道现在第几步 */
+.cbstep{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--muted);margin:16px 0 4px}
+.cbstep .n{display:flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--line);color:var(--ink);font-size:10px;font-weight:700;flex:none}
+/* 顶部状态条：刷新续用注册时在表单最上方说明「还差一步」，
+   位置比塞在验证码框下面更醒目，也更符合「进度提示」的语义。 */
+.cbnotice{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink);margin:0 0 4px}
+.cbnotice b{color:var(--accent);font-weight:700}
+/* 验证码 + 获取按钮同一行 */
+.cbcode{display:flex;gap:8px}
+.cbcode input{flex:1;min-width:0}
+.cbcode .cbget{flex:none;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:0 14px;font:600 12px/1 var(--sans);min-height:44px;white-space:nowrap;transition:opacity .15s}
+.cbcode .cbget:disabled{opacity:.5;border-color:var(--line);background:none;color:var(--muted)}
+/* 可选的用户名折叠档 */
+.cbopt{margin:14px 0 0;border:1px dashed var(--line);border-radius:10px;padding:0 12px}
+.cbopt>summary{cursor:pointer;list-style:none;padding:11px 0;font-size:12px;color:var(--muted)}
+.cbopt>summary::-webkit-details-marker{display:none}
+.cbopt>summary::before{content:'＋ ';color:var(--muted)}
+.cbopt[open]>summary::before{content:'－ '}
+.cbopt>input:last-child{margin-bottom:12px}
 .ledger{margin-top:4px}
 .lgrow{border-bottom:1px dashed var(--line);padding:8px 0;font-size:12px}
 .lgrow .lg1{display:flex;justify-content:space-between;gap:8px;cursor:pointer;align-items:baseline}
@@ -295,6 +325,8 @@ html[data-theme=dark] .eprow .ty.ty-filler{color:#e2a184;border-color:#553226}
 html[data-theme=dark] .eprow .ty.ty-semi{color:#e0b060;border-color:#54401c}
 html[data-theme=dark] .eprow .ty.ty-canon{color:#8ab6e0;border-color:#2c4258}
 html[data-theme=dark] .eprow .ty.ty-movie{color:#b0a4e8;border-color:#3c3660}
+/* 深色下 cbnotice 的强调色要和 --accent 保持一致（浅色是灰金，深色是亮金） */
+html[data-theme=dark] .cbnotice{background:rgba(217,169,75,.10);border-color:#5a4a28}
 html[data-theme=dark] .ep.w{color:#12100d}
 html[data-theme=dark] .quickrow button{color:var(--bg)}
 /* 影院氛围：海报阴影与微交互 */
@@ -393,7 +425,7 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.10.1', AT_BUILD='20260925d';
+var AT_VERSION='2.11.0', AT_BUILD='20260925e';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
