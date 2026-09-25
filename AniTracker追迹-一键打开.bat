@@ -11,7 +11,29 @@ rem ============================================
 setlocal enableextensions
 
 set "PORT=8089"
+
+rem ---- 定位项目目录（让这个 bat 放到桌面/任何地方都能用）----
+rem 顺序：① 同目录有 server.py → 就用同目录
+rem       ② 否则用写死的项目路径（bat 被复制到桌面时走这条）
 set "HERE=%~dp0"
+if not exist "%HERE%server.py" (
+  if exist "D:\项目\01_媒体娱乐\ani-tracker\server.py" (
+    set "HERE=D:\项目\01_媒体娱乐\ani-tracker\"
+  )
+)
+rem 去掉 HERE 末尾的反斜杠，避免拼出 "..\"
+if "%HERE:~-1%"=="\" set "HERE=%HERE:~0,-1%"
+
+if not exist "%HERE%\server.py" (
+  echo.
+  echo [错误] 找不到 server.py。
+  echo   本 bat 所在目录：%~dp0
+  echo   期望的项目目录：D:\项目\01_媒体娱乐\ani-tracker
+  echo   D 盘可能未挂载，或项目被移动了。
+  echo.
+  pause
+  exit /b 1
+)
 
 rem ---- 若端口已在监听，直接开页面 ----
 netstat -ano | findstr ":%PORT% " | findstr /I "LISTENING" >nul 2>nul
@@ -35,14 +57,24 @@ rem 候选 3：系统 Python
 if not defined PYC if exist "C:\Python313\python.exe" set "PYC=C:\Python313\python.exe"
 
 rem ---- 优先用 pythonw（无黑框）；没有就退回 python + 最小化窗口 ----
-if defined PYW (
-  start "" "%PYW%" "%HERE%server.py" --port %PORT% --host 0.0.0.0 --dir "%HERE%." --idle 900
-) else if defined PYC (
-  start "anitracker-server" /MIN "%PYC%" "%HERE%server.py" --port %PORT% --host 0.0.0.0 --dir "%HERE%." --idle 900
-) else (
-  echo.
-  echo [错误] 没找到任何可用的 Python。
-  echo 请安装 Python 3，或把 python.exe 放到 PATH 里。
+rem 注意：用 goto 而不是 if defined ... else，避免 pythonw 缺失时
+rem       cmd 把 "%PYW%" 解析成命令名导致偶发失败。
+if defined PYW goto usepyw
+if defined PYC goto usepyc
+goto nopython
+
+:usepyw
+start "" "%PYW%" "%HERE%\server.py" --port %PORT% --host 0.0.0.0 --dir "%HERE%." --idle 900
+goto waitready
+
+:usepyc
+start "anitracker-server" /MIN "%PYC%" "%HERE%\server.py" --port %PORT% --host 0.0.0.0 --dir "%HERE%." --idle 900
+goto waitready
+
+:nopython
+echo.
+echo [错误] 没找到任何可用的 Python。
+echo 请安装 Python 3，或把 python.exe 放到 PATH 里。
   echo 详情见同目录：服务器日志.txt
   echo.
   pause

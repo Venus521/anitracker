@@ -261,6 +261,31 @@ details.syfold>summary+p,details.syfold>div:last-child{padding-bottom:12px}
 .cbopt>summary::before{content:'＋ ';color:var(--muted)}
 .cbopt[open]>summary::before{content:'－ '}
 .cbopt>input:last-child{margin-bottom:12px}
+/* ===== v2.12.0：右键 / 长按菜单 =====
+   设计要点：不用原生右键（原生会把「另存为图片」等系统菜单也带出来），
+   自绘一个轻量菜单；移动端用长按（500ms）触发，同一套逻辑。 */
+.ctxmenu{position:fixed;z-index:9999;min-width:172px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:6px;box-shadow:0 10px 34px rgba(0,0,0,.28);opacity:0;transform:scale(.96);
+  transition:opacity .11s ease,transform .11s ease;pointer-events:none}
+.ctxmenu.on{opacity:1;transform:scale(1);pointer-events:auto}
+.ctxmenu .ctxhd{padding:7px 11px 8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
+  margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.ctxmenu .ctxi{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;
+  text-align:left;padding:10px 11px;border-radius:8px;font-size:13px;color:var(--ink);min-height:42px;
+  transition:background .12s}
+.ctxmenu .ctxi:hover,.ctxmenu .ctxi:focus{background:var(--accent-soft);outline:none}
+.ctxmenu .ctxi .ic{font-size:14px;width:18px;text-align:center;flex:none;opacity:.85}
+.ctxmenu .ctxi .k{flex:none;font-size:10px;color:var(--muted);border:1px solid var(--line);
+  border-radius:5px;padding:1px 5px;margin-left:auto}
+.ctxmenu .ctxi.dg{color:var(--danger)}
+.ctxmenu .ctxi.dg:hover{background:rgba(168,85,47,.10)}
+.ctxmenu .ctxsep{height:1px;background:var(--line);margin:5px 4px}
+/* 可右键的卡片给一点暗示（桌面端才显示 hover 提示） */
+@media (hover:hover){
+  .show.ctxable,.srrow.ctxable,.eprow.ctxable{cursor:context-menu}
+}
+html[data-theme=dark] .ctxmenu{box-shadow:0 12px 40px rgba(0,0,0,.72)}
+html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
 .ledger{margin-top:4px}
 .lgrow{border-bottom:1px dashed var(--line);padding:8px 0;font-size:12px}
 .lgrow .lg1{display:flex;justify-content:space-between;gap:8px;cursor:pointer;align-items:baseline}
@@ -425,7 +450,326 @@ function safeSid(s){ return String(s==null?'':s).replace(/[^a-zA-Z0-9_\-@]/g,'_'
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
-var AT_VERSION='2.11.0', AT_BUILD='20260925e';
+
+/* ===== v2.12.0：通用右键 / 长按菜单引擎 =====
+   为什么不用原生 contextmenu：原生菜单会把「另存为图片 / 检查元素」也带出来，
+   对一个「记录工具」来说那些是噪音。这里一律 preventDefault，换成自己的菜单。
+   移动端没有右键，用长按（500ms）+ 轻微震动反馈代替，走同一套 openCtx。 */
+var _ctxEl = null, _ctxTimer = null, _ctxLongPress = false, _ctxSrcEl = null;
+function _ctxRoot(){
+  if (_ctxEl) return _ctxEl;
+  _ctxEl = document.createElement('div');
+  _ctxEl.className = 'ctxmenu';
+  _ctxEl.setAttribute('role','menu');
+  document.body.appendChild(_ctxEl);
+  return _ctxEl;
+}
+function closeCtx(){
+  if (_ctxEl) _ctxEl.classList.remove('on');
+  _ctxSrcEl = null;
+  _ctxLongPress = false;
+}
+/* items: [{t:'标题文案', ic:'✎', k:'快捷键提示', dg:true禁用色, fn:回调}] 或 {sep:true} */
+function openCtx(x, y, items, head){
+  var el = _ctxRoot();
+  var h = '';
+  if (head) h += '<div class="ctxhd">' + esc(head) + '</div>';
+  h += items.map(function(it, i){
+    if (it.sep) return '<div class="ctxsep"></div>';
+    return '<button class="ctxi' + (it.dg ? ' dg' : '') + '" role="menuitem" data-i="' + i + '">' +
+      '<span class="ic">' + (it.ic || '') + '</span><span>' + esc(it.t) + '</span>' +
+      (it.k ? '<span class="k">' + esc(it.k) + '</span>' : '') + '</button>';
+  }).join('');
+  el.innerHTML = h;
+  /* 先显示再定位，才能量到尺寸 */
+  el.style.left = '0px'; el.style.top = '0px';
+  el.classList.add('on');
+  var mx = window.innerWidth, my = window.innerHeight;
+  var w = el.offsetWidth, hh = el.offsetHeight;
+  var L = x, T = y;
+  if (L + w > mx - 8) L = Math.max(8, mx - w - 8);
+  if (T + hh > my - 8) T = Math.max(8, my - hh - 8);
+  el.style.left = L + 'px'; el.style.top = T + 'px';
+  /* 绑定动作 */
+  el.querySelectorAll('.ctxi').forEach(function(btn){
+    btn.onclick = function(ev){
+      ev.stopPropagation();
+      var it = items[+btn.dataset.i];
+      closeCtx();
+      if (it && it.fn) { try { it.fn(); } catch (e) { toast('操作失败：' + (e.message || e)); } }
+    };
+  });
+  var first = el.querySelector('.ctxi:not(.dg)') || el.querySelector('.ctxi');
+  if (first) { try { first.focus(); } catch (e) {} }
+  return el;
+}
+/* 全局收尾：点别处 / 滚动 / Esc / 失焦 都关掉 */
+document.addEventListener('click', function(e){
+  if (_ctxEl && _ctxEl.classList.contains('on') && !_ctxEl.contains(e.target)) closeCtx();
+}, true);
+document.addEventListener('contextmenu', function(e){
+  /* 只有挂在 .ctxable 上的元素才接管；其余位置保持系统默认（方便复制文字） */
+  var t = e.target && e.target.closest ? e.target.closest('.ctxable') : null;
+  if (!t) return;
+  e.preventDefault();
+  if (_ctxLongPress) { _ctxLongPress = false; return; }   /* 长按已开过，别再开一次 */
+  var fn = t.__ctxfn;
+  if (typeof fn === 'function') fn(e.clientX, e.clientY, t);
+});
+document.addEventListener('scroll', closeCtx, true);
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') closeCtx();
+  /* 菜单开着时，上下键在项间移动（键盘可达性） */
+  if (!_ctxEl || !_ctxEl.classList.contains('on')) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    var its = Array.prototype.slice.call(_ctxEl.querySelectorAll('.ctxi'));
+    if (!its.length) return;
+    e.preventDefault();
+    var cur = its.indexOf(document.activeElement);
+    var next = e.key === 'ArrowDown' ? (cur + 1) % its.length : (cur - 1 + its.length) % its.length;
+    its[next].focus();
+  }
+}, true);
+window.addEventListener('resize', closeCtx);
+/* 长按：移动端与触屏笔记本都能用 */
+function bindCtx(el, fn){
+  if (!el) return el;
+  el.classList.add('ctxable');
+  el.__ctxfn = fn;
+  el.oncontextmenu = function(e){ e.preventDefault(); fn(e.clientX, e.clientY, el); };
+  el.addEventListener('touchstart', function(e){
+    var pt = e.touches && e.touches[0]; if (!pt) return;
+    var sx = pt.clientX, sy = pt.clientY;
+    clearTimeout(_ctxTimer);
+    _ctxTimer = setTimeout(function(){
+      _ctxLongPress = true;
+      try { if (navigator.vibrate) navigator.vibrate(18); } catch (e0) {}
+      fn(sx, sy, el);
+    }, 500);
+    el.__tsx = sx; el.__tsy = sy;
+  }, { passive: true });
+  el.addEventListener('touchmove', function(e){
+    var pt = e.touches && e.touches[0]; if (!pt) return;
+    /* 手指移动超过 12px 视为滚动，取消长按 */
+    if (Math.abs(pt.clientX - (el.__tsx || 0)) > 12 || Math.abs(pt.clientY - (el.__tsy || 0)) > 12) {
+      clearTimeout(_ctxTimer); _ctxLongPress = false;
+    }
+  }, { passive: true });
+  el.addEventListener('touchend', function(){
+    clearTimeout(_ctxTimer);
+    /* 长按已经触发过 → 阻止紧随其后的 click，避免误开详情页 */
+    if (_ctxLongPress) {
+      el.addEventListener('click', function once(ev){ ev.stopPropagation(); ev.preventDefault();
+        el.removeEventListener('click', once, true); }, { capture: true, once: true });
+    }
+  });
+  return el;
+}
+function copyText(txt, okMsg){
+  var t = String(txt == null ? '' : txt);
+  function done(){ toast(okMsg || ('已复制：' + t)); }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(done, function(){ fallback(); });
+      return;
+    }
+  } catch (e) {}
+  fallback();
+  function fallback(){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = t; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta); done();
+    } catch (e) { toast('复制失败，请手动选择文本'); }
+  }
+}
+/* 改状态（与详情页的状态按钮同一套语义） */
+function setShowStatus(sid, st){
+  var s = bySid(sid); if (!s) return;
+  s.status = st; s.updAt = Date.now();
+  save(); renderList();
+  if (document.getElementById('vDetail').style.display !== 'none' && String(curSid) === String(sid)) renderDetail();
+  toast('《' + s.title + '》状态改为「' + (ST_NAME[st] || st) + '」');
+}
+/* 从片单移除（带确认，且复用 delShow 的语义） */
+function removeShowBySid(sid){
+  var s = bySid(sid); if (!s) return;
+  if (!confirm('从片单移除《' + s.title + '》？\n（本地记录会一并删除，不影响云端备份）')) return;
+  shows = shows.filter(function(x){ return String(x.sid) !== String(sid); });
+  save();
+  if (String(curSid) === String(sid)) backList(); else renderList();
+  toast('已移除《' + s.title + '》');
+}
+/* ===== v2.12.0：片单重复检测 =====
+   判据：标题归一化后相同 → 高度可疑；标题相同但年份/集数明显不同 → 提示「可能是不同季度」，
+   不直接建议合并（这正是「海贼王 1999 TV 1168集」与「海贼王 剧场版 2000 41集」的情况）。 */
+function sortBySid(a, b) { return String(a.sid) < String(b.sid) ? -1 : String(a.sid) > String(b.sid) ? 1 : 0; }
+function findAllDupGroups(){
+  var all = {};
+  shows.forEach(function(s){
+    var k = normTxt(s.title);
+    if (!k) return;
+    (all[k] = all[k] || []).push(s);
+  });
+  /* 也按 Bangumi ID 归组（同一条目被不同名字加了两次） */
+  var byBgm = {};
+  shows.forEach(function(s){
+    if (!s.bgmId) return;
+    (byBgm[String(s.bgmId)] = byBgm[String(s.bgmId)] || []).push(s);
+  });
+  var seen = {};
+  var groups = [];
+
+  /* 关键：同名的一组里，可能「两条是真重复、第三条是剧场版/新季度」。
+     不能整组都当重复 —— 否则会把正经作品也列进「可移除」清单。
+     做法：按「年份+集数」把组再切分，只有内容一致的子集才算真重复。 */
+  function splitGroup(items, extra){
+    var buckets = {};
+    items.forEach(function(s){
+      var bk = String(s.year || '?') + '|' + String(s.total || '?');
+      (buckets[bk] = buckets[bk] || []).push(s);
+    });
+    Object.keys(buckets).forEach(function(bk){
+      var sub = buckets[bk].sort(sortBySid);
+      if (sub.length < 2) return;                 /* 单身的一份 = 异类，不算重复 */
+      var id = sub.map(function(x){ return x.sid; }).join('~');
+      if (seen[id]) return;
+      seen[id] = 1;
+      var g = { key: (extra ? extra + ':' : '') + bk, items: sub };
+      if (extra) g.byBgm = true;
+      groups.push(g);
+    });
+  }
+
+  Object.keys(all).forEach(function(k){
+    /* 先按 bgmId 细分（同一条目优先），剩下的按年份集数细分 */
+    var rest = [];
+    all[k].forEach(function(s){
+      if (s.bgmId && byBgm[String(s.bgmId)] && byBgm[String(s.bgmId)].length > 1) return;
+      rest.push(s);
+    });
+    splitGroup(rest, null);
+  });
+  Object.keys(byBgm).forEach(function(k){
+    if (byBgm[k].length > 1) splitGroup(byBgm[k], 'bgm' + k);
+  });
+  return groups;
+}
+function dupSeverity(g){
+  /* 组内已经保证「年份 + 集数」一致（见 findAllDupGroups 的细分），
+     所以只按标题判：标题也一致 → 真重复；标题不同 → 同名但不同作品。 */
+  var ts = {};
+  g.items.forEach(function(s){ ts[normTxt(s.title)] = 1; });
+  return Object.keys(ts).length > 1 ? 'maybe' : 'same';
+}
+/* 把检测结果渲染到账号面板的「片单整理」卡里 */
+function renderDupReport(box){
+  if (!box) return;
+  var groups = findAllDupGroups();
+  var sure = groups.filter(function(g){ return dupSeverity(g) === 'same'; });
+  var maybe = groups.filter(function(g){ return dupSeverity(g) === 'maybe'; });
+
+  /* 另外单独找出「像重复、其实不是」的作品 —— 它们不该被误删，
+     但必须让用户看到「为什么我这儿有两条」，否则用户会以为程序坏了。
+     两类都要收：
+       ① 标题归一化后**完全相同**，但年份/集数不同（同一部作品的不同季度/重制）
+       ② 标题是**前缀关系**（「海贼王」⊂「海贼王剧场版」）——
+          这正是用户问的「为什么航海王有两个」：TV 与剧场版名字只差后缀，
+          归一化后并不相等，所以①抓不到，必须单独用前缀关系兜住。
+     判据：归一化后 a===b，或 a 以 b 开头 / b 以 a 开头（且短的 >= 2 字符，避免「X」这种噪音）。 */
+  var nameBuckets = {};
+  shows.forEach(function(s){
+    var k = normTxt(s.title);
+    if (!k) return;
+    (nameBuckets[k] = nameBuckets[k] || []).push(s);
+  });
+  var lookalikes = [];
+  var lkSeen = {};
+  function sameSig(items){
+    var sig = {};
+    items.forEach(function(s){ sig[String(s.year || '?') + '|' + String(s.total || '?')] = 1; });
+    return Object.keys(sig).length > 1;
+  }
+  function pushLook(g){
+    var id = g.items.map(function(x){ return x.sid; }).sort().join('~');
+    if (lkSeen[id]) return;
+    lkSeen[id] = 1;
+    lookalikes.push(g);
+  }
+  Object.keys(nameBuckets).forEach(function(k){
+    var items = nameBuckets[k];
+    if (items.length < 2) return;
+    if (sameSig(items)) pushLook({ key: k, items: items });
+  });
+  /* 前缀关系：两两比对归一化标题 */
+  var keys = Object.keys(nameBuckets);
+  for (var i = 0; i < keys.length; i++) {
+    for (var j = i + 1; j < keys.length; j++) {
+      var a = keys[i], b = keys[j];
+      var short = a.length <= b.length ? a : b;
+      var long = a.length <= b.length ? b : a;
+      if (short.length < 2) continue;
+      if (long.indexOf(short) !== 0) continue;
+      pushLook({ key: long + ' ⊃ ' + short, items: nameBuckets[a].concat(nameBuckets[b]) });
+    }
+  }
+
+  if (!sure.length && !maybe.length && !lookalikes.length) {
+    box.innerHTML = '<span style="color:#7a9a6a">✓ 没有发现重复番剧</span>';
+    return;
+  }
+  var h = '';
+  if (sure.length) {
+    h += '<div style="margin-bottom:10px"><b style="color:var(--danger)">发现 ' + sure.length + ' 组疑似重复</b>' +
+         '<span style="color:var(--muted)">（标题、年份、集数都一样）</span></div>';
+    /* 只有真重复组才给「移除」按钮 —— 不给其余条目，避免误删正经作品 */
+    sure.forEach(function(g){
+      h += '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-bottom:7px">';
+      h += '<div style="margin-bottom:6px"><b>' + esc(g.items[0].title) + '</b>' +
+           (g.byBgm ? ' <span style="color:var(--muted)">（同一 Bangumi 条目）</span>' : '') + '</div>';
+      g.items.forEach(function(s, i){
+        h += '<div style="display:flex;gap:7px;align-items:center;padding:2px 0">' +
+          '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          esc(s.title) + ' · ' + (s.year || '—') + ' · ' + s.total + '集' +
+          (i === 0 ? ' <span style="color:var(--muted);font-size:10px">（建议保留）</span>' : '') + '</span>' +
+          (i === 0 ? '' :
+            '<button class="sybtn" style="padding:4px 9px;font-size:11px;min-height:auto" onclick="removeShowBySid(\'' +
+            esc(String(s.sid)) + '\');renderDupReport(this.closest(\'.sycard\').querySelector(\'#optDupResult\'))">移除</button>') +
+          '</div>';
+      });
+      h += '</div>';
+    });
+  }
+  if (maybe.length) {
+    h += '<div style="margin-top:4px"><b>另有 ' + maybe.length + ' 组同条目不同标题</b>' +
+         '<span style="color:var(--muted)"> —— 可能重复，建议人工确认</span></div>';
+    maybe.forEach(function(g){
+      h += '<div style="border:1px dashed var(--line);border-radius:9px;padding:8px 10px;margin-top:6px">';
+      g.items.forEach(function(s){
+        h += '<div style="padding:1px 0">' + esc(s.title) + ' <span style="color:var(--muted)">· ' +
+          (s.year || '—') + ' · ' + s.total + '集</span></div>';
+      });
+      h += '</div>';
+    });
+  }
+  if (lookalikes.length) {
+    h += '<div style="margin-top:12px;padding-top:9px;border-top:1px solid var(--line)">' +
+         '<b>同名但不同的作品 · ' + lookalikes.length + ' 组</b>' +
+         '<span style="color:var(--muted)">（如「海贼王」TV 与「海贼王 剧场版」）</span></div>';
+    lookalikes.forEach(function(g){
+      h += '<div style="border:1px dashed var(--line);border-radius:9px;padding:8px 10px;margin-top:6px">';
+      g.items.forEach(function(s){
+        h += '<div style="padding:1px 0">' + esc(s.title) + ' <span style="color:var(--muted)">· ' +
+          (s.year || '—') + ' · ' + s.total + '集</span></div>';
+      });
+      h += '<div style="color:var(--muted);margin-top:4px;font-size:10px">这些标题相同但年份/集数不同，是不同作品，不是重复数据，无需处理。</div>';
+      h += '</div>';
+    });
+  }
+  box.innerHTML = h;
+}
+var AT_VERSION='2.12.0', AT_BUILD='20260925f';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -526,6 +870,10 @@ function pushHist(s,act,ep){
   if(s.hist.length>200) s.hist=s.hist.slice(-200);
 }
 function setEpStat(s,n,st){
+  /* 防御：statuses 可能缺（历史/半写入的数据、外部导入的残缺记录）。
+     epStat 用 (s.statuses||{}) 读是安全的，写这里也必须先补齐，
+     否则第一集标记就会 TypeError 崩掉（v2.12.0 右键菜单走到这条路时暴露）。 */
+  if(!s.statuses) s.statuses={};
   var cur=epStat(s,n);
   if(st===null) delete s.statuses[n]; else s.statuses[n]=st;
   if(cur!==st) pushHist(s, st===null?'unwatch':st, n);
@@ -535,8 +883,8 @@ function fmtTs(t){
   var d=new Date(t), p2=function(x){ return x<10?'0'+x:x; };
   return (d.getMonth()+1)+'月'+d.getDate()+'日 '+p2(d.getHours())+':'+p2(d.getMinutes());
 }
-function cntWatched(s){ var n=0; for(var k in s.statuses){ if(s.statuses[k]==='watched') n++; } return n; }
-function cntRewatch(s){ var n=0; for(var k in s.statuses){ if(s.statuses[k]==='rewatch') n++; } return n; }
+function cntWatched(s){ var o=s.statuses||{}, n=0; for(var k in o){ if(o[k]==='watched') n++; } return n; }
+function cntRewatch(s){ var o=s.statuses||{}, n=0; for(var k in o){ if(o[k]==='rewatch') n++; } return n; }
 function pct(s){ return s.total? Math.min(100,Math.round((cntWatched(s)/s.total)*100)) : 0; }
 
 /* ===== v2.3 来源判定器（唯一口径；v2.4.2 起无系列级摊派）=====
@@ -887,7 +1235,7 @@ function renderList(){
     var w=st.watched, p=st.pct;
     var covTxt=st.hasEps?srcCovLine(st.cov):'剧集数据未收录';
     var hidTxt=(st.hidden>0)?' · <span style="color:var(--accent)">隐 '+st.hidden+'</span>':'';
-    return '<div class="show">'+
+    return '<div class="show" data-sid="'+esc(String(s.sid))+'">'+
       '<img src="'+esc(s.cover||'')+'" onerror="__coverFail(this)" referrerpolicy="no-referrer" onclick="openDetail(\''+esc(String(s.sid))+'\')"/>'+
       '<div class="info" onclick="openDetail(\''+esc(String(s.sid))+'\')">'+
         '<div class="t">'+esc(s.title)+'</div>'+fCnt(s)+(s.parts&&s.parts.length>1?'<span class="type-tag unknown" style="background:var(--accent-soft);color:var(--accent);border-color:var(--accent)">共 '+s.parts.length+' 部分</span>':'')+
@@ -899,6 +1247,29 @@ function renderList(){
       '<button class="p1" onclick="event.stopPropagation();quickNext(\''+esc(String(s.sid))+'\')" aria-label="标记下一集">＋</button>'+
     '</div>';
   }).join('');
+  /* v2.12.0：给每张片单卡挂右键 / 长按菜单 */
+  Array.prototype.forEach.call(el.querySelectorAll('.show[data-sid]'), function(node){
+    var sid = node.getAttribute('data-sid');
+    if (sid) bindCtx(node, function(x, y){ openShowCtx(x, y, sid); });
+  });
+}
+/* 片单卡的右键菜单 */
+function openShowCtx(x, y, sid){
+  var s = bySid(sid); if (!s) return;
+  var st = s.status || 'watching';
+  var items = [
+    { t: '打开详情', ic: '↗', fn: function(){ openDetail(sid); } },
+    { t: '标记下一集已看', ic: '✓', fn: function(){ quickNext(sid); } },
+    { sep: true }
+  ];
+  ['watching','want','done','drop'].forEach(function(k){
+    if (k === st) return;   /* 当前状态不重复列 */
+    items.push({ t: '改为「' + ST_NAME[k] + '」', ic: '◉', fn: function(){ setShowStatus(sid, k); } });
+  });
+  items.push({ sep: true });
+  items.push({ t: '复制番名', ic: '⧉', fn: function(){ copyText(s.title, '已复制：' + s.title); } });
+  items.push({ t: '从片单移除', ic: '✕', dg: true, fn: function(){ removeShowBySid(sid); } });
+  openCtx(x, y, items, s.title + ' · ' + s.total + '集');
 }
 function quickNext(sid){
   var s=bySid(sid); if(!s) return;
@@ -1093,7 +1464,7 @@ function renderGrid(){
     var inf=srcInfoOf(s,e); var tk=inf.src; var tn=TYPE_NAME[tk]||'';
     var nm=(String(e.t||'')||('第 '+e.s+' 集')).replace(/【动画原创】/g,'').trim();
     var noTxt=e.s+(st==='rewatch'?' <span class="rw">🔁</span>':'');
-    html+='<button class="eprow'+cls+'" onclick="cycleEp(\''+esc(String(e.s))+'\')">'+
+    html+='<button class="eprow'+cls+'" data-ep="'+esc(String(e.s))+'" onclick="cycleEp(\''+esc(String(e.s))+'\')">'+
       '<span class="no">'+noTxt+'</span>'+
       '<span class="nm">'+esc(nm)+'</span>'+
       (tn?'<span class="ty ty-'+tk+'" onclick="event.stopPropagation();editSrc('+e.s+')" title="'+esc(srcBasisText(s,e))+'">'+tn+'</span>':'')+
@@ -1116,9 +1487,37 @@ function renderGrid(){
     html=pgHtml+html+pgHtml; /* 上下双置 */
   }
   document.getElementById('dGroups').innerHTML=html;
+  /* 注意：这个 renderGrid 在运行时会被 AT270 的同名实现覆盖（见文件后段），
+     所以剧集行的右键绑定在 AT270 那版里（真正生效的那版）。这里保留是为了
+     与旧代码结构一致，不重复绑定以免出现双菜单。 */
   document.getElementById('typeRow').innerHTML=['all','canon','filler','semi','unknown'].map(function(t){
     return '<button class="ty'+(dType===t?' on':'')+'" onclick="setType(\''+t+'\')">'+(t==='all'?'全部类型':TYPE_NAME[t])+'</button>';
   }).join('');
+}
+/* 剧集行的右键菜单（v2.12.0） */
+function openEpCtx(x, y, epNo){
+  var s = bySid(curSid); if (!s) return;
+  var n = String(epNo);
+  var e = (s.eps || []).filter(function(z){ return String(z.s) === n; })[0];
+  var st = epStat(s, n);
+  var inf = e ? srcInfoOf(s, e) : null;
+  var nm = e ? ((String(e.t || '') || ('第 ' + n + ' 集')).replace(/【动画原创】/g, '').trim()) : ('第 ' + n + ' 集');
+  var items = [];
+  if (st !== 'watched') items.push({ t: '标记已看', ic: '✓', fn: function(){ setEpStat(s, n, 'watched'); save(); renderDetail(); toast('第 ' + n + ' 集：已看'); } });
+  else items.push({ t: '取消已看', ic: '↺', fn: function(){ setEpStat(s, n, ''); save(); renderDetail(); toast('第 ' + n + ' 集：取消已看'); } });
+  if (st !== 'rewatch') items.push({ t: '标记重看', ic: '🔁', fn: function(){ setEpStat(s, n, 'rewatch'); save(); renderDetail(); toast('第 ' + n + ' 集：重看'); } });
+  items.push({ sep: true });
+  items.push({ t: '标记到这一集为止', ic: '⇥', fn: function(){
+    var all = (s.eps || []).map(function(z){ return z.s; }).filter(function(z){ return +z <= +n; });
+    if (!all.length) { toast('这一集之前没有可标记的集'); return; }
+    if (!confirm('把第 1–' + n + ' 集全部标记为已看？\n（会覆盖这些集原有的「重看」标记）')) return;
+    all.forEach(function(z){ setEpStat(s, z, 'watched'); });
+    save(); renderDetail(); toast('已标记第 1–' + n + ' 集');
+  }});
+  if (inf) items.push({ t: '改来源标注（当前：' + (TYPE_NAME[inf.src] || '未判定') + '）', ic: '◈', fn: function(){ editSrc(+n); } });
+  items.push({ sep: true });
+  items.push({ t: '复制集名', ic: '⧉', fn: function(){ copyText(nm, '已复制第 ' + n + ' 集标题'); } });
+  openCtx(x, y, items, '第 ' + n + ' 集 · ' + nm);
 }
 function setType(t){ dType=t; renderGrid(); }
 function cycleEp(n){
@@ -1326,6 +1725,9 @@ async function doBgmSearch(){
   }
   var items=order.slice(0,60), onlineHtml='';
   window.__srGroups={};
+  /* v2.12.0：缓存搜索结果，供右键菜单取标题/Bangumi 链接 */
+  window.__srCache={};
+  order.forEach(function(z){ if(z&&z.id) window.__srCache[String(z.id)]=z; });
   if(items.length){
     onlineHtml=secHdr('Bangumi 在线',(errN?'部分通道超时 · ':'')+'实时数据 · 免绑定');
     groupSeriesItems(items).forEach(function(g){
@@ -1348,6 +1750,11 @@ async function doBgmSearch(){
     onlineHtml='<div class="srnote">在线无更多结果</div>';
   }
   list.innerHTML=localHtml+onlineHtml;
+  /* v2.12.0：给搜索结果卡挂右键 / 长按菜单 */
+  Array.prototype.forEach.call(list.querySelectorAll('.sr[data-bgm]'), function(node){
+    var bid = node.getAttribute('data-bgm');
+    if (bid) bindCtx(node, function(x, y){ openSrCtx(x, y, bid, node); });
+  });
   /* v2.5.3 前 4 个在线条目自动拉取并展开单集（顺序拉取，防瞬时打满） */
   (function(){ var autoIds=[]; list.querySelectorAll('.sreps[id]').forEach(function(el){ if(autoIds.length<4) autoIds.push(el.id); });
     (async function(){ for(var ai=0;ai<autoIds.length;ai++){ await fillSrEps(autoIds[ai]); } })(); })();
@@ -2394,12 +2801,33 @@ function groupSeriesItems(items){
 }
 function srItemHtml(d){
   var tlab=(d.type===6?'真人':(d.type===2?'动画':''));
-  return '<div class="sritem"><div class="sr" data-t="'+esc(d.name_cn||d.name||'')+'">'+
+  return '<div class="sritem"><div class="sr" data-t="'+esc(d.name_cn||d.name||'')+'" data-bgm="'+esc(String(d.id))+'">'+
   '<img src="'+esc((d.images&&d.images.common)||'')+'" onerror="__coverFail(this)" referrerpolicy="no-referrer"/>'+
   '<div class="i"><div class="t">'+esc(d.name_cn||d.name)+(tlab?' <span style="font-size:10px;color:var(--muted);font-weight:400">'+tlab+'</span>':'')+'</div>'+
   '<div class="m">'+esc(d.name||'')+(d.date?' · '+String(d.date).slice(0,4):'')+' · '+((d.eps||d.total_episodes||'?')+' 集')+'</div></div>'+
   '<button onclick="toggleSrEps(\'sreps_'+d.id+'\',\''+d.id+'\')">剧集</button><button onclick="bgmAttach('+d.id+',this)">添加</button></div>'+
   '<div class="sreps" id="sreps_'+d.id+'" data-sid="'+d.id+'"></div></div>';
+}
+/* 搜索结果卡的右键菜单（v2.12.0） */
+function openSrCtx(x, y, bgmId, node){
+  var d = (window.__srCache && window.__srCache[String(bgmId)]) || null;
+  var title = d ? (d.name_cn || d.name || '') : (node ? (node.getAttribute('data-t') || '') : '');
+  var inList = !!(bySid(String(bgmId)) || bySid('bgm' + String(bgmId)));
+  var items = [];
+  if (!inList) items.push({ t: '加入片单', ic: '＋', fn: function(){ bgmAttach(Number(bgmId)); } });
+  else items.push({ t: '打开详情', ic: '↗', fn: function(){
+    var s = bySid(String(bgmId)) || bySid('bgm' + String(bgmId));
+    if (s) openDetail(String(s.sid));
+  }});
+  items.push({ t: '查看单集列表', ic: '≡', fn: function(){
+    if (node) { var box = node.parentNode && node.parentNode.querySelector('.sreps'); if (box) toggleSrEps(box.id, String(bgmId)); }
+  }});
+  items.push({ sep: true });
+  items.push({ t: '复制番名', ic: '⧉', fn: function(){ copyText(title, '已复制：' + title); } });
+  items.push({ t: '在 Bangumi 打开', ic: '🌐', fn: function(){
+    window.open('https://bgm.tv/subject/' + bgmId, '_blank');
+  }});
+  openCtx(x, y, items, title + (inList ? ' · 已在片单' : ' · Bangumi #' + bgmId));
 }
 function srChipLabel(d){ var cl=classifyPart(d.name_cn||d.name||''); return partLabel(cl); }
 async function bgmAttachGroup(sid,btn,gid){
@@ -2560,6 +2988,12 @@ async function openAccount(focus){
       '<div class="syrow"><button class="sybtn" id="syExport">导出全部数据</button><button class="sybtn" id="syImport">导入数据</button></div>'+
       '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
     '</div>'+
+    /* ④ v2.12.0 片单整理 —— 查重复 */
+    '<div class="sycard"><h4>片单整理 <span class="st">查重 · 同名番剧检查</span></h4>'+
+      '<div class="mini" style="color:var(--muted);margin-bottom:8px">同名番剧（如「海贼王」TV 与「海贼王 剧场版」）看着像重复，其实是不同作品 —— 这里会分开提示，不会误合并。</div>'+
+      '<button class="sybtn" id="optDupScan">检查重复番剧</button>'+
+      '<div id="optDupResult" class="tiny" style="margin-top:9px"></div>'+
+    '</div>'+
     /* ④ 高级设置 —— 折叠（服务导入链路，低频） */
     '<details class="syfold"'+(fold?'':' open')+'><summary>高级设置 <span class="st">搜索 / 网络 · 连不上时看这里</span></summary>'+
       '<div class="mini" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:center;margin:0;letter-spacing:0"><input type="checkbox" id="optNoSync" style="width:auto"/> 免绑定搜索：未绑定 Bangumi 时也可搜索并添加（默认开；关闭即回退旧行为）</label></div>'+
@@ -2604,6 +3038,8 @@ async function openAccount(focus){
     el.innerHTML='页面 v'+AT_VERSION+' · 服务端 v'+esc(String(v.version))+(String(v.version)===AT_VERSION?' <span style="color:#7a9a6a">✓ 一致</span>':' <span class="warn">版本不一致：刷新页面即可更新</span>');
   }).catch(function(){});
   box.querySelector('#syExport').onclick=function(){ downloadBackup(); };
+  var _dupBtn=box.querySelector('#optDupScan');
+  if(_dupBtn) _dupBtn.onclick=function(){ renderDupReport(box.querySelector('#optDupResult')); };
   box.querySelector('#syImport').onclick=function(){ box.querySelector('#syFile').click(); };
   box.querySelector('#syFile').addEventListener('change',function(ev){
     var f=ev.target.files[0]; if(!f) return; var rd2=new FileReader();
@@ -3138,7 +3574,7 @@ setTimeout(function(){
       if (e.tOrig && e.tOrig !== e.t) sec = e.tOrig;
       else if (e.tCn && e.tCn !== e.t) sec = e.tCn;
       var noTxt = e.s + (st === 'rewatch' ? ' <span class="rw">🔁</span>' : '');
-      html += '<button class="eprow' + cls + '" onclick="cycleEp(\'' + esc(String(e.s)) + '\')">' +
+      html += '<button class="eprow' + cls + '" data-ep="' + esc(String(e.s)) + '" onclick="cycleEp(\'' + esc(String(e.s)) + '\')">' +
         '<span class="no" onclick="event.stopPropagation();editSrc(' + e.s + ')" title="点集号可编辑：集名双语 / 来源标注" style="cursor:pointer">' + noTxt + '</span>' +
         '<span class="nm' + (sec ? ' at2' : '') + '">' + esc(nm) + (sec ? ('<span class="at270t2">' + esc(sec) + '</span>') : '') + '</span>' +
         (tn ? '<span class="ty ty-' + tk + '" onclick="event.stopPropagation();editSrc(' + e.s + ')" title="' + esc(srcBasisText(s, e)) + '">' + tn + '</span>' : '') +
@@ -3161,6 +3597,11 @@ setTimeout(function(){
       html = pgHtml + html + pgHtml;
     }
     $('dGroups').innerHTML = html;
+    /* v2.12.0：给剧集行挂右键 / 长按菜单（这里是真正生效的渲染路径） */
+    Array.prototype.forEach.call(document.getElementById('dGroups').querySelectorAll('.eprow[data-ep]'), function (node) {
+      var epno = node.getAttribute('data-ep');
+      bindCtx(node, function (x, y) { openEpCtx(x, y, epno); });
+    });
     $('typeRow').innerHTML = _at270TyHtml();
   };
 
