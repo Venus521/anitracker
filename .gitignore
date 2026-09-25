@@ -1,20 +1,28 @@
+# 依赖与构建产物
 node_modules/
 dist/
-*.py
-*.log
-*.txt
-*.html
-.trash/
-.github/
-!README.md
-!privacy.html
-!index.html
-!ani-tracker.html
-!tracker-manifest.webmanifest
-!tracker-sw.js
-!tracker-icon-512.png
-!tracker-filler-data.js
-docs/shots/v250-preview.png
+*.tmp
 
-# v2.10.0：改动前的完整备份目录（仅本地回滚用，不入库）
-_backup_v2100_pre/
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 备份/退役目录（仅本地回滚用，不入库）
+_backup_*/
+_退役_*/
+
+# 系统与垃圾文件
+.DS_Store
+.trash/
+*.log
+
+# 本地运行输出与测试临时件
+服务器日志.txt
+tests/_p_*.html
+tests/last-*.txt
+tests/post-*.txt
+tests/ui-jian.txt
+
+# 历史本地素材（不入库）
+docs/shots/v250-preview.png
+DELIVERY/anitracker-v2.8.0-sync-filler-20260924/爬虫-animefillerlist.py

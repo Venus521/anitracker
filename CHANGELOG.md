@@ -1,176 +1,6 @@
-# AniTracker 追迹 - 完整交付报告
+# AniTracker 追迹 — 版本史（CHANGELOG）
 
-## 一、项目概述
-
-AniTracker（追迹）是一个基于 Web 的番剧追剧管理工具，具备以下核心功能：
-- 番剧列表管理
-- 集数进度标记
-- 灌水/半原创集识别
-- 类型自动分类（漫改/TV原创/半原创）
-- Bangumi 数据同步
-- Filler Guide 灌水池校准
-- WebDAV 云同步
-
-## 二、本次交付内容
-
-### 2.1 已实现功能
-
-#### 核心功能
-- [x] 番剧列表增删改查
-- [x] 集数标记（已看/未看/回看）
-- [x] 灌水标记（Filler/Mixed Canon/Canon）
-- [x] 类型自动分类
-- [x] Bangumi API 集成
-- [x] Anime Filler Guide 集成
-- [x] WebDAV 云同步
-
-#### 增强功能（本次新增）
-- [x] 删减信息标注（`CENSOR_INFO`）
-- [x] 自动类型推断（`addShow` 中）
-- [x] 类型顺序优化（全部→漫改→TV原创→半原创）
-- [x] 灌水池信息缓存
-
-### 2.2 权威网站信息
-
-已整理以下权威数据来源：
-
-| 网站 | 链接 | 用途 | 状态 |
-|------|------|------|------|
-| Bangumi | https://api.bgm.tv | 主数据库 | ✅ 已集成 |
-| Anime Filler Guide | https://www.animefillerguide.com | 灌水池 | ✅ 已集成 |
-| MAL | https://myanimelist.net | 辅助数据库 | ⚠️ 可选 |
-| AniList | https://anilist.co | 备选方案 | ⚠️ 可选 |
-
-详细报告见：[research/authority-sources.md](research/authority-sources.md)
-
-## 三、BUG 修复清单
-
-### 3.1 已修复问题
-
-| 问题 | 修复方案 | 状态 |
-|------|----------|------|
-| 名侦探柯南未分类 | 修复 `sTypeOf` 函数，正确处理 `type:"长篇"` | ✅ |
-| 类型筛选顺序错误 | 添加 `typeOrder` 数组自定义排序 | ✅ |
-| 添加时类型未保存 | `addShow` 中自动调用 `fgType` | ✅ |
-| 删减信息缺失 | 添加 `CENSOR_INFO` 和 `getCensorship` | ✅ |
-
-### 3.2 已知限制
-
-| 限制 | 说明 |
-|------|------|
-| MAL API 需要认证 | 需要用户注册获取 Client ID |
-| 灌水池数据有限 | 仅覆盖主流番剧 |
-| 删减信息需手动维护 | 预定义数据需手动更新 |
-
-## 四、性能优化
-
-### 4.1 已实施优化
-
-- 图片懒加载和缓存
-- 本地存储优化
-- 函数去抖处理
-- 事件委托
-
-### 4.2 优化指标
-
-| 指标 | 优化前 | 优化后 |
-|------|--------|--------|
-| 文件大小 | 515 KB | 516 KB |
-| 加载时间 | ~2s | ~2s |
-| 内存占用 | 正常 | 正常 |
-
-## 五、使用说明
-
-### 5.1 基本操作
-
-1. **添加番剧**：点击右上角 ＋ → 输入番名搜索 → 选择 Bangumi 结果
-2. **标记进度**：点击集数按钮切换状态
-3. **筛选类型**：点击筛选按钮按类型过滤
-4. **校准灌水**：在番剧详情页点击"校准灌水池"
-
-### 5.2 高级功能
-
-- **Bangumi 同步**：设置 → 粘贴 access_token
-- **云同步**：设置 → 配置 WebDAV 地址
-- **数据备份**：设置 → 导出全部数据
-
-## 六、技术架构
-
-### 6.1 前端架构
-
-- 单文件 HTML 应用
-- 原生 JavaScript（无框架依赖）
-- LocalStorage 数据持久化
-- Service Worker 缓存支持
-
-### 6.2 API 集成
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   用户界面       │────▶│   AniTracker    │────▶│  Bangumi API    │
-│   (HTML/JS)     │◀────│   (本文件)      │◀────│  (api.bgm.tv)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                              │
-                              ▼
-                        ┌─────────────────┐
-                        │ Anime Filler    │
-                        │   Guide API     │
-                        │ (animefillerguide│
-                        │    .com)        │
-                        └─────────────────┘
-```
-
-## 七、交付文件清单
-
-| 文件 | 路径 | 说明 |
-|------|------|------|
-| 主程序 | `index.html`（`ani-tracker.html` 为同步副本） | 完整可运行的追剧应用 |
-| 增强补丁 | `ani-tracker-enhanced.js` | 可选增强功能参考 |
-| 权威网站报告 | `research/authority-sources.md` | 数据来源说明 |
-| 本说明 | `README.md` | 交付报告 |
-
-## 八、验证结果
-
-### 8.1 功能验证
-
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| 番剧添加 | ✅ | 通过 Bangumi API |
-| 类型分类 | ✅ | 自动推断并保存 |
-| 集数标记 | ✅ | 支持三种状态 |
-| 灌水识别 | ✅ | Filler Guide 校准 |
-| 删减标注 | ✅ | 预定义数据 |
-| 云同步 | ✅ | WebDAV 支持 |
-| 数据备份 | ✅ | 导出/导入 JSON |
-
-### 8.2 兼容性验证
-
-| 浏览器 | 状态 | 说明 |
-|--------|------|------|
-| Chrome | ✅ | 最新版本 |
-| Firefox | ✅ | 最新版本 |
-| Safari | ✅ | iOS/Mac |
-| Edge | ✅ | 最新版本 |
-| 移动端 | ✅ | iOS/Android 浏览器 |
-
-## 九、后续扩展建议
-
-1. **MAL 完整集成**：注册 API Key，实现双数据库搜索
-2. **用户贡献系统**：允许用户上传灌水池数据
-3. **更智能推断**：基于作品元数据自动分类
-4. **移动端 App**：封装为 PWA 或原生应用
-5. **分享功能**：生成可分享的追剧链接
-
-## 十、许可证
-
-本项目基于原 AniTracker 项目修改，保持原有许可证。
-
----
-
-**交付日期**: 2026-08-29
-**版本**: v2.1
-**状态**: ✅ 完成交付
-
+从 readme.md 迁出（v2.3 ~ v2.12，2026-09-25 迁移）。此后新版本记录请直接追加到本文件。
 
 ## v2.3（2026-09-14）
 - 集级来源标注（原作改编 / TV原创 / 半原创 / 未判定），支持从 Anime Filler Guide 数据批量补齐与人工标注；
@@ -461,3 +291,48 @@ if(st===null) delete s.statuses[n]; else s.statuses[n]=st;   // s.statuses 可�
 **测试**：`ctxmenu-logic.js` **56/56** · `ctxmenu-e2e.js` **25/25** · `run-regression.js` **23/23**
 · 双入口 sha256 一致（`4ee30ed8650b5ebf`）
 详见 `DELIVERY/anitracker-v2.12.0-ctxmenu-20260925/`。
+
+## v2.13.0（2026-09-25）安全与工程化大修
+
+对全项目 21 项缺点审计后的集中修复（build 20260925h）。
+
+**安全**
+- 备份/云同步凭证隔离：导出与上传剔除 `at_bgm_token` / `at_net_relay` / `credentials_*` / `tr_dav`；
+  导入与云端恢复全部过 `backupSanitize`（键名白名单正则 + 值类型/长度校验 + sid 归一），
+  堵住「恶意备份文件改写 CORS 中继地址→外发搜索词」的投毒通道。
+- `esc()` 补转义单引号；搜索卡 `d.id` 强制数字校验，收口字符串拼 `onclick` 的 XSS 逃逸面。
+
+**云同步不再互丢**
+- 整包覆盖 → 逐剧合并：`s.updAt` 时钟比字段、观看历史并集去重（保留最近 200 条）、
+  删除墓碑 `at_tomb`（500 环）防「删了又漂回来」、`addedAt` 取小。
+- 三个合并入口：开机自动合并（sessionStorage 守卫防刷新循环）、upload 先合后传、手动「从云端合并」。
+- `cbUp` 去掉「覆盖云端」确认——先合后传后双方修改都保得住。
+
+**体积与离线**
+- 302 部内置数据集（649KB）外置 `ani-tracker-lib.json` 懒加载，HTML 928KB→约290KB；
+  装载后按当前视图条件水合，不劫持界面。
+- SW 升 v12 分层缓存：页面/版本文件 network-first，大件（lib/SDK/filler 数据）stale-while-revalidate + 预缓存。
+- cloudbase SDK 落到本地 `vendor/cloudbase.full.js`，CDN 失败自动兜底，离线可用。
+
+**可靠性**
+- 错误留痕 `at_errlog`（环形 100 条）+ 全局 `error`/`unhandledrejection` 兜底。
+- AI 导入冲突集显式上报（不再静默跳过），数据质量面板显示「含 AI 导入 N 部」。
+- 删除封面链路中两个已失效的公共代理（proxy.cors.sh / codetabs）。
+
+**UI/交互**
+- 11 处原生 `confirm`/`prompt` 全数换主题弹窗 `uiDialog`（焦点圈定 / Enter 提交 / Esc 取消 / aria-modal），
+  手动添加三连环 prompt 合并为三输入一屏。
+- 新增 `--ok/--info/--warn` 令牌并统一 10 处硬编码成功色；`--muted` 对比度提到 AA；
+  toast 挂 `role=status aria-live`；新增 900/1300px 平板桌面断点（正文 720/820px 居中）。
+
+**走查中新修的真实缺陷**
+- `CBSync.current()` 自 v2.10.0 起返回 Promise，而 `acctStatus()` 同步判真值——Promise 恒为真，
+  导致**未登录也永远显示「已登录」状态条**。现 `sess()` 结果同步缓存，`current()` 直读缓存，退出即清。
+
+**工程**
+- 测试依赖仓库内化（puppeteer-core + lock）、`AT_PY/AT_CHROME` 环境变量探测、测试路径去绝对化（15 文件）；
+- `.gitignore` 规则改正、`__pycache__` 退库、启动链收敛（孤儿脚本入退役夹）、
+  双入口 pre-commit 钩子（`core.hooksPath=.githooks`）、版本史迁本文件。
+
+**测试**：`v2130-checks.js` 26/26 · `ctxmenu-logic.js` 56/56 · `run-regression.js` 23/23 · `register` 55/55 ·
+浏览器 E2E 走查（深浅双主题 / 主题弹窗 / 手动添加草稿恢复 / 账号面板 vendor 装载 / 1280px 断点实测 620px 收口）。

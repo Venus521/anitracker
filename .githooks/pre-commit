@@ -1,0 +1,10 @@
+#!/bin/sh
+# pre-commit — 双入口收口：index.html 是唯一源，ani-tracker.html 必须是它的字节一致副本。
+# 若提交时两文件不一致（改了 index.html 忘了跑 python 同步双入口.py / npm run sync-entries），
+# 这里直接内联复制并加入本次提交，保证 ani-tracker.html 永不落后。
+if [ -f index.html ] && ! cmp -s index.html ani-tracker.html 2>/dev/null; then
+	cp index.html ani-tracker.html
+	git add ani-tracker.html
+	echo "[pre-commit] index.html 与 ani-tracker.html 不一致，已自动同步并 git add ani-tracker.html"
+fi
+exit 0

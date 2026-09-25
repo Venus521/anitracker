@@ -15,15 +15,16 @@
 ### 1.2 推荐部署方式
 
 #### 方式一：本地服务器（推荐）
+本机真实启动方式：双击 `AniTracker追迹-一键打开.bat`（端口 **8089**，15 分钟空闲自退）。任选静态托管均可：
 ```bash
-# Python
-python -m http.server 8080
+# Python（与一键启动一致的 8089 端口）
+python -m http.server 8089
 
 # Node.js
 npx serve .
 
 # PHP
-php -S localhost:8080
+php -S localhost:8089
 ```
 
 #### 方式二：GitHub Pages

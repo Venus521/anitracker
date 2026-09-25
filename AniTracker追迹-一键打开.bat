@@ -4,32 +4,26 @@ rem ============================================
 rem 一键入口：按需起服（15 分钟空闲自退）+ 打开页面
 rem 失败时窗口停留显示原因（按任意键关闭）
 rem
-rem 2026-09-25 修：原来写死 PYW=C:\Users\Venus\.workbuddy\...（少了 -ai），
-rem 路径不存在 → 降级到裸 python → 黑框里找不到 → 直接失败。
-rem 现在改为「四个候选依次探测」，谁在就用谁，不再依赖某个写死的绝对路径。
+rem 2026-09-25 修：
+rem  1) 项目目录只用 %~dp0（本 bat 所在目录）相对定位，不再写死 D:\... 回退路径；
+rem     要放桌面请放快捷方式，不要把 bat 复制出去。
+rem  2) Python 探测精简：PATH 优先，仅保留本机内置 Python 一个必要回退。
+rem  3) 修掉 nopython 分支里游离的 ")"（导致该分支报错退出）。
 rem ============================================
 setlocal enableextensions
 
 set "PORT=8089"
 
-rem ---- 定位项目目录（让这个 bat 放到桌面/任何地方都能用）----
-rem 顺序：① 同目录有 server.py → 就用同目录
-rem       ② 否则用写死的项目路径（bat 被复制到桌面时走这条）
+rem ---- 定位项目目录：本 bat 所在目录即项目目录 ----
 set "HERE=%~dp0"
-if not exist "%HERE%server.py" (
-  if exist "D:\项目\01_媒体娱乐\ani-tracker\server.py" (
-    set "HERE=D:\项目\01_媒体娱乐\ani-tracker\"
-  )
-)
 rem 去掉 HERE 末尾的反斜杠，避免拼出 "..\"
 if "%HERE:~-1%"=="\" set "HERE=%HERE:~0,-1%"
 
 if not exist "%HERE%\server.py" (
   echo.
-  echo [错误] 找不到 server.py。
+  echo [错误] 在本 bat 所在目录找不到 server.py。
   echo   本 bat 所在目录：%~dp0
-  echo   期望的项目目录：D:\项目\01_媒体娱乐\ani-tracker
-  echo   D 盘可能未挂载，或项目被移动了。
+  echo   请把本 bat 与项目文件放在同一目录。
   echo.
   pause
   exit /b 1
@@ -41,20 +35,17 @@ if not errorlevel 1 goto open
 
 echo [1/3] 正在启动本地服务...
 
-rem ---- 依次探测可用的 Python（用「解释器自身」而不是写死路径）----
-set "PYC="
+rem ---- 探测可用的 Python：PATH 优先，其次本机内置回退 ----
 set "PYW="
+set "PYC="
 
-rem 候选 1：PATH 里的 pythonw（最稳，环境变了也不会坏）
+rem 候选 1：PATH 里的 pythonw / python（最稳，环境变了也不会坏）
 for %%I in (pythonw.exe) do if not defined PYW if exist "%%~$PATH:I" set "PYW=%%~$PATH:I"
 for %%I in (python.exe)  do if not defined PYC if exist "%%~$PATH:I" set "PYC=%%~$PATH:I"
 
-rem 候选 2：本机内置 Python（真实路径，注意是 .workbuddy-ai）
+rem 候选 2（必要回退）：本机内置 Python（注意目录名是 .workbuddy-ai）
 if not defined PYW if exist "C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\pythonw.exe" set "PYW=C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\pythonw.exe"
 if not defined PYC if exist "C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe"  set "PYC=C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe"
-
-rem 候选 3：系统 Python
-if not defined PYC if exist "C:\Python313\python.exe" set "PYC=C:\Python313\python.exe"
 
 rem ---- 优先用 pythonw（无黑框）；没有就退回 python + 最小化窗口 ----
 rem 注意：用 goto 而不是 if defined ... else，避免 pythonw 缺失时
@@ -75,11 +66,10 @@ goto waitready
 echo.
 echo [错误] 没找到任何可用的 Python。
 echo 请安装 Python 3，或把 python.exe 放到 PATH 里。
-  echo 详情见同目录：服务器日志.txt
-  echo.
-  pause
-  exit /b 1
-)
+echo 详情见同目录：服务器日志.txt
+echo.
+pause
+exit /b 1
 
 :waitready
 set /a n=0
