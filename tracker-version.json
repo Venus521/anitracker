@@ -1,7 +1,7 @@
 {
-    "app": "anitracker",
-    "version": "2.12.0",
-    "build": "20260925f",
-    "note": "右键菜单（片单卡/搜索结果卡/剧集行三处都挂）+ 重复番剧检测。① 右键菜单：桌面右键、手机长按 500ms 双通道；菜单含「从片单移除」（用户要的删除番剧）、「标记下一集已看」、「改为：想看/在看/看完/搁置/抛弃」（当前态不重复列出）、复制番名；剧集行菜单含「标记已看/取消已看」「标记重看」「标记到这一集为止」（批量，带确认）「改来源标注」「复制集名」；搜索结果卡菜单含「加入片单」。菜单自动避让视口边缘、Esc/滚动/点别处关闭、方向键可移动（键盘可达）、标题与文案走 esc() 防脏串。② 重复检测：账号面板新增「片单整理」卡，按「标题归一化」与「Bangumi ID」双路查重；关键是把同名组再按「年份+集数」细分——只有内容一致的子集才算真重复并给「移除」按钮，另一份单独列出。这解决了「为什么航海王有两个」：海贼王 1999 TV 1168集 与 海贼王 剧场版 2000 41集 是同名不同作品，报告里归入「同名但不同的作品 · N 组」并明确写「不是重复数据，无需处理」，不给移除按钮。③ 顺手修一个真实缺陷：setEpStat 直接写 s.statuses[n]，statuses 缺失时抛 TypeError: Cannot set properties of undefined —— 历史/半写入/外部导入的残缺记录一标记第一集就崩。已补 if(!s.statuses) s.statuses={} ，cntWatched/cntRewatch 同步改为 (s.statuses||{}) 读。测试：ctxmenu-logic 52/52、ctxmenu-e2e 25/25、run-regression 23/23。",
-    "ts": 1790321898563
+  "app": "anitracker",
+  "version": "2.13.0",
+  "build": "20260925h",
+  "note": "安全与工程化大修版。① 备份/云同步凭证隔离：导出与上传剔除 at_bgm_token/at_net_relay/credentials_*/tr_dav，导入与云恢复全部过白名单+sid 校验，堵住恶意备份改写中继地址的投毒通道。② esc() 补转义单引号、搜索卡 d.id 数字校验，收口字符串拼 onclick 逃逸面。③ 云同步从整包覆盖改为逐剧合并：updAt 时钟+观看历史并集+删除墓碑(at_tomb)，upload 先合后传、开机自动合并，双设备各改各的不再互丢。④ 302 部内置数据集(649KB)外置为 ani-tracker-lib.json 懒加载，HTML 928KB→约290KB；SW 升 v12 分层缓存（页面/版本 network-first，大件 SWR+预缓存），cloudbase SDK 落本地 vendor 兜底离线可用。⑤ 错误留痕 at_errlog(环形100条)+全局 error/unhandledrejection 兜底；AI 导入冲突集数显式上报不再静默；数据质量面板显示含 AI 导入部数；删封面链路两个已失效公共代理。⑥ 11 处原生 confirm/prompt 全数换主题弹窗(uiDialog，带焦点圈定/Enter 提交/Esc 取消)，手动添加三连环 prompt 合并为三输入一屏；新增 --ok/--info/--warn 令牌并统一 10 处硬编码成功色；--muted 对比度提到 AA；补 900/1300px 平板桌面断点；toast 挂 aria-live。⑦ 工程：测试依赖仓库内化(puppeteer-core+lock)、AT_PY/AT_CHROME 环境变量探测、.gitignore 规则改正、__pycache__ 退库、启动链收敛(孤儿脚本入退役夹)、双入口 pre-commit 钩子、文档过时项修正+版本史迁 CHANGELOG。 ⑧ 走查新修：CBSync.current() 自 v2.10.0 起返回 Promise 而 acctStatus() 同步判真值，导致未登录也永远显示「已登录」状态条——现 sess() 结果同步缓存，current() 直读缓存，退出登录即清。",
+  "ts": 1790326277899
 }

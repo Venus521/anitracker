@@ -17,7 +17,7 @@
   var LOGK = 'at_sync_log';
   var LS_REG = 'at_reg_pending';   /* v2.11.0：注册中的「待验证」状态，持久化后可跨刷新续用 */
   var CONSOLE_URL = 'https://tcb.cloud.tencent.com/dev?envId=' + ENV + '#/identity/login-manage';
-  var VERSION = '2.8.0';
+  var VERSION = ''; /* v2.13.0：版本单一源——运行期取主页面 AT_VERSION，本文件不再自立版本号 */
 
   function lg(kind, title, st){ try{ var all = JSON.parse(localStorage.getItem(LOGK) || '[]'); all.push({ id: 'LG' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(), kind: kind, title: title, ok: st === 'ok' ? 1 : 0, fail: st === 'ok' ? 0 : 1, items: [], note: '', rolledBack: false }); localStorage.setItem(LOGK, JSON.stringify(all.slice(-80))); }catch(e){} }
   var app = null, auth = null, db = null, _timer = null;
@@ -119,15 +119,18 @@
     return /^[a-z][0-9a-z:_-]{5,24}$/.test(String(u || '').trim());
   }
 
+  var _userCache = null; /* v2.13.1 修复：acctStatus() 同步调 current()，而 sess() 是 async——返回的 Promise 恒为真值，状态条永远显示「已登录」。这里缓存最近一次 sess() 的真实结果供 current() 同步读取。 */
   async function sess(){
-    if (!boot()) return null;
+    if (!boot()) { _userCache = null; return null; }
     try {
       var r = await auth.getSession();
       try { window._cbSessionDump = JSON.stringify((r && r.data) || {}).slice(0, 2000); } catch (e0) {}
       var s = r && r.data && r.data.session;
-      if (!s) return null;
-      return (r.data.user) || s.user || { uid: (s && (s.uid || s.sub)) || '' };
-    } catch (e) { return null; }
+      if (!s) { _userCache = null; return null; }
+      var u = (r.data.user) || s.user || { uid: (s && (s.uid || s.sub)) || '' };
+      _userCache = u;
+      return u;
+    } catch (e) { _userCache = null; return null; }
   }
 
   function uidOf(u){
@@ -168,15 +171,61 @@
     } catch (e) { return null; }
   }
 
-  var SKIP_RE = /^credentials_|^user_info_/;
+  /* v2.13.0：凭证/机器级 key 永不上云（复用主页面共享正则） */
+  var SKIP_RE = (window.AT_BACKUP && window.AT_BACKUP.secretRe)
+    ? window.AT_BACKUP.secretRe
+    : /^credentials_|^user_info_|^at_bgm_token$|^at_net_relay$|^device_id$|^tr_dav$/;
   function packAll(){
-    var all = { app: 'anitracker-full', version: 2, exportedAt: new Date().toISOString(), data: {} };
+    var all = { app: 'anitracker-full', version: 3, exportedAt: new Date().toISOString(), data: {} };
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (SKIP_RE.test(k) || k === 'device_id') continue;
+      if (SKIP_RE.test(k)) continue;
       all.data[k] = localStorage.getItem(k);
     }
     return JSON.stringify(all);
+  }
+
+  /* ===== v2.13.0 逐剧冲突合并 =====
+     旧行为：download() 把云端 payload 全量盲写本机。
+     新行为：片单(tr_shows)按剧粒度用 updAt 时钟三方合并（删除靠 at_tomb 墓碑传播），
+     其余 key 只补本机没有的——设备级设置（主题/折叠/开关）不互踩。 */
+  function applyCloudMerge(payloadStr){
+    var res = { changedAny: false, onlyCloud: 0, merged: 0, dropped: 0 };
+    var all; try { all = JSON.parse(payloadStr); } catch (e) { return res; }
+    if (!all || all.app !== 'anitracker-full') return res;
+    var rem = all.data || {};
+    var M = window.AT_MERGE, B = window.AT_BACKUP;
+    var TK = (M && M.tombKey) || 'at_tomb';
+    try {
+      var lShows = JSON.parse(localStorage.getItem('tr_shows') || '[]');
+      var cShows = JSON.parse(rem['tr_shows'] || '[]');
+      var tL = JSON.parse(localStorage.getItem(TK) || '{}');
+      var tC = JSON.parse(rem[TK] || '{}');
+      if (M && Array.isArray(lShows) && Array.isArray(cShows)) {
+        var r = M.mergeShows(lShows, cShows, tL, tC);
+        var after = JSON.stringify(r.list);
+        res.onlyCloud = r.stats.onlyCloud; res.merged = r.stats.merged; res.dropped = r.stats.dropped;
+        if (after !== JSON.stringify(lShows)) { localStorage.setItem('tr_shows', after); res.changedAny = true; }
+        if (JSON.stringify(r.tomb) !== JSON.stringify(tL)) { localStorage.setItem(TK, JSON.stringify(r.tomb)); res.changedAny = true; }
+      }
+    } catch (e) { lg('cloud', '片单合并异常：' + ((e && e.message) || e), 'warn'); }
+    try {
+      var cleaned = B ? B.sanitize(rem).ok : rem;
+      for (var k in cleaned) {
+        if (k === 'tr_shows' || k === TK) continue;
+        if (localStorage.getItem(k) === null) { localStorage.setItem(k, cleaned[k]); res.changedAny = true; }
+      }
+    } catch (e) { lg('cloud', '杂项合并异常：' + ((e && e.message) || e), 'warn'); }
+    return res;
+  }
+
+  /* 云端是否领先本机（有本机未合并过的更新） */
+  async function remoteAhead(){
+    var last = lastInfo();
+    if (!last || !last.at) return null;
+    var doc = await peek();
+    if (doc && doc.updatedAt && doc.payload && new Date(doc.updatedAt) > new Date(last.at)) return doc;
+    return null;
   }
 
   async function upload(silent){
@@ -184,6 +233,17 @@
     if (!u) throw new Error('未登录');
     var uid = uidOf(u);
     if (!uid) throw new Error('登录态缺少 uid');
+    /* v2.13.0 先合后传：云端有本机没见过的更新 → 合并进本机并整页刷新，本次上传作废
+       （刷新后数据已是双方并集，不会丢另一台设备的修改） */
+    try {
+      var ahead = await remoteAhead();
+      if (ahead) {
+        var st = applyCloudMerge(ahead.payload);
+        try { localStorage.setItem(LS_LAST, JSON.stringify({ at: ahead.updatedAt })); } catch (e) {}
+        lg('cloud', '上传前发现云端更新，已合并（+' + st.onlyCloud + ' 部自云端，' + st.merged + ' 部并集，-' + st.dropped + ' 部已删）' + (st.changedAny ? '，刷新页面' : ''), 'ok');
+        if (st.changedAny) { location.reload(); return; }
+      }
+    } catch (e) { /* 检查失败不阻断上传，走原覆盖逻辑 */ }
     var payload = packAll();
     var rec = { ownerId: uid, payload: payload, app: 'anitracker-full', updatedAt: new Date().toISOString() };
     /* set 会被规则按 update 评估（新文档无 owner 可查 → 拒），所以先 add 建、已存在再 update */
@@ -207,12 +267,11 @@
     try { r = await db.collection(COLL).where({ ownerId: uid }).limit(2).get(); } catch (e) { throw new Error('读取云端失败（网络或登录过期，请退出重登）'); }
     var doc = ((r && r.data) || [])[0];
     if (!doc || !doc.payload) throw new Error('云端还没有备份——先在本机点「立即上传」');
-    var all = JSON.parse(doc.payload);
-    if (all.app !== 'anitracker-full') throw new Error('云端数据不是追迹备份');
-    var n = 0;
-    for (var k in all.data) { localStorage.setItem(k, all.data[k]); n++; }
-    lg('cloud', '云同步：恢复 ' + n + ' 项', 'ok');
-    return n;
+    /* v2.13.0：由「全量覆盖本机」改为「逐剧合并」——本机更新的修改不会被云端旧数据冲掉 */
+    var st = applyCloudMerge(doc.payload);
+    try { localStorage.setItem(LS_LAST, JSON.stringify({ at: doc.updatedAt || new Date().toISOString() })); } catch (e) {}
+    lg('cloud', '云同步：合并完成（自云端 +' + st.onlyCloud + '、并集 ' + st.merged + '、删 ' + st.dropped + '）', 'ok');
+    return { changed: !!st.changedAny, stats: st };
   }
 
   function lastInfo(){
@@ -327,7 +386,7 @@
     return u;
   }
 
-  async function signOut(){ if (auth) { try { await auth.signOut(); } catch (e) {} } }
+  async function signOut(){ _userCache = null; if (auth) { try { await auth.signOut(); } catch (e) {} } }
 
   /* save() 时调用：同步过至少一次才自动上传，避免新设备空数据覆盖云端 */
   function autosync(){
@@ -369,31 +428,29 @@
       area.innerHTML =
         '<div class="mini">已登录：<b style="color:var(--ink)">' + escH(userName(u)) + '</b>' + (u.email && uname ? '（' + escH(u.email) + '）' : '') + '。改动会自动同步云端；换设备登录同一账号，点「从云端恢复」即可。</div>' +
         (!uname ? '<div class="mini">用户名（可选，一个账号只能设一次）：<button type="button" id="cbBindGen" style="background:none;border:none;color:var(--accent);cursor:pointer;padding:0;font-size:12px">帮我生成一个</button></div><input id="cbBindName" placeholder="点「帮我生成」或自行填写"/><div class="msg" id="cbBindMsg"></div><div class="row2"><button class="b3" id="cbBind" style="width:100%">绑定用户名</button></div>' : '') +
-        '<div class="row2"><button class="b1" id="cbUp">立即上传</button><button class="b2" id="cbDown">从云端恢复</button></div>' +
+        '<div class="row2"><button class="b1" id="cbUp">立即上传</button><button class="b2" id="cbDown">从云端合并</button></div>' +
         '<div class="msg" id="cbMsg"></div>' +
         (last ? '<div class="tiny">上次上传：' + escH(fmtAt(last.at)) + '</div>' : '') +
         '<div class="row2" style="margin-top:8px"><button class="b3" id="cbOut">退出登录</button></div>';
       area.querySelector('#cbUp').onclick = async function(){
         var m = area.querySelector('#cbMsg'); m.textContent = '上传中…'; m.style.color = 'var(--muted)';
         try {
-          var doc = await peek();
-          if (doc && doc.updatedAt && lastInfo() && new Date(doc.updatedAt) > new Date(lastInfo().at || 0)) {
-            if (!confirm('云端备份较新（' + fmtAt(doc.updatedAt) + '），确定用本机数据覆盖云端吗？')) { m.textContent = ''; return; }
-          }
+          /* v2.13.0：不再弹「覆盖云端」确认——upload 内部已先合后传，双方修改都保得住 */
           await upload(false); m.textContent = '';
         } catch (e) { m.textContent = '上传失败：' + errText(e); m.style.color = 'var(--danger)'; }
       };
       area.querySelector('#cbDown').onclick = async function(){
         var m = area.querySelector('#cbMsg');
         try {
-          var doc = await peek();
-          if (!doc || !doc.payload) throw new Error('云端还没有备份——先点「立即上传」');
-          if (!confirm('将用云端备份（' + fmtAt(doc.updatedAt) + '）覆盖本机数据，继续吗？')) return;
-          m.textContent = '恢复中…'; m.style.color = 'var(--muted)';
-          var n = await download();
-          toast('已恢复 ' + n + ' 项，即将刷新');
-          setTimeout(function(){ location.reload(); }, 700);
-        } catch (e) { m.textContent = '恢复失败：' + errText(e); m.style.color = 'var(--danger)'; }
+          m.textContent = '合并中…'; m.style.color = 'var(--muted)';
+          var res = await download();
+          if (res && res.changed) {
+            toast('已与云端合并（逐剧比对，不会丢另一台设备的修改），即将刷新');
+            setTimeout(function(){ location.reload(); }, 800);
+          } else {
+            m.textContent = '云端没有需要合并的新数据'; m.style.color = 'var(--muted)';
+          }
+        } catch (e) { m.textContent = '合并失败：' + errText(e); m.style.color = 'var(--danger)'; }
       };
       var genBtn = area.querySelector('#cbBindGen');
       if (genBtn) {
@@ -670,7 +727,31 @@
                   这里补上导出，修掉那个静默失效。
      current() —— 同步取当前登录用户（可能为 null），供面板顶部显示「已登录：xxx」。 */
   function isOn(){ return !!lastInfo(); }
-  function current(){ return sess().catch(function(){ return null; }); }
+  function current(){ return _userCache; }
 
-  window.CBSync = { mount: mount, autosync: autosync, version: VERSION, isOn: isOn, current: current };
+  /* v2.13.0 开机云合并：页面装载后查一次云端。
+     另一台设备有更新 → 合并进本机并刷新（sessionStorage 守卫保证每会话只判一次，不会刷新循环）。 */
+  async function startupMerge(){
+    try {
+      if (!boot()) return null;
+      var u = await sess(); if (!u) return null;
+      var doc = await remoteAhead(); if (!doc) return null;
+      var st = applyCloudMerge(doc.payload);
+      try { localStorage.setItem(LS_LAST, JSON.stringify({ at: doc.updatedAt })); } catch (e) {}
+      if (st.changedAny) {
+        lg('cloud', '开机合并云端更新：+' + st.onlyCloud + ' 部自云端、' + st.merged + ' 部并集、-' + st.dropped + ' 部已删，刷新生效', 'ok');
+        location.reload();
+      }
+      return st;
+    } catch (e) { lg('cloud', '开机云合并跳过（' + ((e && e.message) || '未知') + '）', 'warn'); return null; }
+  }
+  try {
+    window.addEventListener('load', function(){
+      if (sessionStorage.getItem('at_cb_boot_done')) return;
+      sessionStorage.setItem('at_cb_boot_done', '1');
+      setTimeout(startupMerge, 1200);
+    });
+  } catch (e) {}
+
+  window.CBSync = { mount: mount, autosync: autosync, get version(){ return window.AT_VERSION || VERSION; }, isOn: isOn, current: current, startupMerge: startupMerge, applyCloudMerge: applyCloudMerge };
 })();
