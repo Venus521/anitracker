@@ -1,0 +1,163 @@
+{
+  "at": "2026-09-25T08:53:05.062Z",
+  "pass": 26,
+  "fail": 0,
+  "results": [
+    {
+      "id": "01",
+      "name": "双入口字节一致",
+      "ok": true,
+      "detail": "292662B vs 292662B"
+    },
+    {
+      "id": "02",
+      "name": "esc() 已转义单引号",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "03",
+      "name": "备份导出走 SECRET_KEY_RE 剔除",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "04",
+      "name": "导入走 backupSanitize 白名单",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "05",
+      "name": "删除路径落墓碑",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "06",
+      "name": "全文无原生 confirm()/prompt() 调用残留",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "07",
+      "name": "toast 挂 aria-live",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "08",
+      "name": "数据集已外置（HTML 内无 649KB 单行）",
+      "ok": true,
+      "detail": "size=260144"
+    },
+    {
+      "id": "09",
+      "name": "SW v12：tracker-version.json 走 network-first、数据集预缓存",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "10",
+      "name": "云同步：packAll 共享凭证正则 + upload 先合后传",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "11",
+      "name": "开机云合并已挂 load（sessionStorage 防循环）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "12",
+      "name": "cloudbase SDK 本地兜底 + CDN onerror",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "20",
+      "name": "懒加载数据集到达（302 部回填 INTERNAL_SHOWS）",
+      "ok": true,
+      "detail": "{\"lib\":302,\"internal\":302}"
+    },
+    {
+      "id": "21",
+      "name": "合并：双端各改各的全保留",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "22",
+      "name": "合并：同剧 updAt 新者赢",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "23",
+      "name": "合并：观看历史取并集",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "24",
+      "name": "合并：删除墓碑传播生效",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "25",
+      "name": "合并：删后重新添加存活",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "26",
+      "name": "导入拒收凭证/非法 key",
+      "ok": true,
+      "detail": "[\"at_bgm_token\",\"at_net_relay\",\"bad;k\",\"credentials_x\",\"device_id\",\"tr_dav\"]"
+    },
+    {
+      "id": "27",
+      "name": "恶意 sid 被 safeSid 规整",
+      "ok": true,
+      "detail": "bad___script_alert_1___script_"
+    },
+    {
+      "id": "28",
+      "name": "正常数据不误杀",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "29",
+      "name": "srItemHtml 对畸形 id 做数字规整",
+      "ok": true,
+      "detail": "<div class=\"sritem\"><div class=\"sr\" data-t=\"t\" data-bgm=\"11\"><img src=\"\" onerror=\"__coverFail(this)\" referrerpolicy=\"no-"
+    },
+    {
+      "id": "30",
+      "name": "uiConfirm 弹出主题弹窗（role=dialog）",
+      "ok": true,
+      "detail": "{\"appeared\":true,\"role\":\"dialog\",\"txt\":\"确认\"}"
+    },
+    {
+      "id": "31",
+      "name": "点确定后弹窗关闭并回调",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "32",
+      "name": "atErr 写入环形错误日志",
+      "ok": true,
+      "detail": "{\"t\":1790326384726,\"w\":\"专项测试\",\"m\":\"boom\"}"
+    },
+    {
+      "id": "33",
+      "name": "全程无页面级 JS 错误",
+      "ok": true,
+      "detail": "pageErrors=0"
+    }
+  ]
+}

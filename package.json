@@ -1,7 +1,17 @@
 {
   "name": "anitracker",
-  "version": "2.6.0",
+  "version": "2.13.0",
   "description": "番剧追记 PWA",
   "homepage": "https://venus521.github.io/anitracker/",
-  "private": true
+  "private": true,
+  "scripts": {
+    "test:regression": "node tests/run-regression.js",
+    "test:ctxmenu": "node tests/ctxmenu-logic.js",
+    "test:register": "node tests/register-logic.js",
+    "sync-entries": "python 同步双入口.py",
+    "test:v2130": "node tests/v2130-checks.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
 }

@@ -5,9 +5,9 @@
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const puppeteer = require(String.raw`C:\Users\Venus\.openclaw-autoclaw\workspace\.cluster\bangumi-tracker\app-test\node_modules\puppeteer-core`);
+const puppeteer = require('puppeteer-core');
 const ROOT = path.resolve(__dirname, '..');
-const CHROME = String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
+const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const PORT = 8097;
 const TEST_USER = 'atverify0916';
 const TEST_PASS = 'Verify0916pass';

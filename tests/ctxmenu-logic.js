@@ -190,7 +190,7 @@ check('S26', '同名不同作品那类明确写「不是重复数据」', has('�
 
 /* 不能破坏既有功能 */
 check('S27', 'normTxt 只有一个定义（我中途加过重复定义，必须已清掉）', countOcc('function normTxt(') === 1, 'count=' + countOcc('function normTxt('));
-check('S28', 'delShow 未被改动（仍存在且用 confirm）', has('function delShow(){') && has("confirm('从片单移除《'"));
+check('S28', 'delShow 走主题弹窗且保留移除语义（v2.13.0 起原生 confirm 全面退役）', has('function delShow(){') && has("uiConfirm('从片单移除《'") && has('tombPut(sidSnap)'));
 check('S29', 'cycleEp 未被改动（剧集行原点击行为保留）', has('function cycleEp(n){'));
 check('S30', 'addShow 去重逻辑未被改动', has('已在片单：《') && has('（未重复添加）'));
 check('S31', 'CSS 有 .ctxmenu 且定义了 on 态', has('.ctxmenu{') && has('.ctxmenu.on{'));

@@ -4,9 +4,9 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
-const puppeteer = require(String.raw`C:\Users\Venus\.openclaw-autoclaw\workspace\.cluster\bangumi-tracker\app-test\node_modules\puppeteer-core`);
+const puppeteer = require('puppeteer-core');
 const ROOT = path.resolve(__dirname, '..');
-const CHROME = String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
+const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const results = [];
 function check(id, name, ok, detail) {
   results.push({ id, name, ok: !!ok, detail: String(detail == null ? '' : detail).slice(0, 300) });
@@ -33,7 +33,13 @@ const state = () => new Promise((res, rej) => { http.get({ host: '127.0.0.1', po
 
   /* 用绝对路径起服务：裸 'python' / 'node' 在非交互环境下常不在 PATH，会导致
      ERR_CONNECTION_REFUSED（v2.8.0 实测踩到）。 */
-  const PY = process.env.AT_PY || String.raw`C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe`;
+  const PY = process.env.AT_PY || (function () {
+    try { require('child_process').execSync('python -c ""', { stdio: 'ignore' }); return 'python'; } catch (e) {
+      const fb = String.raw`C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe`;
+      console.warn('[tests] PATH 中未找到 python，回退旧写死路径：' + fb + '（可用环境变量 AT_PY 覆盖）');
+      return fb;
+    }
+  })();
   const NODE = process.env.AT_NODE || process.execPath;
   const pySrv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore' });
   const mock = spawn(NODE, [path.join(__dirname, 'mock-bgm-api.js')], { stdio: 'ignore' });

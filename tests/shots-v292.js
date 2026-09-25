@@ -4,15 +4,21 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
-const puppeteer = require(String.raw`C:\Users\Venus\.openclaw-autoclaw\workspace\.cluster\bangumi-tracker\app-test\node_modules\puppeteer-core`);
+const puppeteer = require('puppeteer-core');
 const ROOT = path.resolve(__dirname, '..');
-const CHROME = String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
+const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const OUT = path.join(ROOT, 'DELIVERY', 'anitracker-v2.9.2-sync-ux-20260925', 'shots');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const PY = String.raw`C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe`;
+  const PY = process.env.AT_PY || (function () {
+    try { require('child_process').execSync('python -c ""', { stdio: 'ignore' }); return 'python'; } catch (e) {
+      const fb = String.raw`C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe`;
+      console.warn('[tests] PATH 中未找到 python，回退旧写死路径：' + fb + '（可用环境变量 AT_PY 覆盖）');
+      return fb;
+    }
+  })();
   const srv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8097', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '600'], { stdio: 'ignore' });
   const mock = spawn(process.execPath, [path.join(__dirname, 'mock-bgm-api.js')], { stdio: 'ignore' });
   const waitPort = async (port, p, tries) => {

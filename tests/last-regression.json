@@ -1,17 +1,17 @@
 {
- "t": "2026-09-25T06:08:13.891Z",
+ "t": "2026-09-25T08:53:48.000Z",
  "results": [
   {
    "id": "00",
    "name": "双入口字节一致",
    "ok": true,
-   "detail": "905411B vs 905411B"
+   "detail": "292662B vs 292662B"
   },
   {
    "id": "01",
    "name": "版本一致（页面 === JSON）",
    "ok": true,
-   "detail": "page=2.11.0 json=2.11.0"
+   "detail": "page=2.13.0 json=2.13.0"
   },
   {
    "id": "02",
@@ -23,7 +23,7 @@
    "id": "10",
    "name": "v2.10.0 账号面板：标题「账号」+ 状态条 + 账号卡在本地备份之前（常开）+ 仅 1 个折叠档",
    "ok": true,
-   "detail": "{\"title\":\"账号\",\"status\":\"已登录\",\"hasAcctCard\":true,\"acctBeforeBackup\":true,\"hasCbArea\":true,\"hasExport\":true,\"hasImport\":true,\"foldCount\":1,\"foldTag\":\"高级设置 搜索 / 网络 · 连不上时看这里\",\"topLabel\":\"☺账号\"}"
+   "detail": "{\"title\":\"账号\",\"status\":\"未登录 · 片单只存在本机浏览器\",\"hasAcctCard\":true,\"acctBeforeBackup\":true,\"hasCbArea\":true,\"hasExport\":true,\"hasImport\":true,\"foldCount\":1,\"foldTag\":\"高级设置 搜索 / 网络 · 连不上时看这里\",\"topLabel\":\"☺账号\"}"
   },
   {
    "id": "10a",
@@ -59,7 +59,7 @@
    "id": "13",
    "name": "季度秒切：缓存命中零网络，进入预览模式",
    "ok": true,
-   "detail": "26ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
+   "detail": "20ms mockReqs=0 {\"bar\":true,\"barText\":\"预览模式 · 未加入片单＋ 加入片单\",\"addBtn\":true}"
   },
   {
    "id": "14",
@@ -77,7 +77,7 @@
    "id": "15b",
    "name": "v2.10.0 详情页：拉取/推送按钮已移除；本地番仍显示「关联Bangumi」",
    "ok": true,
-   "detail": "gone={\"syncBtns\":0,\"anySyncText\":false} assoc={\"sid\":\"man-1790316456645\",\"hasBtn\":true,\"shown\":true}"
+   "detail": "gone={\"syncBtns\":0,\"anySyncText\":false} assoc={\"sid\":\"man-1790326408943\",\"hasBtn\":true,\"shown\":true}"
   },
   {
    "id": "16",
@@ -89,7 +89,7 @@
    "id": "17",
    "name": "断网补拉：快速报错且提示可读",
    "ok": true,
-   "detail": "17ms"
+   "detail": "12ms"
   },
   {
    "id": "19",

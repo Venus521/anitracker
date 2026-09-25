@@ -5,12 +5,18 @@ const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
-const puppeteer = require(String.raw`C:/Users/Venus/.openclaw-autoclaw/workspace/.cluster/bangumi-tracker/app-test/node_modules/puppeteer-core/`);
+const puppeteer = require('puppeteer-core');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = 8124;
-const PY = String.raw`C:/Users/Venus/.workbuddy-ai/binaries/python/versions/3.13.12/python.exe`;
-const CHROME = String.raw`C:/Program Files/Google/Chrome/Application/chrome.exe`;
+const PY = process.env.AT_PY || (function () {
+  try { require('child_process').execSync('python -c ""', { stdio: 'ignore' }); return 'python'; } catch (e) {
+    const fb = String.raw`C:/Users/Venus/.workbuddy-ai/binaries/python/versions/3.13.12/python.exe`;
+    console.warn('[tests] PATH 中未找到 python，回退旧写死路径：' + fb + '（可用环境变量 AT_PY 覆盖）');
+    return fb;
+  }
+})();
+const CHROME = process.env.AT_CHROME || String.raw`C:/Program Files/Google/Chrome/Application/chrome.exe`;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function probe(port, p) {

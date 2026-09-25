@@ -2,8 +2,8 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const puppeteer = require(String.raw`C:\Users\Venus\.openclaw-autoclaw\workspace\.cluster\bangumi-tracker\app-test\node_modules\puppeteer-core`);
-const CHROME = String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
+const puppeteer = require('puppeteer-core');
+const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const ROOT = String.raw`D:\项目\01_媒体娱乐\ani-tracker`;
 const OUT = String.raw`D:\项目\01_媒体娱乐\ani-tracker\_v270_work`;
 const PORT = 8100;

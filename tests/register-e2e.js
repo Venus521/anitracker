@@ -10,12 +10,18 @@
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
-const puppeteer = require(String.raw`C:/Users/Venus/.openclaw-autoclaw/workspace/.cluster/bangumi-tracker/app-test/node_modules/puppeteer-core/`);
+const puppeteer = require('puppeteer-core');
 
 const ROOT = 'D:/项目/01_媒体娱乐/ani-tracker';
 const PORT = 8120;
-const PY = 'C:/Users/Venus/.workbuddy-ai/binaries/python/versions/3.13.12/python.exe';
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const PY = process.env.AT_PY || (function () {
+  try { require('child_process').execSync('python -c ""', { stdio: 'ignore' }); return 'python'; } catch (e) {
+    const fb = 'C:/Users/Venus/.workbuddy-ai/binaries/python/versions/3.13.12/python.exe';
+    console.warn('[tests] PATH 中未找到 python，回退旧写死路径：' + fb + '（可用环境变量 AT_PY 覆盖）');
+    return fb;
+  }
+})();
+const CHROME = process.env.AT_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 let pass = 0, fail = 0;
 const results = [];
