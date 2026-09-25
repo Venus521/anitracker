@@ -1,8 +1,5 @@
 @echo off
-rem ============================================================
-rem 遗留入口（保留兼容旧收藏/旧快捷方式）。
-rem 委托关系：本文件不含任何启动逻辑，全部委托同目录的
-rem   AniTracker追迹-一键打开.bat（按需起服 + 15 分钟空闲自退 + 打开页面）。
-rem 需要改启动行为时只改 一键打开.bat，勿在此重复实现。
-rem ============================================================
-call "%~dp0AniTracker追迹-一键打开.bat"
+rem Legacy entry kept for old favorites/shortcuts. No logic here:
+rem delegates to the main launcher in this same folder (matched by
+rem ASCII wildcard so this file stays 100% ASCII).
+for %%F in ("%~dp0AniTracker*.bat") do call "%%F"
