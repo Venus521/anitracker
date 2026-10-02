@@ -19,7 +19,9 @@
 ## 使用
 
 - 在线版：`https://<用户名>.github.io/anitracker/`（入口 `index.html`）
-- 本地：双击 `AniTracker追迹-一键打开.bat`（按需起服 8089 端口），或直接用浏览器打开 `index.html`
+- 本地：双击 `C:\Users\Venus\DeskBox\启动方式\AniTracker 追迹.lnk`（按需起服 8089，空闲 15 分钟自退），或直接用浏览器打开 `index.html`
+  （旧的项目根 `AniTracker追迹-一键打开.bat` / `启动-本地服务器.bat` / `server.py` 已于 2026-09-26 退役到
+  `_退役_启动入口_20260926_旧bat\`，含还原说明——启动入口统一放 hub，不再留第二份逻辑）
 - **入口文件名**：`index.html` 为唯一源，`ani-tracker.html` 是它的同步副本（`python 同步双入口.py` 生成），两者字节一致
 
 ## 隐私
