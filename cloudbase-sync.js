@@ -94,9 +94,9 @@
     if (/too many|frequent|频繁|限流|exceeded|429/i.test(all)) return '操作太频繁，请等 1 分钟再试';
     if (/user_already_exists|already (been )?registered|已被注册|已注册|已存在/i.test(all)) return '这个邮箱已经注册过了，可直接登录';
     if (/you already have username/i.test(all)) return '这个账号已经绑定过用户名了（一个账号只能绑一次）';
-    if (/does not match regex pattern|invalid.*EditProfileRequest.Username/i.test(all)) return '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）';
-    if (/invalid.*username|用户名(格式|不合规)|INVALID_USERNAME/i.test(all)) return '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）';
-    if (/password/i.test(all) && /invalid|格式|weak|至少|不符|too short/i.test(all)) return '密码需 8–32 位，且同时包含字母和数字';
+    if (/does not match regex pattern|invalid.*EditProfileRequest.Username/i.test(all)) return '平台规则：登录用户名须 6–25 位、小写英文开头（不支持中文）';
+    if (/invalid.*username|用户名(格式|不合规)|INVALID_USERNAME/i.test(all)) return '平台规则：登录用户名须 6–25 位、小写英文开头（不支持中文）';
+    if (/password/i.test(all) && /invalid|格式|weak|至少|不符|too short/i.test(all)) return '云端不收这个密码（本机只要求 6–32 位，云端可能还要求含字母和数字）——加长或混入字母再试';
     if (/network|Failed to fetch|timeout|超时|NetworkError|ERR_/i.test(all)) return '网络不给力，请检查网络后重试';
     if (/not_found|不存在|USER_NOT_FOUND/i.test(all)) return ctx === 'login' ? '账号不存在或未注册——请先注册一个' : '找不到对应账号（可先注册）';
 
@@ -113,7 +113,7 @@
   }
 
   function isEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim()); }
-  function pwdOk(p){ p = String(p || ''); return p.length >= 8 && p.length <= 32 && /[A-Za-z]/.test(p) && /\d/.test(p); }
+  function pwdOk(p){ p = String(p || ''); return p.length >= 6 && p.length <= 32; }
   function userOk(u){
     /* CloudBase 后端正则（实测）：^$|^[a-z][0-9a-z:_-]{5,24}$ —— 小写字母开头，6–25 位 */
     return /^[a-z][0-9a-z:_-]{5,24}$/.test(String(u || '').trim());
@@ -174,7 +174,7 @@
   /* v2.13.0：凭证/机器级 key 永不上云（复用主页面共享正则） */
   var SKIP_RE = (window.AT_BACKUP && window.AT_BACKUP.secretRe)
     ? window.AT_BACKUP.secretRe
-    : /^credentials_|^user_info_|^at_bgm_token$|^at_net_relay$|^device_id$|^tr_dav$/;
+    : /^credentials_|^user_info_|^at_bgm_token$|^at_net_relay$|^device_id$|^tr_dav$|^at_ai_cfg$/;
   function packAll(){
     var all = { app: 'anitracker-full', version: 3, exportedAt: new Date().toISOString(), data: {} };
     for (var i = 0; i < localStorage.length; i++) {
@@ -366,12 +366,31 @@
 
   /* 绑定用户名（注册时可选、登录后也能补绑）—— 抽出来两处共用 */
   async function bindUsername(username){
-    if (!userOk(username)) throw new Error('用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）');
+    if (!userOk(username)) throw new Error('平台规则：登录用户名须 6–25 位、小写英文开头（不支持中文）');
     var cu = auth.currentUser || (await auth.getCurrentUser());
     var t = (cu && typeof cu.updateUsername === 'function') ? cu : (cu && cu.data && (cu.data.user || cu.data)) || cu;
     if (!t || typeof t.updateUsername !== 'function') throw new Error('登录态异常，请退出重登后再试');
     await t.updateUsername(username);
     return username;
+  }
+
+  /* --- 忘记密码（v2.17.0）：邮箱 → 云端发验证码，拿回一个改密句柄 ---
+     SDK 的 resetPasswordForEmail 不返回布尔，而是返回 data.updateUser 闭包：
+     拿它带 {nonce: 邮件里的验证码, password: 新密码} 调用，云端校验通过后顺带把这台设备登录上。 */
+  async function startReset(email){
+    if (!boot()) throw new Error('云组件未加载（需联网）');
+    var r = await auth.resetPasswordForEmail(email);
+    if (r && r.error) throw r.error;
+    var fn = r && r.data && r.data.updateUser;
+    if (typeof fn !== 'function') throw new Error('云端没吐出验证码（这个邮箱大概没注册过）');
+    return fn;
+  }
+  async function finishReset(updateUser, code, password){
+    var r = await updateUser({ nonce: code, password: password });
+    if (r && r.error) throw r.error;
+    var u = await sess();
+    if (!u) throw new Error('密码已改但没自动登录上，请用新密码登录');
+    return u;
   }
 
   /* --- 登录：邮箱或用户名 + 密码 --- */
@@ -424,10 +443,8 @@
   function draw(area, u){
     if (u) {
       var last = lastInfo();
-      var uname = u.username || '';
       area.innerHTML =
-        '<div class="mini">已登录：<b style="color:var(--ink)">' + escH(userName(u)) + '</b>' + (u.email && uname ? '（' + escH(u.email) + '）' : '') + '。改动会自动同步云端；换设备登录同一账号，点「从云端恢复」即可。</div>' +
-        (!uname ? '<div class="mini">用户名（可选，一个账号只能设一次）：<button type="button" id="cbBindGen" style="background:none;border:none;color:var(--accent);cursor:pointer;padding:0;font-size:12px">帮我生成一个</button></div><input id="cbBindName" placeholder="点「帮我生成」或自行填写"/><div class="msg" id="cbBindMsg"></div><div class="row2"><button class="b3" id="cbBind" style="width:100%">绑定用户名</button></div>' : '') +
+        '<div class="mini">已登录：<b style="color:var(--ink)">' + escH(userName(u)) + '</b>。改动会自动同步云端；换设备登录同一账号，点「从云端合并」即可。</div>' +
         '<div class="row2"><button class="b1" id="cbUp">立即上传</button><button class="b2" id="cbDown">从云端合并</button></div>' +
         '<div class="msg" id="cbMsg"></div>' +
         (last ? '<div class="tiny">上次上传：' + escH(fmtAt(last.at)) + '</div>' : '') +
@@ -452,38 +469,6 @@
           }
         } catch (e) { m.textContent = '合并失败：' + errText(e); m.style.color = 'var(--danger)'; }
       };
-      var genBtn = area.querySelector('#cbBindGen');
-      if (genBtn) {
-        genBtn.onclick = function () {
-          var base = String(u.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (!base || /^[^a-z]/.test(base)) base = 'at' + base;
-          base = base.slice(0, 14);
-          while (base.length < 6) base += String(Math.floor(Math.random() * 10));
-          base += String(Math.floor(Math.random() * 90) + 10);
-          var inp = area.querySelector('#cbBindName');
-          if (inp) inp.value = base;
-          var mb = area.querySelector('#cbBindMsg');
-          if (mb) { mb.textContent = '已生成，点「绑定用户名」确认即可'; mb.style.color = 'var(--muted)'; }
-        };
-      }
-      var bindBtn = area.querySelector('#cbBind');
-      if (bindBtn) {
-        bindBtn.onclick = async function(){
-          var m = area.querySelector('#cbBindMsg');
-          var name = (area.querySelector('#cbBindName').value || '').trim();
-          if (!userOk(name)) { m.textContent = '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线（暂不支持中文与大写）'; m.style.color = 'var(--danger)'; return; }
-          m.textContent = '绑定中…'; m.style.color = 'var(--muted)';
-          try {
-            var cu = auth.currentUser || (await auth.getCurrentUser());
-            var t = (cu && typeof cu.updateUsername === 'function') ? cu : (cu && cu.data && (cu.data.user || cu.data)) || cu;
-            if (!t || typeof t.updateUsername !== 'function') throw new Error('登录态异常，请退出重登后再试');
-            await t.updateUsername(name);
-            lg('auth', '绑定用户名成功：' + name, 'ok');
-            toast('用户名 ' + name + ' 绑定成功 ✔');
-            draw(area, await sess());
-          } catch (e) { m.textContent = '绑定失败：' + errText(e); m.style.color = 'var(--danger)'; lg('auth', '绑定用户名失败', 'fail'); }
-        };
-      }
       area.querySelector('#cbOut').onclick = async function(){
         var cbu = await sess().catch(function(){ return null; });
         await signOut();
@@ -493,111 +478,109 @@
       return;
     }
 
-    /* ================= v2.11.0：登录 / 注册 双 Tab（参考 B 站）=================
-       旧版的毛病（都是实测出来的）：
-       ① 注册藏在「还没有账号？注册一个 →」一行小字后面，默认 display:none，
-          用户根本不知道这里有注册；
-       ② 展开后是一整坨表单，登录和注册的字段混在同一屏，分不清现在是哪个流程；
-       ③ 「获取验证码」发信要 5~6 秒（实测 5237~5802ms），
-          但 btn.disabled 在 await 期间**从来没被置 true**（守卫形同虚设），
-          用户看界面不动就狂点，点几次就真发几封邮件；
-       ④ 提示写死「6 位验证码」，校验却是 /^\d{4,8}$/，自相矛盾。
+    /* ================= v2.14.0：登录 / 注册 单屏（用户指令「还是太复杂」）=================
+       v2.11 的双 Tab 版被否：Tab 条 + 「去注册」链接是同一功能的两个入口，纯冗余。
+       新版：默认只给登录表单（邮箱+密码+按钮），注册只留底部一行小字入口；
+       点「注册」原地换成注册表单（邮箱+密码+验证码），可一键换回。
+       保留的实测修复：发信瞬间锁按钮（_sending + disabled）、验证码 4–8 位文案统一、
+       刷新后凭 messageId 续注册。 */
 
-       新版：两个 Tab 明确切换、当前 Tab 高亮；发信期间真锁按钮 + 转圈态；
-             验证码一行内联「获取验证码」；文案统一为「4–8 位」。 */
+    /* —— 密码框一律带「显示」切换（用户指令「加入登陆时的可视密码」）：
+       手机端输入法在密码框里看不见自己打了什么，是这个页面上最容易火的一件事。 —— */
+    function pwdRow(id, ph, ac){
+      return '<div class="cbcode">' +
+        '<input id="' + id + '" type="password" autocomplete="' + ac + '" placeholder="' + ph + '"/>' +
+        '<button type="button" class="cbget cb-eye" data-eye="' + id + '">显示</button>' +
+        '</div>';
+    }
 
-    var TABS =
-      '<div class="cbtabs" role="tablist">' +
-        '<button type="button" class="cbtab on" id="cbTabLogin" role="tab" aria-selected="true">登录</button>' +
-        '<button type="button" class="cbtab" id="cbTabReg" role="tab" aria-selected="false">注册</button>' +
-      '</div>';
-
-    /* —— 登录面板 —— */
+    /* —— 登录（默认屏） —— */
     var PANE_LOGIN =
       '<div id="cbPaneLogin" class="cbpane">' +
-        '<div class="mini" style="color:var(--muted);margin-bottom:10px">用注册时的<b style="color:var(--ink)">邮箱</b>登录；绑过用户名的也可以用用户名。</div>' +
-        '<label>邮箱 / 用户名</label>' +
+        '<label>邮箱</label>' +
         '<input id="cbUser" autocomplete="username" placeholder="you@example.com"/>' +
         '<label>密码</label>' +
-        '<input id="cbPass" type="password" autocomplete="current-password" placeholder="请输入密码"/>' +
+        pwdRow('cbPass', '请输入密码', 'current-password') +
         '<div class="msg" id="cbMsg"></div>' +
         '<div class="row2"><button class="b1" id="cbLogin" style="width:100%">登录</button></div>' +
-        '<div class="tiny" style="margin-top:10px;text-align:center;color:var(--muted)">还没有账号？' +
-          '<a href="javascript:;" id="cbToReg" style="color:var(--accent)">去注册 →</a></div>' +
+        '<div class="tiny cbfoot">还没有账号？<a href="javascript:;" id="cbToReg">注册</a>' +
+          '<span class="cbdot">·</span>忘了密码？<a href="javascript:;" id="cbToReset">重设</a></div>' +
       '</div>';
 
-    /* —— 注册面板 —— */
+    /* —— 注册（点「注册」后整屏换成这个） —— */
     var PANE_REG =
       '<div id="cbPaneReg" class="cbpane" style="display:none">' +
         /* 顶部状态位：刷新续用时在这里说明「还差一步」，而不是把提示塞到表单底下 */
         '<div class="cbnotice" id="cbRegNotice" style="display:none"></div>' +
-        '<div class="cbstep"><span class="n">1</span>填邮箱和密码</div>' +
         '<label>邮箱</label>' +
         '<input id="cbEmail" type="email" autocomplete="email" placeholder="you@example.com"/>' +
         '<label>密码</label>' +
-        '<input id="cbEmailPass" type="password" autocomplete="new-password" placeholder="8–32 位，需含字母和数字"/>' +
-        '<div class="cbstep"><span class="n">2</span>去邮箱收验证码（10 分钟内有效）</div>' +
+        pwdRow('cbEmailPass', '6–32 位，数字或字母都行', 'new-password') +
+        '<label>验证码（点「获取」后去邮箱收，10 分钟内有效）</label>' +
         '<div class="cbcode">' +
           '<input id="cbCode" inputmode="numeric" autocomplete="one-time-code" placeholder="4–8 位验证码"/>' +
           '<button type="button" class="cbget" id="cbSendCode">获取验证码</button>' +
         '</div>' +
         '<div class="msg" id="cbRegMsg"></div>' +
-        '<details class="cbopt" id="cbNameFold">' +
-          '<summary>顺便设个用户名（可选）</summary>' +
-          '<div class="tiny" style="color:var(--muted);margin:6px 0">6–25 位，小写字母开头，只能用 a-z / 0-9 / _ / -。设了以后就能用它登录。' +
-            '<button type="button" id="cbNameGen" style="background:none;border:none;color:var(--accent);cursor:pointer;padding:0;font-size:inherit">帮我生成一个</button></div>' +
-          '<input id="cbNewName" placeholder="留空则不设" autocomplete="off"/>' +
-        '</details>' +
         '<div class="row2"><button class="b1" id="cbFinish" style="width:100%">完成注册</button></div>' +
-        '<div class="tiny" style="margin-top:10px;text-align:center;color:var(--muted)">已有账号？' +
-          '<a href="javascript:;" id="cbToLogin" style="color:var(--accent)">去登录 →</a></div>' +
+        '<div class="tiny cbfoot">已有账号？<a href="javascript:;" id="cbToLogin">返回登录</a></div>' +
       '</div>';
 
-    area.innerHTML = TABS + PANE_LOGIN + PANE_REG;
+    /* —— 重设密码（点「重设」后整屏换成这个） —— */
+    var PANE_RESET =
+      '<div id="cbPaneReset" class="cbpane" style="display:none">' +
+        '<label>注册邮箱</label>' +
+        '<input id="cbRpEmail" type="email" autocomplete="email" placeholder="you@example.com"/>' +
+        '<label>新密码</label>' +
+        pwdRow('cbRpPass', '6–32 位，数字或字母都行', 'new-password') +
+        '<label>验证码（点「获取」后去邮箱收）</label>' +
+        '<div class="cbcode">' +
+          '<input id="cbRpCode" inputmode="numeric" autocomplete="one-time-code" placeholder="4–8 位验证码"/>' +
+          '<button type="button" class="cbget" id="cbRpSend">获取验证码</button>' +
+        '</div>' +
+        '<div class="msg" id="cbRpMsg"></div>' +
+        '<div class="row2"><button class="b1" id="cbRpGo" style="width:100%">设新密码并登录</button></div>' +
+        '<div class="tiny cbfoot">想起来了？<a href="javascript:;" id="cbRpBack">返回登录</a></div>' +
+      '</div>';
 
-    /* —— Tab 切换 —— */
+    area.innerHTML = PANE_LOGIN + PANE_REG + PANE_RESET;
+
+    /* 密码明暗切换：整块面板重画后统一挂一遍，不必逐个输入框点名 */
+    Array.prototype.forEach.call(area.querySelectorAll('.cb-eye'), function(b){
+      b.onclick = function(){
+        var i = area.querySelector('#' + b.getAttribute('data-eye'));
+        if (!i) return;
+        var show = i.type !== 'text';
+        i.type = show ? 'text' : 'password';
+        b.textContent = show ? '隐藏' : '显示';
+      };
+    });
+
+    /* —— 单屏切换：只换三块面板的显隐，没有 Tab 条 —— */
     function showTab(which){
-      var isReg = which === 'reg';
-      var tL = area.querySelector('#cbTabLogin'), tR = area.querySelector('#cbTabReg');
-      var pL = area.querySelector('#cbPaneLogin'), pR = area.querySelector('#cbPaneReg');
-      if (!tL || !tR || !pL || !pR) return;
-      tL.className = 'cbtab' + (isReg ? '' : ' on');
-      tR.className = 'cbtab' + (isReg ? ' on' : '');
-      tL.setAttribute('aria-selected', isReg ? 'false' : 'true');
-      tR.setAttribute('aria-selected', isReg ? 'true' : 'false');
-      pL.style.display = isReg ? 'none' : '';
-      pR.style.display = isReg ? '' : 'none';
-      var f = area.querySelector(isReg ? '#cbEmail' : '#cbUser');
+      var pL = area.querySelector('#cbPaneLogin'), pR = area.querySelector('#cbPaneReg'), pP = area.querySelector('#cbPaneReset');
+      if (!pL || !pR || !pP) return;
+      pL.style.display = which === 'login' ? '' : 'none';
+      pR.style.display = which === 'reg' ? '' : 'none';
+      pP.style.display = which === 'reset' ? '' : 'none';
+      var f = area.querySelector(which === 'reg' ? '#cbEmail' : (which === 'reset' ? '#cbRpEmail' : '#cbUser'));
       if (f) setTimeout(function(){ try { f.focus(); } catch (e) {} }, 40);
     }
-    area.querySelector('#cbTabLogin').onclick = function(){ showTab('login'); };
-    area.querySelector('#cbTabReg').onclick = function(){ showTab('reg'); };
     var toReg = area.querySelector('#cbToReg');
     if (toReg) toReg.onclick = function(){ showTab('reg'); };
     var toLogin = area.querySelector('#cbToLogin');
     if (toLogin) toLogin.onclick = function(){ showTab('login'); };
-
-    /* —— 用户名生成（注册时那个可选项）—— */
-    var nameGen = area.querySelector('#cbNameGen');
-    if (nameGen) {
-      nameGen.onclick = function () {
-        var em = (area.querySelector('#cbEmail') || {}).value || '';
-        var base = String(em).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (!base || /^[^a-z]/.test(base)) base = 'at' + base;
-        base = base.slice(0, 12);
-        while (base.length < 6) base += String(Math.floor(Math.random() * 10));
-        base += String(Math.floor(Math.random() * 90) + 10);
-        var inp = area.querySelector('#cbNewName');
-        if (inp) { inp.value = base; inp.focus(); }
-      };
-    }
+    var toReset = area.querySelector('#cbToReset');
+    if (toReset) toReset.onclick = function(){ showTab('reset'); };
+    var rpBack = area.querySelector('#cbRpBack');
+    if (rpBack) rpBack.onclick = function(){ showTab('login'); };
 
     /* —— 登录 —— */
     var doAuth = async function(){
       var idv = (area.querySelector('#cbUser').value || '').trim();
       var pass = area.querySelector('#cbPass').value;
       var m = area.querySelector('#cbMsg');
-      if (!idv || !pass) { m.textContent = '请填写邮箱（或用户名）和密码'; m.style.color = 'var(--danger)'; return; }
+      if (!idv || !pass) { m.textContent = '请填写邮箱和密码'; m.style.color = 'var(--danger)'; return; }
       var btn = area.querySelector('#cbLogin');
       if (btn.disabled) return;
       btn.disabled = true; btn.textContent = '登录中…';
@@ -636,7 +619,7 @@
 
       if (_sending) return;                                        /* 真·防重入 */
       if (!isEmail(email)) { m.textContent = '请先填写正确的邮箱地址'; m.style.color = 'var(--danger)'; return; }
-      if (!pwdOk(pass)) { m.textContent = '密码需 8–32 位，且同时包含字母和数字'; m.style.color = 'var(--danger)'; return; }
+      if (!pwdOk(pass)) { m.textContent = '密码设 6–32 位（纯数字或纯字母都行）'; m.style.color = 'var(--danger)'; return; }
 
       _sending = true;
       btn.disabled = true;                                          /* ← 立刻锁，不等 await */
@@ -672,8 +655,6 @@
       var m = area.querySelector('#cbRegMsg');
       var btn = area.querySelector('#cbFinish');
       var code = (area.querySelector('#cbCode').value || '').trim();
-      var nn = area.querySelector('#cbNewName');
-      var uname = nn ? (nn.value || '').trim() : '';
       var email = (area.querySelector('#cbEmail').value || '').trim();
 
       if (!regResumable()) { m.textContent = '请先点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
@@ -682,16 +663,15 @@
       if (_pendingEmail && _pendingEmail !== email) { m.textContent = '邮箱已修改，请重新点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
       if (!code) { m.textContent = '请填写邮件里的验证码'; m.style.color = 'var(--danger)'; return; }
       if (!/^\d{4,8}$/.test(code)) { m.textContent = '验证码是 4–8 位数字，请检查一下'; m.style.color = 'var(--danger)'; return; }
-      if (uname && !userOk(uname)) { m.textContent = '用户名需 6–25 位：小写字母开头，只能用小写字母 / 数字 / 下划线 / 短横线'; m.style.color = 'var(--danger)'; return; }
       if (btn.disabled) return;
 
       btn.disabled = true; btn.textContent = '验证中…';
       m.textContent = ''; m.style.color = 'var(--muted)';
       try {
-        var res = await finishSignUp(_pendingVerify, code, uname, email);
+        var res = await finishSignUp(_pendingVerify, code, '', email);
         lg('auth', '注册成功：' + (res.user ? userName(res.user) : email), 'ok');
         draw(area, res.user);
-        toast(res.bound ? ('账号已创建，用户名 ' + res.bound + ' 已绑定 ✔') : '账号已创建——点「立即上传」把本机片单存上云');
+        toast('账号已创建——点「立即上传」把本机片单存上云');
       } catch (e) {
         var t = errText(e, 'signup');
         if (t === 'PROVIDER_OFF') { m.innerHTML = providerOffHtml(); }
@@ -699,6 +679,66 @@
         m.style.color = 'var(--danger)';
         btn.disabled = false; btn.textContent = '完成注册';
         lg('auth', '注册失败：' + (t === 'PROVIDER_OFF' ? '云端未开启邮箱登录' : t), 'fail');
+      }
+    };
+
+    /* —— 重设密码：先拿验证码（发信慢，点瞬间锁按钮，和注册同一套规矩）—— */
+    var _rpUpdate = null, _rpMail = '';
+    area.querySelector('#cbRpSend').onclick = async function(){
+      var email = (area.querySelector('#cbRpEmail').value || '').trim();
+      var m = area.querySelector('#cbRpMsg');
+      var btn = area.querySelector('#cbRpSend');
+      if (_sending) return;
+      if (!isEmail(email)) { m.textContent = '请先填写正确的邮箱地址'; m.style.color = 'var(--danger)'; return; }
+      _sending = true;
+      btn.disabled = true;
+      var _ori = btn.textContent;
+      btn.textContent = '发送中…';
+      m.textContent = ''; m.style.color = 'var(--muted)';
+      try {
+        _rpUpdate = await startReset(email);
+        _rpMail = email;
+        lg('auth', '重设密码：验证码已发送 ' + email, 'ok');
+        m.innerHTML = '验证码已发到 <b>' + escH(email) + '</b>，去邮箱看看（可能在垃圾箱）。';
+        m.style.color = 'var(--muted)';
+        _sending = false;
+        startCooldown(btn);
+        var ic = area.querySelector('#cbRpCode');
+        if (ic) ic.focus();
+      } catch (e) {
+        _sending = false;
+        btn.disabled = false; btn.textContent = _ori;
+        var t = errText(e, 'reset');
+        if (t === 'PROVIDER_OFF') m.innerHTML = providerOffHtml();
+        else m.textContent = t;
+        m.style.color = 'var(--danger)';
+        lg('auth', '重设密码失败：' + t, 'fail');
+      }
+    };
+    area.querySelector('#cbRpGo').onclick = async function(){
+      var m = area.querySelector('#cbRpMsg');
+      var btn = area.querySelector('#cbRpGo');
+      var email = (area.querySelector('#cbRpEmail').value || '').trim();
+      var code = (area.querySelector('#cbRpCode').value || '').trim();
+      var pass = area.querySelector('#cbRpPass').value;
+      if (!_rpUpdate) { m.textContent = '先点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
+      if (_rpMail && _rpMail !== email) { m.textContent = '邮箱已修改，请重新点「获取验证码」'; m.style.color = 'var(--danger)'; return; }
+      if (!/^\d{4,8}$/.test(code)) { m.textContent = '验证码是 4–8 位数字，请检查一下'; m.style.color = 'var(--danger)'; return; }
+      if (!pwdOk(pass)) { m.textContent = '新密码设 6–32 位（纯数字或纯字母都行）'; m.style.color = 'var(--danger)'; return; }
+      if (btn.disabled) return;
+      btn.disabled = true; btn.textContent = '提交中…';
+      m.textContent = ''; m.style.color = 'var(--muted)';
+      try {
+        var u = await finishReset(_rpUpdate, code, pass);
+        _rpUpdate = null;
+        lg('auth', '密码已重设：' + userName(u), 'ok');
+        draw(area, u);
+        toast('密码已重设，这台设备已经登录上了');
+      } catch (e) {
+        var t2 = errText(e, 'reset');
+        m.textContent = t2; m.style.color = 'var(--danger)';
+        btn.disabled = false; btn.textContent = '设新密码并登录';
+        lg('auth', '重设密码失败：' + t2, 'fail');
       }
     };
 

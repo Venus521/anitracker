@@ -1,7 +1,7 @@
 {
   "app": "anitracker",
-  "version": "2.13.0",
-  "build": "20260925h",
-  "note": "安全与工程化大修版。① 备份/云同步凭证隔离：导出与上传剔除 at_bgm_token/at_net_relay/credentials_*/tr_dav，导入与云恢复全部过白名单+sid 校验，堵住恶意备份改写中继地址的投毒通道。② esc() 补转义单引号、搜索卡 d.id 数字校验，收口字符串拼 onclick 逃逸面。③ 云同步从整包覆盖改为逐剧合并：updAt 时钟+观看历史并集+删除墓碑(at_tomb)，upload 先合后传、开机自动合并，双设备各改各的不再互丢。④ 302 部内置数据集(649KB)外置为 ani-tracker-lib.json 懒加载，HTML 928KB→约290KB；SW 升 v12 分层缓存（页面/版本 network-first，大件 SWR+预缓存），cloudbase SDK 落本地 vendor 兜底离线可用。⑤ 错误留痕 at_errlog(环形100条)+全局 error/unhandledrejection 兜底；AI 导入冲突集数显式上报不再静默；数据质量面板显示含 AI 导入部数；删封面链路两个已失效公共代理。⑥ 11 处原生 confirm/prompt 全数换主题弹窗(uiDialog，带焦点圈定/Enter 提交/Esc 取消)，手动添加三连环 prompt 合并为三输入一屏；新增 --ok/--info/--warn 令牌并统一 10 处硬编码成功色；--muted 对比度提到 AA；补 900/1300px 平板桌面断点；toast 挂 aria-live。⑦ 工程：测试依赖仓库内化(puppeteer-core+lock)、AT_PY/AT_CHROME 环境变量探测、.gitignore 规则改正、__pycache__ 退库、启动链收敛(孤儿脚本入退役夹)、双入口 pre-commit 钩子、文档过时项修正+版本史迁 CHANGELOG。 ⑧ 走查新修：CBSync.current() 自 v2.10.0 起返回 Promise 而 acctStatus() 同步判真值，导致未登录也永远显示「已登录」状态条——现 sess() 结果同步缓存，current() 直读缓存，退出登录即清。",
-  "ts": 1790326277899
+  "version": "2.27.0",
+  "build": "20261002e",
+  "note": "v2.27.0 豆瓣中转搬上云，国产剧封面在任意网络下都能自动出。① 豆瓣同源中转从「仅本机 8089、同 WiFi 有效」升级为 CloudBase 公网 HTTP 函数 douban-relay（service.tcloudbase.com/douban-relay），浏览器可直接 fetch，任何网络下都可用；函数内部带 4 级搜索回退、原图升级、内存 LRU 缓存与 403 退避重试。② 局域网模式优先走本机 /cover-relay（更快、免公网流量），失败自动回退公网函数。③ 豆瓣源不再受 isLocalServer 限制，「重拉封面」与手动「批量补封面」在任何模式下都会用上豆瓣；开机自动小批量仍不主动打豆瓣，避免触发风控。④ 失败提示文案同步更新。⑤ 壳 v1.12 / versionCode 13，SW 缓存 v26→v27。",
+  "ts": 1790939509163
 }
