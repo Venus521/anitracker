@@ -31,8 +31,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check('07', 'toast 挂 aria-live', ix.includes('<div id="toast" role="status" aria-live="polite">'));
   check('08', '数据集已外置（HTML 内无 649KB 单行）', ix.length < 500000 && /fetch\((['"])ani-tracker-lib\.json\1\)/.test(ix), 'size=' + ix.length);
   const sw = fs.readFileSync(path.join(ROOT, 'tracker-sw.js'), 'utf-8');
-  check('09', 'SW v12：tracker-version.json 走 network-first、数据集预缓存',
-    sw.includes('anitracker-v12') && /NETWORK_FIRST[^;]*tracker-version/.test(sw.replace(/\n/g, '')) && sw.includes('ani-tracker-lib.json'));
+  /* 缓存名从 v2.16.0 起带 build 后缀（anitracker-v15-20260927b），这里只认版本号单调递增；
+     「名字里的 build 必须等于 AT_BUILD」由 v2140 的 V04 负责。 */
+  const swCacheM = sw.match(/var CACHE='anitracker-v(\d+)(?:-2\d{7}[a-z])?'/);
+  const swN = swCacheM && parseInt(swCacheM[1], 10);
+  check('09', 'SW 分层缓存：版本 ≥ v12 单调、tracker-version.json 走 network-first、数据集预缓存',
+    !!swN && swN >= 12 && /NETWORK_FIRST[^;]*tracker-version/.test(sw.replace(/\n/g, '')) && sw.includes('ani-tracker-lib.json'), 'CACHE=' + (swCacheM && swCacheM[1]));
   const cs = fs.readFileSync(path.join(ROOT, 'cloudbase-sync.js'), 'utf-8');
   check('10', '云同步：packAll 共享凭证正则 + upload 先合后传', cs.includes('window.AT_BACKUP.secretRe') && cs.includes('await remoteAhead()'));
   check('11', '开机云合并已挂 load（sessionStorage 防循环）', cs.includes("at_cb_boot_done"));
@@ -78,7 +82,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       const B2 = JSON.parse(JSON.stringify(Bx)); B2.statuses = { 5: 'want' }; B2.updAt = t0 + 300;
       /* 双端各改各的：都保留 */
       const r1 = AT_MERGE.mergeShows([A2], [B2], {}, {});
-      /* 同剧：新者赢 + hist 并集 */
+      /* 同剧：新者赢（v2.14.0b 起历史日志退役，产物 hist 恒空） */
       const r2 = AT_MERGE.mergeShows([A], [A2], {}, {});
       /* 墓碑：删除晚于修改 → 双端皆删 */
       const r3 = AT_MERGE.mergeShows([A], [A2], { s1: t0 + 900 }, {});
@@ -88,14 +92,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       return {
         both: r1.stats.onlyLocal === 1 && r1.stats.onlyCloud === 1,
         newerWins: !!g(r2, 's1') && Object.keys(g(r2, 's1').statuses).length === 2,
-        histUnion: !!g(r2, 's1') && g(r2, 's1').hist.length === 2,
+        histDead: !!g(r2, 's1') && (g(r2, 's1').hist || []).length === 0,
         tombDel: r3.stats.dropped === 1 && !g(r3, 's1'),
         readdSurvives: !!g(r4, 's1') && r4.stats.dropped === 0
       };
     });
     check('21', '合并：双端各改各的全保留', m.both);
     check('22', '合并：同剧 updAt 新者赢', m.newerWins);
-    check('23', '合并：观看历史取并集', m.histUnion);
+    check('23', '合并：历史日志退役，产物 hist 恒空（云端旧记录不复活）', m.histDead);
     check('24', '合并：删除墓碑传播生效', m.tombDel);
     check('25', '合并：删后重新添加存活', m.readdSurvives);
 
@@ -112,12 +116,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('27', '恶意 sid 被 safeSid 规整', !/[<>'"]/.test(s.sid), s.sid);
     check('28', '正常数据不误杀', s.okKeys.includes('at_theme') && s.okKeys.includes('at_ok') && s.okKeys.includes('tr_shows'));
 
-    /* 搜索卡 id 校验（srItemHtml 注入口） */
+    /* 搜索卡 id 校验（v2.17.0：在线源换成全网库，注入口改为 webRowHtml） */
     const xss = await page.evaluate(() => {
-      const h = srItemHtml({ id: "1' onclick=alert(1) x='", name: 't', type: 2 });
-      return { html: h.slice(0, 400), digitsOnly: /data-bgm="\d+"/.test(h) && !h.includes('x=') && !/<script/.test(h) };
+      const h = webRowHtml({ id: "1' onclick=alert(1) x='", name: 't', language: 'English' });
+      return { html: h.slice(0, 400), digitsOnly: /data-tv="0"/.test(h) && !h.includes('x=') && !/<script/.test(h) };
     });
-    check('29', 'srItemHtml 对畸形 id 做数字规整', xss.digitsOnly, xss.html.slice(0, 120));
+    check('29', 'webRowHtml 对畸形 id 做数字规整（非数字一律归 0，负载不进 HTML）', xss.digitsOnly, xss.html.slice(0, 120));
 
     /* uiDialog：confirm 流 */
     const dlg = await page.evaluate(() => new Promise(res => {

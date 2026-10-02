@@ -194,20 +194,27 @@ function check(id, desc, cond, extra) {
   check('13', '剧集菜单标题显示集号与集名',
     /第 2 集/.test(epMenuItems.head || '') && /第二集/.test(epMenuItems.head || ''), epMenuItems.head);
 
-  /* ---- 14 剧集菜单：标记到这一集为止 ---- */
+  /* ---- 14 剧集菜单：标记到这一集为止（v2.13.0 起这一步要先过主题弹窗确认） ---- */
   await page.evaluate(() => {
     const btns = Array.from(document.querySelectorAll('.ctxmenu .ctxi'));
     const b = btns.filter(x => x.textContent.indexOf('标记到这一集为止') >= 0)[0];
     if (b) b.click();
   });
   await sleep(350);
+  const asked = await page.evaluate(() => {
+    const m = document.getElementById('uiDlgMask');
+    return { shown: !!m, txt: m ? m.textContent : '' };
+  });
+  await page.evaluate(() => { const y = document.querySelector('#uiDlgMask #udYes'); if (y) y.click(); });
+  await sleep(350);
   const bulk = await page.evaluate(() => {
     const s = bySid('t-eps');
     const w = (s.eps || []).filter(e => epStat(s, e.s) === 'watched').map(e => e.s);
     return { watched: w, menuGone: !document.querySelector('.ctxmenu.on') };
   });
-  check('14', '「标记到第 2 集为止」把第 1、2 集标为已看',
-    bulk.watched.join(',') === '1,2' && bulk.menuGone, JSON.stringify(bulk));
+  check('14', '「标记到第 2 集为止」先要确认，确认后把第 1、2 集标为已看',
+    asked.shown && /第 1–2 集/.test(asked.txt || '') &&
+    bulk.watched.join(',') === '1,2' && bulk.menuGone, JSON.stringify({ asked, bulk }));
 
   /* ---- 15 菜单内的「复制番名」不报错（无剪贴板权限也应兜底） ---- */
   await page.evaluate(() => { backList(); });
@@ -249,67 +256,7 @@ function check(id, desc, cond, extra) {
   await page.evaluate(() => { if (typeof backList === 'function') backList(); });
   await sleep(400);
 
-  /* ---- 16 重复检测：同名不同作品不该被判为重复 ----
-     （放在最后做，因为它会往片单里加数据） */
-  const dup1 = await page.evaluate(() => {
-    const gs = findAllDupGroups();
-    return {
-      n: gs.length,
-      groups: gs.map(g => ({ key: g.key, titles: g.items.map(x => x.title), sev: dupSeverity(g) })),
-    };
-  });
-  check('16', '「海贼王」与「海贼王 剧场版」不被判为重复组', dup1.n === 0, JSON.stringify(dup1));
-
-  /* ---- 17 真重复能被检出 ----
-     注意：addShow 自带同名去重（跨源防重复），所以直接 addShow 第二条会被拦。
-     这里用 shows.push 绕过 —— 正是为了模拟「历史数据里已经存在两条」的情况。 */
-  const dup2 = await page.evaluate(() => {
-    shows.push({ sid: 't-dup', title: '海贼王', year: '1999', total: 1168, cover: '', eps: [] });
-    const gs = findAllDupGroups();
-    const hit = gs.filter(g => g.items.some(x => x.sid === 't-dup'))[0];
-    return { n: gs.length, sev: hit ? dupSeverity(hit) : null, titles: hit ? hit.items.map(x => x.title) : null };
-  });
-  check('17', '存在同年同集数的同名条目 → 检出为同一组且判 same',
-    dup2.n === 1 && dup2.sev === 'same', JSON.stringify(dup2));
-
-  /* ---- 18 报告 UI：两类分开呈现 ---- */
-  const rep = await page.evaluate(() => {
-    /* 再加一条同名但不同集数，制造 maybe 类 */
-    shows.push({ sid: 't-dup2', title: '海贼王', year: '2023', total: 8, cover: '', eps: [] });
-    const host = document.createElement('div');
-    host.id = 'optDupResult';
-    document.body.appendChild(host);
-    renderDupReport(host);
-    const txt = host.textContent;
-    host.remove();
-    return { txt: txt.slice(0, 500) };
-  });
-  check('18', '报告同时给出「疑似重复」与「同名但不同的作品」两类',
-    /组疑似重复/.test(rep.txt) && /同名但不同的作品/.test(rep.txt), rep.txt.slice(0, 260));
-  check('19', '报告明确说明同名不同作品「不是重复数据」', /不是重复数据/.test(rep.txt), rep.txt.slice(0, 260));
-  /* ---- 20 账号面板里真的有「片单整理」入口 ---- */
-  const acct = await page.evaluate(() => {
-    try { if (typeof openAccount === 'function') openAccount(); } catch (e) {}
-    return {
-      hasCard: !!Array.from(document.querySelectorAll('.sycard h4')).filter(h => /片单整理/.test(h.textContent)).length,
-      hasBtn: !!document.getElementById('optDupScan'),
-      hasResult: !!document.getElementById('optDupResult'),
-    };
-  });
-  await sleep(400);
-  check('20', '账号面板有「片单整理」卡 + 检查按钮 + 结果容器',
-    acct.hasCard && acct.hasBtn && acct.hasResult, JSON.stringify(acct));
-
-  /* ---- 21 点检查按钮能出结果 ---- */
-  const scan = await page.evaluate(() => {
-    const b = document.getElementById('optDupScan');
-    if (b) b.click();
-    return true;
-  });
-  await sleep(400);
-  const scanOut = await page.evaluate(() => (document.getElementById('optDupResult') || {}).textContent || '');
-  check('21', '点「检查重复番剧」真的渲染出报告',
-    scan && scanOut.length > 8 && /组疑似重复|同名但不同的作品|没有发现重复/.test(scanOut), scanOut.slice(0, 160));
+  /* 原用例 16–21（重复检测 / 片单整理）—— v2.14.0 按用户指令移除功能，用例退役 */
 
   /* ---- 22 长按路径（触屏模拟） ---- */
   await page.evaluate(() => { window.__closeSync && window.__closeSync(); closeCtx(); backList(); });

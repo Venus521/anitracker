@@ -53,15 +53,16 @@ emailCases.forEach(([v, want, why], i) => {
 
 /* ---------- 2. pwdOk ---------- */
 console.log('\n--- pwdOk ---');
+/* v2.17.0 用户指令「密码标准不要那么麻烦，可纯数字或者字母」：长度 6–32，字符类型一律不挑 */
 const pwdCases = [
   ['Probe0Testx', true, '标准 11 位'],
   ['123', false, '太短（实测云端也不校验，靠前端拦）'],
-  ['abcdefgh', false, '纯字母，无数字'],
-  ['12345678', false, '纯数字，无字母'],
+  ['abcdefgh', true, '纯字母放行（旧规则要求必含数字，已按用户指令去掉）'],
+  ['12345678', true, '纯数字放行'],
   ['a1'.repeat(16), true, '恰好 32 位'],
   ['a1'.repeat(17), false, '36 位，超上限'],
-  ['abcdefg1', true, '恰好 8 位，边界'],
-  ['abcdef1', false, '7 位，边界外'],
+  ['abcdef', true, '恰好 6 位，边界'],
+  ['abcde', false, '5 位，边界外'],
   ['', false, '空'],
 ];
 pwdCases.forEach(([v, want, why], i) => {
@@ -168,10 +169,13 @@ s('S5', 'finishSignUp 支持无闭包时用 messageId 重建',
   /auth\.verifyOtp\(\{ token: code, messageId: p\.messageId \}\)/.test(src));
 s('S6', 'startSignUp 里调了 resend 取 messageId',
   /auth\.resend\(\{ email: email, type: 'signup' \}\)/.test(src));
-s('S7', '注册表单真的渲染了 #cbNewName（旧版只读不写）',
-  /id="cbNewName"/.test(src));
-s('S8', '双 Tab 结构存在且注册面板默认隐藏',
-  /id="cbTabLogin"/.test(src) && /id="cbTabReg"/.test(src) && /id="cbPaneReg" class="cbpane" style="display:none"/.test(src));
+s('S7', '注册表单极简化：仅邮箱+密码+验证码，无用户名/昵称等附加字段（v2.14.0 用户指令）',
+  !/id="cbNewName"/.test(src) && !/cbRegNick|cbNick"/.test(src) && /id="cbEmail"/.test(src) &&
+  /pwdRow\('cbEmailPass'/.test(src) && /id="cbCode"/.test(src));
+s('S8', '登录/注册单屏：无 Tab 条，注册面板默认隐藏、靠「注册」链接切换（v2.14.0 极简单屏）',
+  !/id="cbTabLogin"/.test(src) && !/id="cbTabReg"/.test(src) && !/class="cbtabs"/.test(src) &&
+  /id="cbPaneReg" class="cbpane" style="display:none"/.test(src) &&
+  /id="cbToReg"/.test(src) && /id="cbToLogin"/.test(src));
 s('S9', '验证码文案与校验一致（不再写死「6 位」）',
   /* 只看「给用户看的字符串」，注释里提到旧 bug 不算。 */
   !/placeholder="6 位验证码"|'6 位验证码'|6 位验证码（/.test(src.replace(/^\s*(\/\*|\*|\/\/).*$/gm, '')),
@@ -182,6 +186,22 @@ s('S11', '刷新后回到注册页并预填邮箱',
   /if \(pend && pend\.messageId\)/.test(src) && /showTab\('reg'\)/.test(src));
 s('S12', '旧的「写死正则」错误翻译已换成结构化优先',
   /cat === 'VERIFICATION_FAILED'/.test(src) && /cleanMsg/.test(src));
+/* v2.17.0 用户指令：可视密码 + 忘记密码 + 密码标准放宽 */
+const pwdOkSrc = (src.match(/function pwdOk\(p\)\{[^}]*\}/) || [''])[0];
+s('S13', '密码规则只剩长度（6–32），不再要求字母+数字（用户指令「可纯数字或者字母」）',
+  /length >= 6/.test(pwdOkSrc) && /length <= 32/.test(pwdOkSrc) &&
+  !/test\(|RegExp|\[a-z\]|\[0-9\]/.test(pwdOkSrc), 'pwdOk 源码=' + pwdOkSrc.slice(0, 120));
+s('S14', '登录与注册两处密码框都走 pwdRow（自带「显示/隐藏」）',
+  /pwdRow\('cbPass'/.test(src) && /pwdRow\('cbEmailPass'/.test(src) &&
+  /class="cbget cb-eye" data-eye=/.test(src) &&
+  /i\.type = show \? 'text' : 'password'/.test(src) &&
+  /b\.textContent = show \? '隐藏' : '显示'/.test(src));
+s('S15', '忘记密码有独立面板并联到云端 resetPasswordForEmail',
+  /id="cbToReset"/.test(src) && /PANE_RESET/.test(src) && /id="cbRpEmail"/.test(src) &&
+  /auth\.resetPasswordForEmail\(/.test(src));
+s('S16', '重设密码提交前也过 pwdOk（新口令同规则）',
+  (src.match(/pwdOk\(pass\)/g) || []).length >= 2 && /新密码设 6–32 位/.test(src),
+  'pwdOk(pass) 出现=' + (src.match(/pwdOk\(pass\)/g) || []).length);
 
 /* ---------- 汇总 ---------- */
 console.log('\n' + '='.repeat(50));
