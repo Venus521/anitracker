@@ -24,8 +24,8 @@ BUILD = r'D:\dev\at-shell-build'      # 纯 ASCII
 DIST = os.path.join(SRC, 'dist')
 
 MIN_API = '21'
-VERSION_CODE = '13'
-VERSION_NAME = '1.12'
+VERSION_CODE = '14'
+VERSION_NAME = '1.13'
 
 # 打进 assets/web 的文件：index.html 引用的全部同源资源，缺一个就白屏/缺库
 WEB_FILES = [

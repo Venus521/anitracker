@@ -1,0 +1,5 @@
+{
+  "name": "douban-relay-node",
+  "version": "1.0.0",
+  "description": "豆瓣封面同源中转（国剧自动封面）——可行性实测"
+}

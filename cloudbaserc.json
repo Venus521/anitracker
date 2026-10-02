@@ -1,0 +1,13 @@
+{
+  "envId": "cloud1-d7gsn5t0w6407b963",
+  "functions": [
+    {
+      "name": "douban-relay-node",
+      "timeout": 20,
+      "runtime": "Nodejs20.19",
+      "memorySize": 256,
+      "description": "豆瓣封面同源中转 v2（抗超时/抗风控：14s预算制+失败负缓存+403全局冷却+外呼节流）",
+      "installDependency": false
+    }
+  ]
+}

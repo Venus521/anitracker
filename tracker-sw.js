@@ -5,7 +5,7 @@
      并在 install 时预缓存——离线二次打开浏览库和账号组件依然可用 */
 /* 缓存名钉住 build：换界面必须换缓存名，否则旧 SW 会拿 v14 那份继续喂页面。
    名字里带 build 号，门禁就能拿 index.html 的 AT_BUILD 对账——忘了改立刻红，不靠人记「这批该升到 v 几」。 */
-var CACHE='anitracker-v27-20261002e';
+var CACHE='anitracker-v28-20261003a';
 var PRECACHE=['./index.html','./tracker-manifest.webmanifest','./ani-tracker-lib.json','./vendor/cloudbase.full.js','./tracker-filler-data.js','./favicon.ico'];
 /* 需要「永远尽量新」的资源：命中即走网络 */
 var NETWORK_FIRST=/(^|\/)(index\.html|ani-tracker\.html|tracker-version\.json)$/;

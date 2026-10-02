@@ -469,12 +469,27 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   .wrap{padding-bottom:max(96px,calc(env(safe-area-inset-bottom) + 84px))}
   /* 整幅的「从片单移除」实测 43px，是全页最不可逆的一颗，抬到 44 */
   #delBtn{min-height:44px}
-  /* 点开一部番，主操作是「标记下一集」，可它原先排在 5 颗低频工具钮和「来源覆盖」条后面，
-     393×851 上首次打开就落在 700px 外——每次记进度都得先滚过两段设置类工具。
-     只在触屏下用 flex order 把这两块折到剧集列表之后，DOM 一行不动，桌面顺序照旧。 */
+  /* 点开一部番，主操作是「标记下一集」。v2.21 曾把工具条整体折到剧集列表之后保首屏，
+     v2.28.0 用户令：「重拉封面/本地封面/AI 导入这些不要放在最后的界面」——改成精确重排：
+     下一集仍守首屏（hero→状态→分季→下一集），工具条紧跟其后不再沉底；
+     剧集网格和「从片单移除」仍收在最后。DOM 一行不动，桌面顺序照旧。 */
   #vDetail{display:flex;flex-direction:column}
-  #vDetail>.dtools,#vDetail>#dSrcCov{order:2}
-  #vDetail>#delBtn{order:3}
+  #vDetail>.back{order:0}
+  #vDetail>.hero{order:1}
+  #vDetail>.strow{order:2}
+  #vDetail>#dParts{order:3}
+  #vDetail>.quickrow{order:4}
+  #vDetail>.dtools{order:5}
+  #vDetail>.statgrid{order:6}
+  #vDetail>.durline{order:7}
+  #vDetail>.filmpos{order:8}
+  #vDetail>#dSrcCov{order:9}
+  #vDetail>.searchrow2{order:10}
+  #vDetail>.typerow{order:11}
+  #vDetail>.seclabel{order:12}
+  #vDetail>#dGroups{order:13}
+  #vDetail>#delBtn{order:14}
+  #vDetail>div:last-child{order:99}
 }
 /* 悬浮添加钮：默认不存在于桌面（desktop 由这条 display:none 挡着，只在触屏下由 JS 决定何时露面） */
 #fabAdd{display:none}
@@ -1013,7 +1028,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.27.0', AT_BUILD='20261002e';
+var AT_VERSION='2.28.0', AT_BUILD='20261003a';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -3444,18 +3459,22 @@ async function coverHealAll(manual,limit){
   if(limit&&pool.length>limit) pool=pool.slice(0,limit);
   if(!pool.length){ if(manual) toast('没有需要补封面的条目'); return; }
   _coverHealRunning=true;
-  var okN=0,failN=0,skipN=0;
+  var okN=0,failN=0,skipN=0,dbFail=0;
   if(manual) toast('开始补封面：共 '+pool.length+' 部…');
   try{
     for(var i=0;i<pool.length;i++){
       if(!navigator.onLine){ skipN=pool.length-i; break; }
       var ok=false;
-      /* v2.27.0：豆瓣中转已上云，手动批量补封面时任何模式都能打豆瓣（不再只看 isLocalServer） */
-      try{ ok=await healCoverFor(pool[i],{save:false, relay:!!manual}); }catch(e){ ok=false; }
+      /* v2.27.0：豆瓣中转已上云，手动批量补封面时任何模式都能打豆瓣（不再只看 isLocalServer）
+         v2.28.0：熔断——连着 3 部全源失败就停用豆瓣（大概率撞上限流），本轮剩余只走其余源，
+         免得把豆瓣本来就紧的额度烧光；批量时每部间隔放宽到 1.2s，降低风控触发。 */
+      var relay=!!manual&&dbFail<3;
+      try{ ok=await healCoverFor(pool[i],{save:false, relay:relay}); }catch(e){ ok=false; }
+      if(manual&&!ok&&relay) dbFail++;
       coverMark(pool[i].sid,ok);
       if(ok) okN++; else failN++;
-      if(manual) toast('补封面 '+(i+1)+'/'+pool.length+'（成功 '+okN+'）…');
-      await new Promise(function(r){ setTimeout(r,420); });
+      if(manual) toast('补封面 '+(i+1)+'/'+pool.length+'（成功 '+okN+'）…'+(dbFail>=3?'（豆瓣已熔断，剩余走其他源）':''));
+      await new Promise(function(r){ setTimeout(r, relay?1200:420); });
     }
   }finally{
     _coverHealRunning=false;
@@ -3479,7 +3498,7 @@ function healThisCover(){
     /* v2.24.0：拉不到就把老封面还回去；真没有 → 直接指向「本地封面」这条一定能成的路 */
     if(s._cvOld){ save(); renderDetail(); toast('全网库 / TMDB / Wikidata / 豆瓣 都没这部剧的封面，已保留原来那张'); return; }
     var _k=rd('at_tmdb_key','');
-    toast(navigator.onLine?(_k?'TMDB / Wikidata / 豆瓣 也没匹配——点「⇪ 本地封面」从本机选一张':'没配 TMDB 密钥（账号 → 封面来源）；豆瓣中转是兜底，或点「⇪ 本地封面」手动传图'):'网络不可用，稍后再试');
+    toast(navigator.onLine?(_k?'TMDB / Wikidata / 豆瓣 也没匹配（豆瓣偶发限流，可稍后再点重拉）——点「⇪ 本地封面」从本机选一张':'没配 TMDB 密钥（账号 → 封面来源）；豆瓣中转是兜底（偶发限流，稍后再试），或点「⇪ 本地封面」手动传图'):'网络不可用，稍后再试');
   });
 }
 
@@ -4004,7 +4023,7 @@ function openCoverSrc(){
     '<div class="msg" id="cvSrcMsg"></div>'+
     '<div class="row2" style="margin-top:2px"><button type="button" class="b1" id="cvSrcSave" style="flex:1">保存</button>'+
     '<button type="button" class="b2" id="cvSrcClear" style="flex:0 0 auto">清除</button></div>'+
-    '<p class="aihint" style="margin-top:10px">豆瓣暂无浏览器端自动抓图（防盗链 + 反爬），国产剧要 100% 可控仍走详情页「⇪ 本地封面」手动传图。</p>'+
+    '<p class="aihint" style="margin-top:10px">豆瓣已由云函数中转自动抓图（国剧覆盖最全），偶发限流时稍后再点「⟳ 重拉封面」；总抓不到的，仍可走详情页「⇪ 本地封面」手动传图。</p>'+
     '</div></div>');
   document.body.appendChild(wrap);
   var km=$('cvSrcKey'); if(km) km.value=rd('at_tmdb_key','')||'';
