@@ -1,11 +1,12 @@
-/* run-v270-tests.js — AniTracker v2.7.0 专项测试（草稿保护 / 双语 / 别名联想 / 关联 / 台账 / 分类实测 / 质量面板） */
+/* run-v270-tests.js — AniTracker 专项测试（草稿保护 / 双语 / 别名联想 / 关联 / 分类实测 / 质量面板；
+   T08 的「台账 + 修改历史」在 v2.14.0d 已按用户指令整块退役，那两条现在是**防复活**断言，别改回旧功能 */
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const puppeteer = require('puppeteer-core');
 const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const ROOT = String.raw`D:\项目\01_媒体娱乐\ani-tracker`;
-const OUT = String.raw`D:\项目\01_媒体娱乐\ani-tracker\_v270_work`;
+const OUT = path.join(ROOT, 'tests', '_artifacts', 'v270');
 const PORT = 8100;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = [];
@@ -20,12 +21,17 @@ function check(id, name, ok, detail) {
   await sleep(1800);
   let browser;
   const pageErrors = [];
+  /* 导航轨迹：这份门禁跑在 page.reload() 之后，页面里任何一次 history.back() 若和 pushState 对不上，
+     就会真的退回「上一个文档」把执行上下文掀掉（表现为「Execution context was destroyed」且不知道死在哪步）。
+     留一条轨迹，崩在哪一步、是不是导航引起，一眼可判。 */
+  const navs = [];
   try {
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
     const page = await browser.newPage();
     await page.setViewport({ width: 460, height: 1000, deviceScaleFactor: 2 });
     page.on('dialog', d => d.accept());
     page.on('pageerror', e => pageErrors.push(String(e).slice(0, 200)));
+    page.on('framenavigated', f => { if (f === page.mainFrame()) navs.push(f.url().replace('http://127.0.0.1:' + PORT, '')); });
     await page.goto('http://127.0.0.1:' + PORT + '/index.html?v=t270', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(1500);
 
@@ -46,10 +52,10 @@ function check(id, name, ok, detail) {
 
     /* T01 版本与模块 */
     const t01 = await page.evaluate(() => ({ ver: (typeof AT_VERSION !== 'undefined') ? AT_VERSION : null, at270: !!(window.AT270 && AT270.V) }));
-    check('01', '版本 2.7.0 且 AT270 模块就位', t01.ver === '2.7.0' && t01.at270 === true, JSON.stringify(t01));
+    check('01', '版本号是 x.y.z 且 AT270 模块就位', /^[\d.]+$/.test(String(t01.ver)) && t01.at270 === true, JSON.stringify(t01));
 
     /* T02 草稿：注册面板 点空白 → 自动存草稿 → 重开恢复 */
-    await page.evaluate(() => { syncOpen(); });
+    await page.evaluate(() => { openAccount(); });
     await sleep(1600);
     await page.evaluate(() => { const l = document.getElementById('cbToReg'); if (l) l.click(); });
     await sleep(400);
@@ -61,7 +67,7 @@ function check(id, name, ok, detail) {
       return { mask: !!document.getElementById('syncMask'), draft: (d && d.syncMask) ? Object.keys(d.syncMask.fields).length : 0 };
     });
     check('02a', '点空白关闭后：面板已关且草稿已保存', t02a.mask === false && t02a.draft >= 2, JSON.stringify(t02a));
-    await page.evaluate(() => { syncOpen(); });
+    await page.evaluate(() => { openAccount(); });
     await sleep(1400);
     await page.evaluate(() => { const l = document.getElementById('cbToReg'); if (l) l.click(); });
     await sleep(400);
@@ -186,6 +192,7 @@ function check(id, name, ok, detail) {
     check('06b', '点击候选一键填入', t06b === '海贼王', t06b);
     try { await page.screenshot({ path: OUT + '\\t06-suggest.png' }); } catch (e) {}
     await page.evaluate(() => { backList(); });
+    await sleep(400);
 
     /* T07 关联条目（双向 + 解除） */
     await page.evaluate(() => { openDetail('test-op'); });
@@ -211,12 +218,17 @@ function check(id, name, ok, detail) {
     await sleep(900);
     const t07c = await page.evaluate(() => { const box = document.getElementById('at270Box'); return box ? box.textContent.indexOf('海贼王') >= 0 : false; });
     check('07c', 'B 条目详情同样可见（双向）', t07c === true, '');
+    /* 解除是破坏性动作：v2.13.0 起走主题确认框（#udYes），不点确认就不该掉数据 */
     await page.evaluate(() => { const rows = document.querySelectorAll('#at270Box .at270row'); for (const r of rows) { const b = r.querySelector('button'); if (b && /解除/.test(b.textContent)) { b.click(); break; } } });
+    await sleep(400);
+    const t07d1 = await page.evaluate(() => { let r = []; try { r = JSON.parse(localStorage.getItem('at_relations') || '[]'); } catch (e) {} return { ask: !!document.getElementById('udYes'), count: r.length }; });
+    check('07d1', '点「解除」先要确认，未确认不删数据', t07d1.ask === true && t07d1.count === 1, JSON.stringify(t07d1));
+    await page.evaluate(() => { const y = document.getElementById('udYes'); if (y) y.click(); });
     await sleep(600);
     const t07d = await page.evaluate(() => { let r = []; try { r = JSON.parse(localStorage.getItem('at_relations') || '[]'); } catch (e) {} return r.length; });
-    check('07d', '解除关联后清零', t07d === 0, 'count=' + t07d);
+    check('07d', '确认解除后清零', t07d === 0, 'count=' + t07d);
 
-    /* T08 资料编辑 + 台账 + 历史 */
+    /* T08 资料编辑 + 台账/历史（已退役，此处是防复活门禁） */
     await page.evaluate(() => { openDetail('test-op'); });
     await sleep(900);
     await page.evaluate(() => { const b = document.getElementById('at270EditProf'); if (b) b.click(); });
@@ -225,13 +237,16 @@ function check(id, name, ok, detail) {
     await sleep(600);
     const t08a = await page.evaluate(() => { const shows = JSON.parse(localStorage.getItem('tr_shows') || '[]'); const s = shows.filter(x => x.sid === 'test-op')[0]; return s.nameJp; });
     check('08a', '资料编辑保存（原文名更新）', t08a === 'ONE PIECE (1999)', t08a);
-    const t08b = await page.evaluate(() => { let L = []; try { L = JSON.parse(localStorage.getItem('at_edit_log') || '[]'); } catch (e) {} return { n: L.length, kinds: Array.from(new Set(L.map(x => x.kind))) }; });
-    check('08b', '修改台账已记录（含资料/集名等）', t08b.n >= 3, JSON.stringify(t08b));
-    await page.evaluate(() => { const b = document.getElementById('at270HistAll'); if (b) b.click(); });
-    await sleep(400);
-    const t08c = await page.evaluate(() => !!document.getElementById('at270HistMask'));
-    check('08c', '历史面板可打开', t08c === true, '');
-    await page.evaluate(() => { const m = document.getElementById('at270HistMask'); if (m) m.remove(); });
+    /* v2.14.0d 用户指令「已有的记录全清空」：logEdit 停笔、at_edit_log 加载即删、修改历史区连同入口一起拆。
+       这三条测的是「不再长回来」，不是旧功能——改回绿的方式只有继续退役，别把展示加回去。 */
+    const t08b = await page.evaluate(() => ({ raw: localStorage.getItem('at_edit_log'), n: (function () { try { return (JSON.parse(localStorage.getItem('at_edit_log') || '[]')).length; } catch (e) { return -1; } })() }));
+    check('08b', '修改台账已退役：编辑后仍无存量', t08b.raw === null && t08b.n === 0, JSON.stringify(t08b));
+    const t08c = await page.evaluate(() => {
+      const box = document.getElementById('at270Box');
+      return { btn: !!document.getElementById('at270HistAll'), mask: !!document.getElementById('at270HistMask'),
+        head: box ? /修改历史|全部历史/.test(box.textContent) : true };
+    });
+    check('08c', '详情页不留「修改历史」入口', t08c.btn === false && t08c.mask === false && t08c.head === false, JSON.stringify(t08c));
 
     /* T09 分类实测：海贼王 54→TV原创 / 45→半原创 / 1→漫改 */
     await page.evaluate(async () => { try { await batchCalibrateAll(); } catch (e) {} });
@@ -302,7 +317,7 @@ function check(id, name, ok, detail) {
     check('11', '全程无页面 JS 错误', pageErrors.length === 0, JSON.stringify(pageErrors.slice(0, 3)));
 
   } catch (e) {
-    check('99', '测试执行异常', false, String(e));
+    check('99', '测试执行异常', false, String(e) + ' 最近导航：' + JSON.stringify(navs.slice(-3)));
   } finally {
     try { if (browser) await browser.close(); } catch (e) {}
     try { pySrv.kill(); } catch (e) {}

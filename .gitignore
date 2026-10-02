@@ -7,9 +7,10 @@ dist/
 __pycache__/
 *.pyc
 
-# 备份/退役目录（仅本地回滚用，不入库）
+# 备份/退役/归档目录（仅本地回滚用，不入库；2026-10-03 起历史备份统一进 _archive/）
 _backup_*/
 _退役_*/
+_archive/
 
 # 系统与垃圾文件
 .DS_Store
@@ -20,8 +21,26 @@ _退役_*/
 服务器日志.txt
 tests/_p_*.html
 tests/last-*.txt
+tests/last-*.json
 tests/post-*.txt
 tests/ui-jian.txt
+tests/_artifacts/
+tests/_*.log
+tests/_run_look.err
+tests/_pptr_tmp.js
+tests/_steps_tmp.js
+
+# 走查截图/走查墙（node tests/phone-look.js 等可再生的本地产物）
+tests/shots*/
+
+# 交付快照（历史交付包存档，清单在 delivery-清单.md，源码以仓库为准）
+DELIVERY/
+
+# 签名密钥：一旦入库，仓库里就永久躺着能签这个 App 的那把钥匙。
+# 目录本身必须留在 mobile-shell/ 里（换 keystore = 换签名 = 手机拒绝覆盖安装），只是别让它进 git。
+mobile-shell/keystore/
+*.keystore
+*.jks
 
 # 历史本地素材（不入库）
 docs/shots/v250-preview.png
