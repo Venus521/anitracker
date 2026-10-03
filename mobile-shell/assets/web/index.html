@@ -469,12 +469,27 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   .wrap{padding-bottom:max(96px,calc(env(safe-area-inset-bottom) + 84px))}
   /* 整幅的「从片单移除」实测 43px，是全页最不可逆的一颗，抬到 44 */
   #delBtn{min-height:44px}
-  /* 点开一部番，主操作是「标记下一集」，可它原先排在 5 颗低频工具钮和「来源覆盖」条后面，
-     393×851 上首次打开就落在 700px 外——每次记进度都得先滚过两段设置类工具。
-     只在触屏下用 flex order 把这两块折到剧集列表之后，DOM 一行不动，桌面顺序照旧。 */
+  /* 点开一部番，主操作是「标记下一集」。v2.21 曾把工具条整体折到剧集列表之后保首屏，
+     v2.28.0 用户令：「重拉封面/本地封面/AI 导入这些不要放在最后的界面」——改成精确重排：
+     下一集仍守首屏（hero→状态→分季→下一集），工具条紧跟其后不再沉底；
+     剧集网格和「从片单移除」仍收在最后。DOM 一行不动，桌面顺序照旧。 */
   #vDetail{display:flex;flex-direction:column}
-  #vDetail>.dtools,#vDetail>#dSrcCov{order:2}
-  #vDetail>#delBtn{order:3}
+  #vDetail>.back{order:0}
+  #vDetail>.hero{order:1}
+  #vDetail>.strow{order:2}
+  #vDetail>#dParts{order:3}
+  #vDetail>.quickrow{order:4}
+  #vDetail>.dtools{order:5}
+  #vDetail>.statgrid{order:6}
+  #vDetail>.durline{order:7}
+  #vDetail>.filmpos{order:8}
+  #vDetail>#dSrcCov{order:9}
+  #vDetail>.searchrow2{order:10}
+  #vDetail>.typerow{order:11}
+  #vDetail>.seclabel{order:12}
+  #vDetail>#dGroups{order:13}
+  #vDetail>#delBtn{order:14}
+  #vDetail>div:last-child{order:99}
 }
 /* 悬浮添加钮：默认不存在于桌面（desktop 由这条 display:none 挡着，只在触屏下由 JS 决定何时露面） */
 #fabAdd{display:none}
@@ -606,7 +621,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div class="dtools" style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 12px">
       <button class="ty" onclick="aiUpd()" id="btnAiUpd" title="让 AI 按固定格式补出没收录的分集和双语集名：只追加缺的集，绝不改动已看进度">✧ 让 AI 补新集</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
-      <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / TMDB 重新拉封面（国产剧需配 TMDB 密钥，拉不到会保留原来那张）">⟳ 重拉封面</button>
+      <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / 豆瓣重新拉封面（免配置，拉不到会保留原来那张）">⟳ 重拉封面</button>
       <button class="ty" onclick="pickCover()" id="btnPickCover" title="全网库 / TMDB 都查不到的中文剧、国产剧：从本机选一张海报，或直接 Ctrl+V 粘贴图片">⇪ 本地封面</button>
       <button class="ty" onclick="fillEpisodesNow()" id="btnFillEps" style="display:none" title="整部剧没有单集数据时，按剧名到全网库补齐（多季会一次给全）">≡ 补齐剧集</button>
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
@@ -1013,7 +1028,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.27.0', AT_BUILD='20261002e';
+var AT_VERSION='2.29.1', AT_BUILD='20261003b';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -2610,6 +2625,7 @@ async function doSearch(){
      旧的回包直接作废，不许覆盖新结果（新一轮 innerHTML 会把旧占位框换掉）。 */
   var tok=(window.__srTok=(window.__srTok||0)+1);
   var alP=anilistSearch(kw);
+  var dbP=doubanSuggest(kw);   /* v2.29.0：豆瓣联想并发发，不拖主流程 */
   var wr=await webSearchShows(kw), items=wr.list, errN=wr.errN;
   if(tok!==window.__srTok) return;
   window.__srCache={};
@@ -2682,9 +2698,35 @@ async function doSearch(){
   } else {
     msg.textContent='全网没搜到'+(localN?('（本地有 '+localN+' 条）'):'')+'，可换关键词/别名，或「✧ 问 AI 加片」';
   }
+  /* v2.29.0：豆瓣联想第四区——中文国产剧在英文库（TVMaze/AniList）经常 0 结果，
+     subject_suggest 补上豆瓣标准名+小图+集数；与已列出的本地/全网/AniList 条目按归一化名去重。
+     联想拿不到就静默没有这一区，绝不拖慢主流程（doubanSuggest 内部 6s 超时 + 失败空列表）。 */
+  var db=await dbP;
+  if(tok!==window.__srTok) return;
+  var dbItems=(db||[]).filter(function(it){
+    var t=normTxt(it&&it.title||''); if(!t) return false;
+    if(seenKeys[t]) return false;
+    var dupAl=alItems.some(function(m){ var ks=alKeys(m); for(var k in ks){ if(k===t) return true; } return false; });
+    if(dupAl) return false;
+    seenKeys[t]=1; return true;
+  });
+  window.__dbCache={};
+  var dbHtml=dbItems.map(function(it,i){
+    var did=(String(it.url||'').match(/subject\/(\d+)/)||[])[1]||'';
+    it.did=did; window.__dbCache['db'+i]=it;
+    var own=(did&&bySid('db-'+did))||shows.filter(function(x){ return normTxt(x.title)===normTxt(it.title); })[0];
+    return '<div class="sr">'+(it.img?'<img src="'+esc(it.img)+'" onerror="this.style.display=\'none\'" referrerpolicy="no-referrer"/>':'<div style="width:44px;flex:none"></div>')+
+      '<div class="i"><div class="t">'+esc(it.title)+'</div><div class="m">'+(it.year?esc(it.year)+' · ':'')+(it.episode?(esc(it.episode)+' 集 · '):'')+'豆瓣条目 · 集数可在详情页编辑</div></div>'+
+      (own?'<button disabled>已加</button>':'<button onclick="dbAddShow('+i+')">添加</button>')+
+      '</div>';
+  }).join('');
+  if(dbItems.length){
+    list.insertAdjacentHTML('beforeend','<div id="srDbBox">'+secHdr('豆瓣联想','国产剧 / 中文剧 · 一键入库')+dbHtml+'</div>');
+    if(onlineN) msg.textContent+=' · 豆瓣联想 '+dbItems.length+' 条';
+  }
   /* v2.19.1 用户指令：「搜不到就直接进 AI，别让我再点一次」——本地 + TVMaze + AniList **三条都空**
-     才自动转（半自动会把人从结果堆里拽走）。 */
-  if(!localN&&!onlineN) autoAiAdd(kw);
+     才自动转（半自动会把人从结果堆里拽走）。v2.29.0：豆瓣联想有货也算有活路，不转 AI。 */
+  if(!localN&&!onlineN&&!dbItems.length) autoAiAdd(kw);
 }
 /* —— 全网结果行：中文俗称（用户就是打「老友记」搜进来的）标在英文名后面 —— */
 /* 别名组命中的往往是转写（friends ↔ Friends），那不算俗称；优先回显用户打的那个叫法，
@@ -2708,6 +2750,19 @@ function webRowHtml(sh){
     (own?'<button disabled>已加</button>':'<button onclick="webAddFromSearch(this,'+tv+')">添加</button>') +
     '<div class="sreps" id="sreps_tv'+tv+'" data-sid="'+tv+'"></div>' +
     '</div>';
+}
+/* v2.29.0：豆瓣联想一键入库——标准名+年份+集数直接建档（source 豆瓣联想，sid 用豆瓣 subject id 防重）。
+   封面先挂豆瓣小图（列表 img 均带 referrerpolicy=no-referrer，可显示），后台再走封面链转存本机
+   dataURL（离线不裂）；集数取 suggest 的 episode（单季剧=总集数），多季剧进详情页「编辑集数」改。 */
+function dbAddShow(i){
+  var it=window.__dbCache['db'+i]; if(!it||!it.title) return;
+  var sid='db-'+(it.did||normTxt(it.title).replace(/[^a-z0-9]/g,'').slice(0,20)||(''+Date.now()));
+  var n=parseInt(it.episode,10)||0, eps=[];
+  for(var k=1;k<=n;k++) eps.push({s:k,t:'第 '+k+' 集'});
+  addShow({ sid:sid, title:it.title, nameJp:'', cover:it.img||'', year:String(it.year||''), total:n, eps:eps,
+    statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'豆瓣联想', manual:1, doubanId:it.did||'' });
+  var s=bySid(sid);
+  if(s&&navigator.onLine){ try{ healCoverFor(s,{relay:true}).then(function(ok){ if(ok) renderList(); }); }catch(e){} }
 }
 async function webAddFromSearch(btn,tvId){
   var sh=window.__srCache&&window.__srCache['tv'+tvId]; if(!sh) return;
@@ -3391,6 +3446,20 @@ async function doubanRelayCover(name){
   }
   return '';
 }
+/* v2.29.0：添加页「豆瓣联想」——subject_suggest 经云函数中转（豆瓣接口无 CORS，浏览器直连不了）。
+   中文国产剧在 TVMaze/AniList 经常 0 结果，这条补上豆瓣标准剧名+小图+集数；点击直接建档。
+   联想是锦上添花：任何失败静默回空列表，绝不拖慢搜索主流程。 */
+async function doubanSuggest(kw){
+  kw=String(kw||'').trim(); if(!kw||!navigator.onLine) return [];
+  try{
+    var ctl=new AbortController(); var t=setTimeout(function(){ ctl.abort(); },6000);
+    var r=await fetch(DOUBAN_RELAY_CLOUD+'?mode=suggest&q='+encodeURIComponent(kw), {signal:ctl.signal});
+    clearTimeout(t);
+    if(!r.ok) return [];
+    var j=await r.json();
+    return (j&&j.items)||[];
+  }catch(e){ return []; }
+}
 async function healCoverFor(s,opts){
   opts=opts||{};
   if(!s) return false;
@@ -3444,18 +3513,22 @@ async function coverHealAll(manual,limit){
   if(limit&&pool.length>limit) pool=pool.slice(0,limit);
   if(!pool.length){ if(manual) toast('没有需要补封面的条目'); return; }
   _coverHealRunning=true;
-  var okN=0,failN=0,skipN=0;
+  var okN=0,failN=0,skipN=0,dbFail=0;
   if(manual) toast('开始补封面：共 '+pool.length+' 部…');
   try{
     for(var i=0;i<pool.length;i++){
       if(!navigator.onLine){ skipN=pool.length-i; break; }
       var ok=false;
-      /* v2.27.0：豆瓣中转已上云，手动批量补封面时任何模式都能打豆瓣（不再只看 isLocalServer） */
-      try{ ok=await healCoverFor(pool[i],{save:false, relay:!!manual}); }catch(e){ ok=false; }
+      /* v2.27.0：豆瓣中转已上云，手动批量补封面时任何模式都能打豆瓣（不再只看 isLocalServer）
+         v2.28.0：熔断——连着 3 部全源失败就停用豆瓣（大概率撞上限流），本轮剩余只走其余源，
+         免得把豆瓣本来就紧的额度烧光；批量时每部间隔放宽到 1.2s，降低风控触发。 */
+      var relay=!!manual&&dbFail<3;
+      try{ ok=await healCoverFor(pool[i],{save:false, relay:relay}); }catch(e){ ok=false; }
+      if(manual&&!ok&&relay) dbFail++;
       coverMark(pool[i].sid,ok);
       if(ok) okN++; else failN++;
-      if(manual) toast('补封面 '+(i+1)+'/'+pool.length+'（成功 '+okN+'）…');
-      await new Promise(function(r){ setTimeout(r,420); });
+      if(manual) toast('补封面 '+(i+1)+'/'+pool.length+'（成功 '+okN+'）…'+(dbFail>=3?'（豆瓣已熔断，剩余走其他源）':''));
+      await new Promise(function(r){ setTimeout(r, relay?1200:420); });
     }
   }finally{
     _coverHealRunning=false;
@@ -3478,8 +3551,9 @@ function healThisCover(){
     if(ok){ var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none') renderDetail(); toast('封面已更新'); return; }
     /* v2.24.0：拉不到就把老封面还回去；真没有 → 直接指向「本地封面」这条一定能成的路 */
     if(s._cvOld){ save(); renderDetail(); toast('全网库 / TMDB / Wikidata / 豆瓣 都没这部剧的封面，已保留原来那张'); return; }
-    var _k=rd('at_tmdb_key','');
-    toast(navigator.onLine?(_k?'TMDB / Wikidata / 豆瓣 也没匹配——点「⇪ 本地封面」从本机选一张':'没配 TMDB 密钥（账号 → 封面来源）；豆瓣中转是兜底，或点「⇪ 本地封面」手动传图'):'网络不可用，稍后再试');
+    /* v2.29.1：TMDB 密钥全面降级为「可选进阶」——豆瓣云函数（v2.27）已把国产剧/中文剧封面
+       全自动抓齐，用户令「配密钥还是太麻烦了」：所有必经路径的文案不再出现「没配密钥」。 */
+    toast(navigator.onLine?'豆瓣 / 全网库也没匹配到（豆瓣偶发限流，可稍后再点重拉）——点「⇪ 本地封面」从本机选一张，一定能成':'网络不可用，稍后再试');
   });
 }
 
@@ -3911,7 +3985,7 @@ async function openAccount(focus){
       '<button type="button" class="lnk" id="syExport">导出</button><span class="sep">·</span>'+
       '<button type="button" class="lnk" id="syImport">导入</button></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">封面来源</span>'+
-      '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥…</button></div>'+
+      '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥（可选）…</button></div>'+
     '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -3990,21 +4064,20 @@ async function openAccount(focus){
   }
   box.querySelector('#syExport').onclick=function(){ downloadBackup(); };  box.querySelector('#syImport').onclick=function(){ box.querySelector('#syFile').click(); };
   box.querySelector('#cvSrcOpen').onclick=function(){ openCoverSrc(); };
-/* ===== v2.25.0：封面来源设置（TMDB 密钥，国产剧自动抓海报）===== */
+/* ===== 封面来源设置（v2.25.0 建；v2.29.1 起 TMDB 密钥为可选进阶，主文案=全自动免配置）===== */
 function openCoverSrc(){
   var old=document.getElementById('cvSrcMask'); if(old) old.remove();
   var wrap=makeEl('<div class="mask" id="cvSrcMask"><div class="panel aiwrap">'+
     '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">封面来源</h3>'+
     '<button type="button" id="cvSrcX" aria-label="关闭" style="background:none;border:none;font-size:20px;line-height:1.2;color:var(--muted);padding:2px 4px">×</button></div>'+
-    '<p class="aihint">国产剧在 TVMaze 没有条目，自动抓不到封面。配一个 <b style="color:var(--ink)">TMDB API Key</b>（免费，'+
-    '<a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a> 申请 v3 Key）后，'+
-    '追迹会按中文名到 TMDB 补海报，含国产剧与海外真人剧。</p>'+
-    '<label style="margin:0">TMDB API Key（只存本机；导出备份 / 云同步会自动剔除）</label>'+
-    '<input id="cvSrcKey" type="password" placeholder="v3 API Key" autocomplete="off" style="caret-color:var(--accent)"/>'+
+    '<p class="aihint">封面抓取<b style="color:var(--ink)">全自动、无需任何密钥</b>：国产剧/中文剧由豆瓣云函数按剧名抓图（覆盖最全），海外剧与动画走 TVMaze / AniList / Wikidata（均免 key）。</p>'+
+    '<label style="margin:0">TMDB API Key（可选进阶，只存本机；导出备份 / 云同步会自动剔除）</label>'+
+    '<input id="cvSrcKey" type="password" placeholder="不配也完全不影响使用" autocomplete="off" style="caret-color:var(--accent)"/>'+
     '<div class="msg" id="cvSrcMsg"></div>'+
     '<div class="row2" style="margin-top:2px"><button type="button" class="b1" id="cvSrcSave" style="flex:1">保存</button>'+
     '<button type="button" class="b2" id="cvSrcClear" style="flex:0 0 auto">清除</button></div>'+
-    '<p class="aihint" style="margin-top:10px">豆瓣暂无浏览器端自动抓图（防盗链 + 反爬），国产剧要 100% 可控仍走详情页「⇪ 本地封面」手动传图。</p>'+
+    '<p class="aihint" style="margin-top:10px">什么时候才值得配：想给部分海外剧提升封面命中率时，去 '+
+    '<a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>（免费）申请 v3 Key 填进来即可。豆瓣偶发限流时，稍后再点详情页「⟳ 重拉封面」；总抓不到的走「⇪ 本地封面」手动传图。</p>'+
     '</div></div>');
   document.body.appendChild(wrap);
   var km=$('cvSrcKey'); if(km) km.value=rd('at_tmdb_key','')||'';
