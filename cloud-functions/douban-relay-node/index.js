@@ -158,7 +158,8 @@ async function suggestSubject(name, deadline) {
   let arr;
   try { arr = JSON.parse(r.body.toString('utf-8')); } catch (e) { throw new Error('bad suggest json'); }
   if (!Array.isArray(arr)) return [];
-  return arr.map((x) => ({ title: String(x.title || ''), cover: String(x.img || ''), ep: String(x.episode || '') }))
+  return arr.map((x) => ({ title: String(x.title || ''), cover: String(x.img || ''), ep: String(x.episode || ''),
+                          year: String(x.year || ''), url: String(x.url || '') }))
             .filter((x) => x.cover);
 }
 
@@ -221,6 +222,19 @@ const server = http.createServer(async (req, res) => {
       clearTimeout(killer);
       res.writeHead(400, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
       return res.end(JSON.stringify({ error: 'need q' }));
+    }
+    // —— 联想模式（v2.29.0）：?q=剧名&mode=suggest → JSON 条目（title/img/episode/year/url）。
+    //    给添加页搜索第四区「豆瓣联想」用：中文国产剧在英文库经常 0 结果，这里直接给豆瓣标准名。
+    //    联想是锦上添花：任何失败都回 200 + 空列表，前端不等它。 ----
+    if (url.parse(req.url, true).query.mode === 'suggest') {
+      try {
+        const arr = await suggestSubject(name, Date.now() + BUDGET_MS);
+        res.writeHead(200, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=600' }, cors));
+        return res.end(JSON.stringify({ items: arr.slice(0, 8).map((x) => ({ title: x.title, img: x.cover, episode: x.ep, year: x.year, url: x.url })) }));
+      } catch (e) {
+        res.writeHead(200, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
+        return res.end(JSON.stringify({ items: [] }));
+      }
     }
     const deadline = Date.now() + BUDGET_MS;
     const { bytes, ctype, hit } = await doubanCover(name, deadline);

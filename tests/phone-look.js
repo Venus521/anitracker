@@ -336,6 +336,11 @@ const wallHtml = (shots, all, m, bad, errs, ts, use) => {
       }
       const ep = u.match(/^https:\/\/api\.tvmaze\.com\/shows\/(\d+)\/episodes/);
       if (ep) return jsonResp(req, JSON.stringify(EP_MOCK[Number(ep[1])] || []));
+      /* v2.29.0：豆瓣联想 mock（缺 CORS 头页面会判网络不可用 → 连锁触发 autoAiAdd 污染后续屏，v2.20.0 教训） */
+      if (/service\.tcloudbase\.com/.test(u)) {
+        if (req.method() === 'OPTIONS') return req.respond({ status: 204, headers: CORS });
+        return jsonResp(req, JSON.stringify({ items: [{ title: 'Mock 国产剧 (豆瓣)', img: '', episode: '12', year: '2026', url: 'https://movie.douban.com/subject/99000001/' }] }));
+      }
       if (/^https:\/\/graphql\.anilist\.co/.test(u)) {
         if (req.method() === 'OPTIONS') return req.respond({ status: 204, headers:
           { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type',

@@ -1028,7 +1028,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.28.0', AT_BUILD='20261003a';
+var AT_VERSION='2.29.0', AT_BUILD='20261003a';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -2625,6 +2625,7 @@ async function doSearch(){
      旧的回包直接作废，不许覆盖新结果（新一轮 innerHTML 会把旧占位框换掉）。 */
   var tok=(window.__srTok=(window.__srTok||0)+1);
   var alP=anilistSearch(kw);
+  var dbP=doubanSuggest(kw);   /* v2.29.0：豆瓣联想并发发，不拖主流程 */
   var wr=await webSearchShows(kw), items=wr.list, errN=wr.errN;
   if(tok!==window.__srTok) return;
   window.__srCache={};
@@ -2697,9 +2698,35 @@ async function doSearch(){
   } else {
     msg.textContent='全网没搜到'+(localN?('（本地有 '+localN+' 条）'):'')+'，可换关键词/别名，或「✧ 问 AI 加片」';
   }
+  /* v2.29.0：豆瓣联想第四区——中文国产剧在英文库（TVMaze/AniList）经常 0 结果，
+     subject_suggest 补上豆瓣标准名+小图+集数；与已列出的本地/全网/AniList 条目按归一化名去重。
+     联想拿不到就静默没有这一区，绝不拖慢主流程（doubanSuggest 内部 6s 超时 + 失败空列表）。 */
+  var db=await dbP;
+  if(tok!==window.__srTok) return;
+  var dbItems=(db||[]).filter(function(it){
+    var t=normTxt(it&&it.title||''); if(!t) return false;
+    if(seenKeys[t]) return false;
+    var dupAl=alItems.some(function(m){ var ks=alKeys(m); for(var k in ks){ if(k===t) return true; } return false; });
+    if(dupAl) return false;
+    seenKeys[t]=1; return true;
+  });
+  window.__dbCache={};
+  var dbHtml=dbItems.map(function(it,i){
+    var did=(String(it.url||'').match(/subject\/(\d+)/)||[])[1]||'';
+    it.did=did; window.__dbCache['db'+i]=it;
+    var own=(did&&bySid('db-'+did))||shows.filter(function(x){ return normTxt(x.title)===normTxt(it.title); })[0];
+    return '<div class="sr">'+(it.img?'<img src="'+esc(it.img)+'" onerror="this.style.display=\'none\'" referrerpolicy="no-referrer"/>':'<div style="width:44px;flex:none"></div>')+
+      '<div class="i"><div class="t">'+esc(it.title)+'</div><div class="m">'+(it.year?esc(it.year)+' · ':'')+(it.episode?(esc(it.episode)+' 集 · '):'')+'豆瓣条目 · 集数可在详情页编辑</div></div>'+
+      (own?'<button disabled>已加</button>':'<button onclick="dbAddShow('+i+')">添加</button>')+
+      '</div>';
+  }).join('');
+  if(dbItems.length){
+    list.insertAdjacentHTML('beforeend','<div id="srDbBox">'+secHdr('豆瓣联想','国产剧 / 中文剧 · 一键入库')+dbHtml+'</div>');
+    if(onlineN) msg.textContent+=' · 豆瓣联想 '+dbItems.length+' 条';
+  }
   /* v2.19.1 用户指令：「搜不到就直接进 AI，别让我再点一次」——本地 + TVMaze + AniList **三条都空**
-     才自动转（半自动会把人从结果堆里拽走）。 */
-  if(!localN&&!onlineN) autoAiAdd(kw);
+     才自动转（半自动会把人从结果堆里拽走）。v2.29.0：豆瓣联想有货也算有活路，不转 AI。 */
+  if(!localN&&!onlineN&&!dbItems.length) autoAiAdd(kw);
 }
 /* —— 全网结果行：中文俗称（用户就是打「老友记」搜进来的）标在英文名后面 —— */
 /* 别名组命中的往往是转写（friends ↔ Friends），那不算俗称；优先回显用户打的那个叫法，
@@ -2723,6 +2750,19 @@ function webRowHtml(sh){
     (own?'<button disabled>已加</button>':'<button onclick="webAddFromSearch(this,'+tv+')">添加</button>') +
     '<div class="sreps" id="sreps_tv'+tv+'" data-sid="'+tv+'"></div>' +
     '</div>';
+}
+/* v2.29.0：豆瓣联想一键入库——标准名+年份+集数直接建档（source 豆瓣联想，sid 用豆瓣 subject id 防重）。
+   封面先挂豆瓣小图（列表 img 均带 referrerpolicy=no-referrer，可显示），后台再走封面链转存本机
+   dataURL（离线不裂）；集数取 suggest 的 episode（单季剧=总集数），多季剧进详情页「编辑集数」改。 */
+function dbAddShow(i){
+  var it=window.__dbCache['db'+i]; if(!it||!it.title) return;
+  var sid='db-'+(it.did||normTxt(it.title).replace(/[^a-z0-9]/g,'').slice(0,20)||(''+Date.now()));
+  var n=parseInt(it.episode,10)||0, eps=[];
+  for(var k=1;k<=n;k++) eps.push({s:k,t:'第 '+k+' 集'});
+  addShow({ sid:sid, title:it.title, nameJp:'', cover:it.img||'', year:String(it.year||''), total:n, eps:eps,
+    statuses:{}, status:'watching', addedAt:Date.now(), updAt:Date.now(), source:'豆瓣联想', manual:1, doubanId:it.did||'' });
+  var s=bySid(sid);
+  if(s&&navigator.onLine){ try{ healCoverFor(s,{relay:true}).then(function(ok){ if(ok) renderList(); }); }catch(e){} }
 }
 async function webAddFromSearch(btn,tvId){
   var sh=window.__srCache&&window.__srCache['tv'+tvId]; if(!sh) return;
@@ -3405,6 +3445,20 @@ async function doubanRelayCover(name){
     if(dataURL) return dataURL;                     // 云端失败再退本地
   }
   return '';
+}
+/* v2.29.0：添加页「豆瓣联想」——subject_suggest 经云函数中转（豆瓣接口无 CORS，浏览器直连不了）。
+   中文国产剧在 TVMaze/AniList 经常 0 结果，这条补上豆瓣标准剧名+小图+集数；点击直接建档。
+   联想是锦上添花：任何失败静默回空列表，绝不拖慢搜索主流程。 */
+async function doubanSuggest(kw){
+  kw=String(kw||'').trim(); if(!kw||!navigator.onLine) return [];
+  try{
+    var ctl=new AbortController(); var t=setTimeout(function(){ ctl.abort(); },6000);
+    var r=await fetch(DOUBAN_RELAY_CLOUD+'?mode=suggest&q='+encodeURIComponent(kw), {signal:ctl.signal});
+    clearTimeout(t);
+    if(!r.ok) return [];
+    var j=await r.json();
+    return (j&&j.items)||[];
+  }catch(e){ return []; }
 }
 async function healCoverFor(s,opts){
   opts=opts||{};

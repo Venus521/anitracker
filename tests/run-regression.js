@@ -78,6 +78,12 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     page.on('request', req => {
       const u = req.url();
       if (u.includes('api.tvmaze.com')) { webReqs++; return req.continue({ url: u.replace('https://api.tvmaze.com', 'http://127.0.0.1:8093') }); }
+      /* v2.29.0：豆瓣联想（云函数）不出网——本地直接应答，带 CORS 头（v2.20.0 教训：少头=页面判网络不可用） */
+      if (u.includes('service.tcloudbase.com')) {
+        webReqs++;
+        return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ items: [{ title: 'Mock 国产剧 (豆瓣)', img: '', episode: '12', year: '2026', url: 'https://movie.douban.com/subject/99000001/' }] }) });
+      }
       req.continue();
     });
 
@@ -90,10 +96,11 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
        所以先把「关键函数在不在」单独列一条，缺谁点名谁。 */
     const boot = await page.evaluate(() => ({
       missing: ['renderList', 'renderDetail', 'doSearch', 'webSearchShows', 'webRowHtml', 'webAddShow',
-        'fillEpisodesNow', 'visEps', 'seasonKeyOf', 'ensureSeasons', 'autoCalibrateSrc', 'addShow', 'coverPH']
+        'fillEpisodesNow', 'visEps', 'seasonKeyOf', 'ensureSeasons', 'autoCalibrateSrc', 'addShow', 'coverPH',
+        'doubanSuggest', 'dbAddShow']
         .filter(n => typeof window[n] !== 'function')
     }));
-    check('03', '开机自检：主脚本 13 个关键函数全部就位', boot.missing.length === 0, '缺失：' + boot.missing.join(','));
+    check('03', '开机自检：主脚本 15 个关键函数全部就位', boot.missing.length === 0, '缺失：' + boot.missing.join(','));
 
     // ===== T19 默认浅色（用户指令「默认浅色系统」）：必须在任何切换动作之前量 =====
     // 占位图联动只看「浅色档取 L、深色档取 D，且两档不同」——不钉具体色值，v2.21.0 占位改灰阶骨架后不必回来改测试
@@ -202,6 +209,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     check('11', '搜「老友记」出真人剧 Friends（别名命中 + 中文俗称回显 + 标「真人剧」）',
       sr.sec && sr.hasRow && sr.kind === '真人剧' && sr.alias && sr.rows >= 1, JSON.stringify(sr).slice(0, 260));
 
+
     /* T12 点「添加」立刻回执，单集在后台补（主路径不联网——缺点5 的不变量） */
     const beforeCnt = await page.evaluate(() => JSON.parse(localStorage.getItem('tr_shows') || '[]').length);
     webReqs = 0;
@@ -227,6 +235,34 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       added.n === beforeCnt + 1 && added.eps === 15 && added.total === 15 && added.seasons === 3 &&
       /全网/.test(added.src) && toastMs < 600,
       JSON.stringify(added).slice(0, 220) + ' toast=' + toastMs + 'ms');
+
+    /* ===== T30 豆瓣联想（v2.29.0）：中文剧搜索出第四区 + 一键建档 =====
+       搜「mock」时豆瓣 suggest 替身固定回一条国产剧（img 留空走占位，防测试真下豆瓣图）。
+       放在 T12 之后：addShow 成功会清空搜索区并返回列表，别拆了 T11/T12 共用的搜索现场。
+       断言后把 db-99000001 移出片单还原现场，免得污染后面的计数类用例。 */
+    await page.evaluate(() => { showAdd(); document.getElementById('qKw').value = 'mock'; doSearch(); });
+    await page.waitForFunction(() => !!document.getElementById('srDbBox'), { timeout: 15000 }).catch(() => { });
+    await sleep(300);
+    const db = await page.evaluate(() => {
+      const box = document.getElementById('srDbBox');
+      return {
+        sec: !!box,
+        rows: box ? box.querySelectorAll('.sr').length : 0,
+        hasAddBtn: box ? !!Array.from(box.querySelectorAll('button')).find(b => b.textContent === '添加') : false
+      };
+    });
+    await page.evaluate(() => dbAddShow(0)); await sleep(400);
+    const dbAdded = await page.evaluate(() => {
+      const s = bySid('db-99000001') || {};
+      return { inList: !!s.sid, title: s.title || '', total: s.total || 0, eps: (s.eps || []).length, src: s.source || '' };
+    });
+    await page.evaluate(() => {
+      const i = shows.findIndex(s => s.sid === 'db-99000001');
+      if (i >= 0) { shows.splice(i, 1); try { save(); } catch (e) {} }
+    });
+    check('30', '豆瓣联想：第四区渲染 + 一键建档（豆瓣 sid / 集数落库 / 标准名）',
+      db.sec && db.rows >= 1 && db.hasAddBtn && dbAdded.inList && dbAdded.total === 12 && dbAdded.eps === 12 && /豆瓣/.test(dbAdded.src),
+      JSON.stringify({ db, dbAdded }).slice(0, 220));
 
     await page.evaluate(() => openDetail('tv900003')); await sleep(700);
     const grid0 = await page.evaluate(() => ({

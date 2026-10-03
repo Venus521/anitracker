@@ -1284,3 +1284,16 @@ SW 离线回退会喂旧缓存页、用户不知要刷新）；账号面板里�
 **门禁**：`phone-look` 15 屏 PASS（无出界/触点≥34px/正文无<11px）、`run-regression` 28/28、双入口 MATCH。
 **版本三件套**：`AT_VERSION` 2.27.0 → **2.28.0**、`AT_BUILD` 20261002e → 20261003a、SW 缓存 `anitracker-v27-20261002e` → `anitracker-v28-20261003a`、`build-apk.py` VERSION_NAME 1.12 → 1.13 / VERSION_CODE 13 → 14、`package.json`/`tracker-version.json` 经 `发版.py` 同步。
 **注意**：APK 未重新打包安装（壳配置已就绪 1.13/code 14），手机上要吃到新封面链路需重打 APK 或走浏览器版；云端 hosting 的 index.html 也未重新发布（`mobile-shell/发布到云端.py` 可发）。
+
+
+## v2.29.0（2026-10-03）添加页搜索接入豆瓣联想（用户令「搜索联想也要」）
+
+**背景**：添加页搜索是「本地 → 全网（TVMaze）→ AniList」三区，条目名全是英文索引，中文国产剧/真人剧经常 0 结果（v2.12 起的已知痛点，2642 行注释自己写着）。v2.28.0 在云函数里验证了 `movie.douban.com/j/subject_suggest` 对 rexxar 被 403 的剧名照样 200——这次把它接到搜索上。
+
+- **① 云函数 `mode=suggest`**：`?q=剧名&mode=suggest` → JSON `{items:[{title,img,episode,year,url}]}`（≤8 条）。联想是锦上添花：任何失败都回 200 + 空列表，前端不等它。已部署线上实测（漫长的季节 → 标准名+2023+12集+封面）。
+- **② 添加页第四区「豆瓣联想」**：与 TVMaze/AniList 并发发出（6s 超时），AniList 收口后渲染 `#srDbBox`；与本地/全网/AniList 条目按归一化名去重；**有联想结果时不再自动转 AI**（v2.19.1 的「三区全空才转 AI」判定加上第四区）。
+- **③ 一键入库 `dbAddShow`**：sid 用豆瓣 subject id（`db-35588177`）防重；标题用豆瓣标准名；总集数取 suggest 的 episode（单季剧即总集数，多季剧进详情页「编辑集数」改）；封面先挂豆瓣小图（列表 img 自带 no-referrer 可显示），后台走 `healCoverFor(relay:true)` 转存本机 dataURL（离线不裂，v2.27 链路复用）。
+- **④ 测试**：回归新增 **T30**（第四区渲染 + 建档断言：sid/集数/来源名），放在 T12 之后（addShow 会清空搜索区，别拆 T11/T12 共用现场），断言后移出片单还原现场；`mock-tvmaze-api` 加 `/__douban_suggest` 路由，`run-regression`/`phone-look`/`phone-use` 拦截器全部补豆瓣域 respond（**带 CORS 头**——v2.20.0 教训：缺头页面判「网络不可用」→ 连锁触发 autoAiAdd 污染后续屏）；开机自检函数清单 +2（doubanSuggest/dbAddShow）。
+
+**门禁**：`run-regression` **29/29**（含新 T30）、`phone-look` 15 屏 PASS、双入口 MATCH。
+**版本**：`AT_VERSION` 2.28.0 → **2.29.0**、`AT_BUILD` 20261003a、SW 缓存 `anitracker-v28-20261003a` → `anitracker-v29-20261003a`、`build-apk.py` VERSION_CODE 14 → 15（壳本体未变，versionCode 随发版走线）、`package.json`/`tracker-version.json` 经 `发版.py` 同步。

@@ -85,6 +85,11 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', 'Content-Length': TINY_JPEG.length });
     return res.end(TINY_JPEG);
   }
+  if (p === '/__douban_suggest') {
+    /* v2.29.0：豆瓣联想替身——mode=suggest 走这里（regression 拦截器也直接 respond，两路都备） */
+    const q = String(u.searchParams.get('q') || '').trim();
+    return send(res, 200, { items: q ? [{ title: 'Mock 国产剧 (豆瓣)', img: '', episode: '12', year: '2026', url: 'https://movie.douban.com/subject/99000001/?suggest=' + encodeURIComponent(q) }] : [] });
+  }
   if (p === '/search/shows') {
     const q = String(u.searchParams.get('q') || '').trim().toLowerCase();
     const ids = BY_KEYWORD[q] || [];

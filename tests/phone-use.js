@@ -90,6 +90,8 @@ const F = (level, task, what, detail) => {
       if (/api\.tvmaze\.com\/search\/shows/.test(u)) return reply(SR_FIXTURE.search);
       if (/api\.tvmaze\.com\/shows\/\d+\/episodes/.test(u)) return reply(SR_FIXTURE.episodes);
       if (/api\.tvmaze\.com\/shows\/\d+/.test(u)) return reply(SR_FIXTURE.subject);
+      /* v2.29.0：豆瓣联想 mock（缺 CORS 头会连锁触发 autoAiAdd，v2.20.0 教训） */
+      if (/service\.tcloudbase\.com/.test(u)) return reply({ items: [{ title: 'Mock 国产剧 (豆瓣)', img: '', episode: '12', year: '2026', url: 'https://movie.douban.com/subject/99000001/' }] });
       return req.continue();
     });
 
