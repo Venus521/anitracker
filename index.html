@@ -621,7 +621,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div class="dtools" style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 12px">
       <button class="ty" onclick="aiUpd()" id="btnAiUpd" title="让 AI 按固定格式补出没收录的分集和双语集名：只追加缺的集，绝不改动已看进度">✧ 让 AI 补新集</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
-      <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / TMDB 重新拉封面（国产剧需配 TMDB 密钥，拉不到会保留原来那张）">⟳ 重拉封面</button>
+      <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / 豆瓣重新拉封面（免配置，拉不到会保留原来那张）">⟳ 重拉封面</button>
       <button class="ty" onclick="pickCover()" id="btnPickCover" title="全网库 / TMDB 都查不到的中文剧、国产剧：从本机选一张海报，或直接 Ctrl+V 粘贴图片">⇪ 本地封面</button>
       <button class="ty" onclick="fillEpisodesNow()" id="btnFillEps" style="display:none" title="整部剧没有单集数据时，按剧名到全网库补齐（多季会一次给全）">≡ 补齐剧集</button>
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
@@ -1028,7 +1028,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.29.0', AT_BUILD='20261003a';
+var AT_VERSION='2.29.1', AT_BUILD='20261003b';
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -3551,8 +3551,9 @@ function healThisCover(){
     if(ok){ var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none') renderDetail(); toast('封面已更新'); return; }
     /* v2.24.0：拉不到就把老封面还回去；真没有 → 直接指向「本地封面」这条一定能成的路 */
     if(s._cvOld){ save(); renderDetail(); toast('全网库 / TMDB / Wikidata / 豆瓣 都没这部剧的封面，已保留原来那张'); return; }
-    var _k=rd('at_tmdb_key','');
-    toast(navigator.onLine?(_k?'TMDB / Wikidata / 豆瓣 也没匹配（豆瓣偶发限流，可稍后再点重拉）——点「⇪ 本地封面」从本机选一张':'没配 TMDB 密钥（账号 → 封面来源）；豆瓣中转是兜底（偶发限流，稍后再试），或点「⇪ 本地封面」手动传图'):'网络不可用，稍后再试');
+    /* v2.29.1：TMDB 密钥全面降级为「可选进阶」——豆瓣云函数（v2.27）已把国产剧/中文剧封面
+       全自动抓齐，用户令「配密钥还是太麻烦了」：所有必经路径的文案不再出现「没配密钥」。 */
+    toast(navigator.onLine?'豆瓣 / 全网库也没匹配到（豆瓣偶发限流，可稍后再点重拉）——点「⇪ 本地封面」从本机选一张，一定能成':'网络不可用，稍后再试');
   });
 }
 
@@ -3984,7 +3985,7 @@ async function openAccount(focus){
       '<button type="button" class="lnk" id="syExport">导出</button><span class="sep">·</span>'+
       '<button type="button" class="lnk" id="syImport">导入</button></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">封面来源</span>'+
-      '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥…</button></div>'+
+      '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥（可选）…</button></div>'+
     '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -4063,21 +4064,20 @@ async function openAccount(focus){
   }
   box.querySelector('#syExport').onclick=function(){ downloadBackup(); };  box.querySelector('#syImport').onclick=function(){ box.querySelector('#syFile').click(); };
   box.querySelector('#cvSrcOpen').onclick=function(){ openCoverSrc(); };
-/* ===== v2.25.0：封面来源设置（TMDB 密钥，国产剧自动抓海报）===== */
+/* ===== 封面来源设置（v2.25.0 建；v2.29.1 起 TMDB 密钥为可选进阶，主文案=全自动免配置）===== */
 function openCoverSrc(){
   var old=document.getElementById('cvSrcMask'); if(old) old.remove();
   var wrap=makeEl('<div class="mask" id="cvSrcMask"><div class="panel aiwrap">'+
     '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">封面来源</h3>'+
     '<button type="button" id="cvSrcX" aria-label="关闭" style="background:none;border:none;font-size:20px;line-height:1.2;color:var(--muted);padding:2px 4px">×</button></div>'+
-    '<p class="aihint">国产剧在 TVMaze 没有条目，自动抓不到封面。配一个 <b style="color:var(--ink)">TMDB API Key</b>（免费，'+
-    '<a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a> 申请 v3 Key）后，'+
-    '追迹会按中文名到 TMDB 补海报，含国产剧与海外真人剧。</p>'+
-    '<label style="margin:0">TMDB API Key（只存本机；导出备份 / 云同步会自动剔除）</label>'+
-    '<input id="cvSrcKey" type="password" placeholder="v3 API Key" autocomplete="off" style="caret-color:var(--accent)"/>'+
+    '<p class="aihint">封面抓取<b style="color:var(--ink)">全自动、无需任何密钥</b>：国产剧/中文剧由豆瓣云函数按剧名抓图（覆盖最全），海外剧与动画走 TVMaze / AniList / Wikidata（均免 key）。</p>'+
+    '<label style="margin:0">TMDB API Key（可选进阶，只存本机；导出备份 / 云同步会自动剔除）</label>'+
+    '<input id="cvSrcKey" type="password" placeholder="不配也完全不影响使用" autocomplete="off" style="caret-color:var(--accent)"/>'+
     '<div class="msg" id="cvSrcMsg"></div>'+
     '<div class="row2" style="margin-top:2px"><button type="button" class="b1" id="cvSrcSave" style="flex:1">保存</button>'+
     '<button type="button" class="b2" id="cvSrcClear" style="flex:0 0 auto">清除</button></div>'+
-    '<p class="aihint" style="margin-top:10px">豆瓣已由云函数中转自动抓图（国剧覆盖最全），偶发限流时稍后再点「⟳ 重拉封面」；总抓不到的，仍可走详情页「⇪ 本地封面」手动传图。</p>'+
+    '<p class="aihint" style="margin-top:10px">什么时候才值得配：想给部分海外剧提升封面命中率时，去 '+
+    '<a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>（免费）申请 v3 Key 填进来即可。豆瓣偶发限流时，稍后再点详情页「⟳ 重拉封面」；总抓不到的走「⇪ 本地封面」手动传图。</p>'+
     '</div></div>');
   document.body.appendChild(wrap);
   var km=$('cvSrcKey'); if(km) km.value=rd('at_tmdb_key','')||'';

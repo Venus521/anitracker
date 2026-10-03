@@ -1297,3 +1297,17 @@ SW 离线回退会喂旧缓存页、用户不知要刷新）；账号面板里�
 
 **门禁**：`run-regression` **29/29**（含新 T30）、`phone-look` 15 屏 PASS、双入口 MATCH。
 **版本**：`AT_VERSION` 2.28.0 → **2.29.0**、`AT_BUILD` 20261003a、SW 缓存 `anitracker-v28-20261003a` → `anitracker-v29-20261003a`、`build-apk.py` VERSION_CODE 14 → 15（壳本体未变，versionCode 随发版走线）、`package.json`/`tracker-version.json` 经 `发版.py` 同步。
+
+
+## v2.29.1（2026-10-03）封面链路全面免配置（用户令「配密钥还是太麻烦了」）
+
+**背景**：v2.25 建「封面来源 → TMDB 密钥」时，豆瓣云函数还没上线，弹窗首段引导「配一个 TMDB API Key」；v2.27 起豆瓣云函数已把国产剧/中文剧封面全自动抓齐（实测 6/6），TMDB 的必要性归零，但四处文案还在把用户往「申请密钥」上引——本版全部清掉，**纯文案改动，逻辑零变更**（无 key 时 tmdbCoverFor 本来就 return null 跳过）。
+
+- **重拉封面按钮 title**：「国产剧需配 TMDB 密钥」→「免配置」；
+- **重拉失败 toast**：删掉「没配 TMDB 密钥（账号 → 封面来源）」分支，统一为「豆瓣 / 全网库也没匹配到——点『⇪ 本地封面』一定能成」；
+- **账号面板**：「TMDB 密钥…」→「TMDB 密钥（可选）…」；
+- **封面来源弹窗重写**：首段改为「封面抓取**全自动、无需任何密钥**（豆瓣云函数 + TVMaze/AniList/Wikidata 均免 key）」；TMDB 输入框标注「可选进阶 · 不配也完全不影响使用」；补充「什么时候才值得配」（海外剧封面命中率）。
+- AI 自动模式（LLM key）本就是折叠「可选」定位 + 手动贴回答主路径，未动。
+
+**门禁**：`run-regression` 29/29、`phone-look` 15 屏 PASS、双入口 MATCH。
+**版本**：`AT_VERSION` 2.29.0 → **2.29.1**、`AT_BUILD` 20261003a → **20261003b**（SW 缓存名随 build 推进 `anitracker-v29-20261003a` → `anitracker-v29-20261003b`，避免同 2.29.0 撞名）、`build-apk.py` VERSION_CODE 15 → 16 → 17（壳本体未变，纯走线）、`package.json`/`tracker-version.json` 经 `发版.py` 同步。
