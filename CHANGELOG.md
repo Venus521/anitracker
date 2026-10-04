@@ -1338,3 +1338,18 @@ SW 离线回退会喂旧缓存页、用户不知要刷新）；账号面板里�
 **测试基建**：新增 `tests/csp-check.js`（`npm run test:csp`，自起 :8141 + 本机 Chrome）——静态断言查「头怎么写」、运行期断言查「真跑起来违不违规」，专门接住「CSP 两条坑都是静默坏」这种情况；另外 `phone-look.js` / `phone-use.js` 原先硬写 `spawn('python')`，本机 `python` 若是 Microsoft Store 别名会**挂着不报错**、把整条门禁卡死——改成与 `run-regression.js` 同款 `AT_PY` 解析并给探测加 3s 超时（正对审计「测试换机器就废」那条）；`phone-live.js` / `account-live-verify.js` / `run-v270-tests.js` 仍硬写，留待下一轮统一。
 **待办**：`frame-ancestors` 需服务器侧响应头才算真防点击劫持；审计项 1（拆单文件）/ 3（a11y 补 aria-label 与 :focus-visible，扫描报告见 `docs/a11y-扫描报告-v2.29.2.md`）未动。
 
+## v2.29.3（2026-10-05）a11y 改造：键盘焦点可见 + 可访问名称全覆盖（外部审计项 3）
+
+**背景**：审计扫描（`docs/a11y-扫描报告-v2.29.2.md`）点名三项：132 个 `<button>` 仅 13 个带 aria-label（9.8%）、40 个 `<input>` **0 个**带 aria-label（21 个只靠 placeholder 当标签，读屏不可靠）、主样式块 **0 条** `:focus-visible` 规则（键盘用户看不见焦点在哪）。本版由 opencode 起草补丁（三个一次性脚本，已归档），ZCode 接手复验收尾。**业务逻辑零变更**——全部是属性 / CSS / 弹层 role 的纯 a11y 增量。
+
+**四类改动（index.html，双入口同步）**
+- **① :focus-visible 全局规则**：键盘导航时焦点元素显示 2px accent 外圈（offset 2px），鼠标点击不闪（浏览器原生行为）；`.scrlbtn` / `.back` 用 offset 3px 防外圈贴边被裁。
+- **② 纯图标按钮 19 个补 aria-label**（← › × 这类没文字的，读屏读不到）：刷新列表、6 个弹窗关闭 ×、季度条左右滑、at270 系列弹窗 4 个关闭等。**有文字的按钮一律不加**——加 aria-label 会盖掉可见文字，是 a11y 改造最容易犯的错。
+- **③ 表单控件可访问名称**：非 radio 控件 35 个全部补 aria-label（input 30 + textarea 4 + select 1）；8 个 radio 经核验本就被 `<label>` 包住（隐式关联，首轮扫描器误报），未动。运行时一处：`uiDialog` 的 `#udInp` 的 label 是按 `o.title` 运行时拼的 h3，静态写死会错，故在创建后按 `o.input.aria || o.title` 赋值。
+- **④ 弹层语义 + 密码框**：4 个弹层（uiDlgMask / srcEditMask / srcToolsMask / syncMask）创建处设 `role=dialog` + `aria-modal=true`；2 个 password 框（cvSrcKey / at270AutoKey）`autocomplete=off` → `current-password`（off 会禁用浏览器密码管理器）。
+
+**门禁**：新增 `tests/a11y-check.js`（`npm run test:a11y`，7 项静态断言，**7/7 PASS**——T01 focus-visible / T02 图标按钮 19 个全带 label / T03 非 radio 控件 35 个全带 / T04 radio 8 个全被 label 包住 / T05 密码框 autocomplete / T06 4 弹层 role / T07 button aria-label 数 ≥24 基线）；全套复跑：`run-regression` **29/29**、`phone-look` **15 屏 PASS**（无出界 / 触点 ≥34px / 正文无 <11px）、`phone-use` **BAD 0 · MID 1**（唯一 MID 仍是「低频工具排在剧集列表前」旧取舍）、`tests/_syntax.js` 6 块 OK、双入口 SHA256 MATCH。
+**版本**：已发版——`python 发版.py 2.29.3` 六处同步，`AT_VERSION` / `AT_BUILD` = **2.29.3 / 20261005a**，SW 缓存名 `anitracker-v29-20261005a`，壳 **1.18（code 19）**、`package.json` 2.29.3。
+**工具件**：opencode 的三个一次性补丁脚本归档至 `_archive/a11y补丁脚本_20261005/`（a11y-patch.py 主补丁含逐处精确次数校验 / a11y-fix-slash.py 修正 `/ aria-label=` 脏写法 / a11y-patch2.py 收尾 seTO/seTC/udInp）；`a11y-check.js` 留 tests/ 常驻门禁。
+**待办**：审计项 1（拆单文件）未动；`frame-ancestors` 服务器侧响应头未动。
+

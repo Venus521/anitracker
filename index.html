@@ -591,6 +591,12 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
   .wrap{max-width:820px}
   .panel{max-width:680px}
 }
+
+/* a11y（审计项 3）：键盘焦点必须看得见。只在键盘导航时出现，鼠标点击不闪。 */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,
+a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scrlbtn:focus-visible,.back:focus-visible{outline-offset:3px}
 </style>
 
 <script>
@@ -615,7 +621,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     </div>
     <div class="frow">
       <div class="filter" id="filters"></div>
-      <input id="listQ" class="lq" type="search" placeholder="搜索片单…" autocomplete="off" oninput="setListQ(this.value)"/>
+      <input id="listQ" class="lq" type="search" placeholder="搜索片单…" autocomplete="off" oninput="setListQ(this.value)" aria-label="搜索片单"/>
     </div>
     <div class="srcbar" id="srcBar"></div>
     <div class="typerow" id="showTypeRow"></div>
@@ -648,7 +654,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div class="quickrow" style="padding:12px 16px">
       <button id="nextBtn" style="width:100%;background:none;border:none;font-size:14px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:8px"></button>
     </div>
-    <div class="searchrow2"><input id="qFilter" placeholder="按集标题/集号筛选…" oninput="renderGrid()"/></div>
+    <div class="searchrow2"><input id="qFilter" placeholder="按集标题/集号筛选…" oninput="renderGrid()" aria-label="按集标题或集号筛选"/></div>
     <div class="typerow" id="typeRow"></div>
     <div class="seclabel" style="font-size:12px;letter-spacing:2px;color:var(--muted);margin:12px 0 8px">剧集 EPISODES</div>
     <div id="dGroups"></div>
@@ -658,7 +664,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
   <div id="vAdd" style="display:none">
     <button class="back" onclick="backList()">← 返回</button>
     <div class="searchrow">
-      <input id="qKw" placeholder="搜索剧名（中文/英文都行 · 本地 + 全网）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doSearch();}"/>
+      <input id="qKw" placeholder="搜索剧名（中文/英文都行 · 本地 + 全网）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doSearch();}" aria-label="搜索剧名"/>
       <button onclick="doSearch()">搜索</button>
     </div>
     <div id="srMsg" class="msg"></div>
@@ -745,7 +751,7 @@ window.addEventListener('unhandledrejection',function(ev){ try{ atErr('Promise:'
    读屏软件读不到语境。统一走 .mask/.panel，带焦点圈定、Enter 提交、Esc 取消。 */
 function uiDialog(o){
   var old=document.getElementById('uiDlgMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='uiDlgMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='uiDlgMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label',o.title||'确认');
   var h='<h3 style="margin:0 0 8px">'+esc(o.title||'确认')+'</h3>';
   if(o.msg) h+='<div class="mini" style="white-space:pre-wrap;line-height:1.6">'+esc(o.msg)+'</div>';
@@ -758,6 +764,8 @@ function uiDialog(o){
   h+='<div class="msg" id="udMsg"></div><div class="row2" style="margin-top:12px"><button type="button" class="b2" id="udNo">'+esc(o.cancelText||'取消')+'</button><button type="button" class="b1" id="udYes">'+esc(o.okText||'确定')+'</button></div>';
   box.innerHTML=h; wrap.appendChild(box); document.body.appendChild(wrap);
   var inpEl=box.querySelector('#udInp'), fieldEls=[].slice.call(box.querySelectorAll('.udF')), done=false;
+  /* a11y：label 是运行时由 o.title 拼的 h3，静态写死会错，这里按标题赋值 */
+  try{ if(inpEl) inpEl.setAttribute('aria-label', o.input.aria||o.title||'输入框'); }catch(x){}
   function dlgVal(){ if(inpEl) return inpEl.value.trim();
     if(fieldEls.length){ var v={}; fieldEls.forEach(function(el){ v[el.getAttribute('data-fid')]=el.value.trim(); }); return v; }
     return null; }
@@ -1074,7 +1082,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.29.2', AT_BUILD='20261004a';
+var AT_VERSION='2.29.3', AT_BUILD='20261005a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1571,12 +1579,12 @@ function renderInternalLib(){
   /* v2.14.0b 片内搜索框只作用于「我的片单」，浏览内置库时隐藏 */
   var _lqh=document.getElementById('listQ'); if(_lqh) _lqh.style.display='none';
   var _sb0=document.getElementById('srcBar'); if(_sb0) _sb0.style.display='none';
-  document.querySelector('.top').innerHTML='<div class="brand">追迹<small>ANITRACKER 库</small></div><button class="topbtn" onclick="renderList()">←</button>';
+  document.querySelector('.top').innerHTML='<div class="brand">追迹<small>ANITRACKER 库</small></div><button class="topbtn" onclick="renderList()" aria-label="刷新列表">←</button>';
   var fe=document.getElementById('filters');
   if(!document.getElementById('libQ')){
     var sr=document.createElement('div');
     sr.className='searchrow2';
-    sr.innerHTML='<input id="libQ" placeholder="搜番名 / 英文名 / 集名…" oninput="libQInput()"/>';
+    sr.innerHTML='<input id="libQ" placeholder="搜番名 / 英文名 / 集名…" oninput="libQInput()" aria-label="搜索片库"/>';
     fe.parentNode.insertBefore(sr, fe);
     var hr=document.createElement('div');
     hr.className='histrow'; hr.id='libHist';
@@ -3201,19 +3209,19 @@ function editSrc(epNum){
   if(!e){ toast('找不到该集'); return; }
   var inf=srcInfoOf(s,e);
   var old=document.getElementById('srcEditMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='srcEditMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='srcEditMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel';
   var opts=[['canon','漫改'],['filler','TV原创'],['semi','半原创'],['unknown','待核']];
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 '+e.s+' 集 · 来源标注</h3>'+
-    '<button onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<button onclick="__closeSrcEdit()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">当前：<b style="color:var(--ink)">'+esc(srcDisplayName(inf.src))+'</b> · 依据：'+esc(srcByText(inf.by))+(inf.note?(' · '+esc(inf.note)):'')+(inf.by==='ai'?' · <span style="color:var(--accent)">AI 导入</span>':(e.src?' · <span style="color:var(--accent)">人工标注</span>':''))+'</div>'+
     '<div class="srcopts" id="seOps">'+opts.map(function(o){
       var on=((e.src&&e.src===o[0])||(!e.src&&inf.src===o[0]&&o[0]!=='unknown')||(!e.src&&inf.src==='unknown'&&o[0]==='unknown'));
       return '<button class="srcopt'+(on?' on':'')+'" onclick="__pickSe(this,\''+o[0]+'\')">'+o[1]+'</button>';
     }).join('')+'</div>'+
     '<div class="rangeline">应用范围：<label><input type="radio" name="seSc" value="one" checked/> 仅此集</label>'+
-    '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="'+e.s+'"/> 至 <input id="seB" type="number" min="1" value="'+e.s+'"/> 集</label></div>'+
-    '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="'+esc(e.srcNote||'')+'"/>'+
+    '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="'+e.s+'" aria-label="起始集号"/> 至 <input id="seB" type="number" min="1" value="'+e.s+'" aria-label="结束集号"/> 集</label></div>'+
+    '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="'+esc(e.srcNote||'')+'" aria-label="来源备注"/>'+
     '<div class="msg" id="seMsg"></div>'+
     '<div class="row2"><button class="b2" onclick="__closeSrcEdit()">取消</button><button class="b1" id="seSave">保存标注</button></div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -3249,11 +3257,11 @@ function showSrcTools(){
   var s=bySid(curSid); if(!s) return;
   var st=statOf(s);
   var old=document.getElementById('srcToolsMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='srcToolsMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='srcToolsMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel';
   var epsN=(s.eps||[]).length||1;
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">来源标注工具</h3>'+
-    '<button onclick="__closeSrcTools()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<button onclick="__closeSrcTools()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">《'+esc(s.title)+'》当前覆盖：<b style="color:var(--ink)">'+esc(srcCovLine(st.cov))+'</b></div>'+
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">① AI 结果导入</b>（v2.9.0）：自动库查不到的新番/冷门番，把 AI 的回答原文贴进来即可自动识别。优先级最高，覆盖自动查到的。</div>'+
@@ -3261,9 +3269,9 @@ function showSrcTools(){
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">② 批量套用标签</b>（适合整部忠实原作的番）：</div>'+
     '<div class="rangeline">范围：<label><input type="radio" name="stSc" value="unknown" checked/> 仅待核集</label><label><input type="radio" name="stSc" value="all"/> 整部</label>'+
-    '<label><input type="radio" name="stSc" value="range"/> 第 <input id="stA" type="number" min="1" value="1"/> 至 <input id="stB" type="number" min="1" value="'+epsN+'"/> 集</label></div>'+
+    '<label><input type="radio" name="stSc" value="range"/> 第 <input id="stA" type="number" min="1" value="1" aria-label="起始集号"/> 至 <input id="stB" type="number" min="1" value="'+epsN+'" aria-label="结束集号"/> 集</label></div>'+
     '<div class="srcopts" id="stOps">'+['canon','filler','semi'].map(function(k){ return '<button class="srcopt" onclick="__pickSt(this,\''+k+'\')">'+TYPE_NAME[k]+'</button>'; }).join('')+'</div>'+
-    '<label>备注（可选）</label><input id="stNote" placeholder="如：整部基本忠于原作"/>'+
+    '<label>备注（可选）</label><input id="stNote" placeholder="如：整部基本忠于原作" aria-label="来源备注"/>'+
     '<div class="msg" id="stMsg"></div>'+
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">③ 联网查证</b>（公开分集资料，逐集核对后可手动标注）：</div>'+
@@ -3674,7 +3682,7 @@ function pickCover(){
       '<button type="button" class="sybtn" id="cvPick" style="flex:1">选择图片文件</button>' +
       '<button type="button" class="sybtn" id="cvClear" style="flex:0 0 auto">清除封面</button>' +
     '</div>' +
-    '<input type="file" id="cvFile" accept="image/*" style="display:none"/>' +
+    '<input type="file" id="cvFile" accept="image/*" style="display:none" aria-label="选择本机封面图片"/>' +
     '<div id="cvDrop" style="margin-top:12px;border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7">' +
       '把图片拖到这里，或按 Ctrl+V 粘贴<br><span style="color:var(--muted)">（截图、网页里另存的图都行）</span></div>' +
     '<div id="cvPrev" class="aiflow"></div>' +
@@ -3872,7 +3880,7 @@ function renderParts(){
   var parts=s.parts||[];
   if(parts.length<2){ box.innerHTML=''; return; }
   var cur=s.curPart||parts[0].key;
-  box.innerHTML='<div class="parthead"><span>季度切换</span><span style="display:flex;gap:8px;align-items:center"><button class="scrlbtn" id="pScrl" onclick="scrollParts(-1)" title="往前滑看更多季度">‹</button><button class="scrlbtn" id="pScrr" onclick="scrollParts(1)" title="往后滑看更多季度">›</button></span>'+
+  box.innerHTML='<div class="parthead"><span>季度切换</span><span style="display:flex;gap:8px;align-items:center"><button class="scrlbtn" id="pScrl" onclick="scrollParts(-1)" title="往前滑看更多季度" aria-label="往前滑看更多季度">‹</button><button class="scrlbtn" id="pScrr" onclick="scrollParts(1)" title="往后滑看更多季度" aria-label="往后滑看更多季度">›</button></span>'+
       '</div>'+
     '<div class="partrow" onscroll="updateScrollBtns()">'+parts.map(function(p){
       var on=String(p.key)===String(cur);
@@ -4045,16 +4053,16 @@ function importDoubanFile(box,ev){
    底部一行「本地备份：导出 · 导入」 + 版本行。状态条/卡片套壳/完成按钮全删。 */
 async function openAccount(focus){
   var old=document.getElementById('syncMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel';
-  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">账号</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">账号</h3><button onclick="window.__closeSync()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div id="cbArea"><div class="mini" style="color:var(--muted)">…</div></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">本地备份</span>'+
       '<button type="button" class="lnk" id="syExport">导出</button><span class="sep">·</span>'+
       '<button type="button" class="lnk" id="syImport">导入</button></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">封面来源</span>'+
       '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥（可选）…</button></div>'+
-    '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
+    '<input type="file" id="syFile" accept=".json" style="display:none" aria-label="选择要导入的备份文件"/>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
   function escClose(e){ if(e.key==='Escape') window.__closeSync(); }
@@ -4140,7 +4148,7 @@ function openCoverSrc(){
     '<button type="button" id="cvSrcX" aria-label="关闭" style="background:none;border:none;font-size:20px;line-height:1.2;color:var(--muted);padding:2px 4px">×</button></div>'+
     '<p class="aihint">封面抓取<b style="color:var(--ink)">全自动、无需任何密钥</b>：国产剧/中文剧由豆瓣云函数按剧名抓图（覆盖最全），海外剧与动画走 TVMaze / AniList / Wikidata（均免 key）。</p>'+
     '<label style="margin:0">TMDB API Key（可选进阶，只存本机；导出备份 / 云同步会自动剔除）</label>'+
-    '<input id="cvSrcKey" type="password" placeholder="不配也完全不影响使用" autocomplete="off" style="caret-color:var(--accent)"/>'+
+    '<input id="cvSrcKey" type="password" placeholder="不配也完全不影响使用" autocomplete="current-password" style="caret-color:var(--accent)" aria-label="云同步密钥"/>'+
     '<div class="msg" id="cvSrcMsg"></div>'+
     '<div class="row2" style="margin-top:2px"><button type="button" class="b1" id="cvSrcSave" style="flex:1">保存</button>'+
     '<button type="button" class="b2" id="cvSrcClear" style="flex:0 0 auto">清除</button></div>'+
@@ -4506,13 +4514,13 @@ setTimeout(function(){
     var old = $('at270AddMask'); if (old) old.remove();
     var wrap = makeEl(
       '<div id="at270AddMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">手动添加番剧</h3><button type="button" id="at270AddX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">手动添加番剧</h3><button type="button" id="at270AddX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">本地添加，无需网络。建议同时填写「原文名」；别名支持一行一条，可写「台译: 航海王」这样的类型前缀。</div>' +
-      '<label>中文名（必填）</label><input id="at270AddTitle" placeholder="如：海贼王" style="caret-color:var(--accent)"/>' +
-      '<label>原文名（可选）</label><input id="at270AddJp" placeholder="如：ONE PIECE / ワンピース" />' +
-      '<label>别名（可选，每行一条）</label><textarea id="at270AddAlias" rows="3" placeholder="台译: 航海王\n罗马字: ONE PIECE\n简称: 海贼"></textarea>' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label>年份（可选）</label><input id="at270AddYear" placeholder="1999"/></div>' +
-      '<div style="flex:1"><label>总集数（可留空，之后可改）</label><input id="at270AddTotal" inputmode="numeric" placeholder="1168"/></div></div>' +
+      '<label>中文名（必填）</label><input id="at270AddTitle" placeholder="如：海贼王" style="caret-color:var(--accent)" aria-label="标题"/>' +
+      '<label>原文名（可选）</label><input id="at270AddJp" placeholder="如：ONE PIECE / ワンピース"  aria-label="原文名"/>' +
+      '<label>别名（可选，每行一条）</label><textarea id="at270AddAlias" rows="3" placeholder="台译: 航海王\n罗马字: ONE PIECE\n简称: 海贼" aria-label="别名（每行一条）"></textarea>' +
+      '<div style="display:flex;gap:12px"><div style="flex:1"><label>年份（可选）</label><input id="at270AddYear" placeholder="1999" aria-label="年份"/></div>' +
+      '<div style="flex:1"><label>总集数（可留空，之后可改）</label><input id="at270AddTotal" inputmode="numeric" placeholder="1168" aria-label="总集数"/></div></div>' +
       '<div class="msg" id="at270AddMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" id="at270AddCancel">取消</button><button type="button" class="b1" id="at270AddSave">保存并加入片单</button></div>' +
       '</div></div>');
@@ -4593,19 +4601,19 @@ setTimeout(function(){
     var opts = [['canon', '漫改'], ['filler', 'TV原创'], ['semi', '半原创'], ['unknown', '待核']];
     box.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 ' + e.s + ' 集 · 编辑</h3>' +
-      '<button type="button" onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<button type="button" onclick="__closeSrcEdit()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">当前：<b style="color:var(--ink)">' + esc(srcDisplayName(inf.src)) + '</b> · 依据：' + esc(srcByText(inf.by)) + (inf.note ? (' · ' + esc(inf.note)) : '') + (inf.by === 'ai' ? ' · <span style="color:var(--accent)">AI 导入</span>' : (e.src ? ' · <span style="color:var(--accent)">人工标注</span>' : '')) + '</div>' +
       '<div class="srcopts" id="seOps">' + opts.map(function (o) {
         var on = ((e.src && e.src === o[0]) || (!e.src && inf.src === o[0] && o[0] !== 'unknown') || (!e.src && inf.src === 'unknown' && o[0] === 'unknown'));
         return '<button type="button" class="srcopt' + (on ? ' on' : '') + '" onclick="__pickSe(this,\'' + o[0] + '\')">' + o[1] + '</button>';
       }).join('') + '</div>' +
       '<div class="rangeline">应用范围：<label><input type="radio" name="seSc" value="one" checked/> 仅此集</label>' +
-      '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="' + e.s + '"/> 至 <input id="seB" type="number" min="1" value="' + e.s + '"/> 集</label></div>' +
-      '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="' + esc(e.srcNote || '') + '"/>' +
+      '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="' + e.s + '" aria-label="起始集号"/> 至 <input id="seB" type="number" min="1" value="' + e.s + '" aria-label="结束集号"/> 集</label></div>' +
+      '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="' + esc(e.srcNote || '') + '" aria-label="来源备注"/>' +
       '<div class="divi"></div>' +
       '<div class="mini"><b style="color:var(--ink)">集名（双语）</b>：左原文、右中文；只作用于本集，列表会同时显示两种写法。</div>' +
-      '<label>原文名</label><input id="seTO" placeholder="如：麦わらの一味！" value="' + esc(e.tOrig || '') + '"/>' +
-      '<label>中文名</label><input id="seTC" placeholder="如：草帽一伙！" value="' + esc(e.tCn || '') + '"/>' +
+      '<label>原文名</label><input id="seTO" aria-label="原文名" placeholder="如：麦わらの一味！" value="' + esc(e.tOrig || '') + '"/>' +
+      '<label>中文名</label><input id="seTC" aria-label="中文名" placeholder="如：草帽一伙！" value="' + esc(e.tCn || '') + '"/>' +
       '<div class="msg" id="seMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" onclick="__closeSrcEdit()">取消</button><button type="button" class="b1" id="seSave">保存</button></div>';
     wrap.appendChild(box); document.body.appendChild(wrap);
@@ -4848,12 +4856,12 @@ setTimeout(function(){
     if (s.pv) { toast('预览模式：先加入片单再编辑'); return; }
     closeM('at270ProfMask');
     var wrap = makeEl('<div id="at270ProfMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">编辑资料</h3><button type="button" id="at270ProfX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">编辑资料</h3><button type="button" id="at270ProfX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">剧名建议：中文名 + 原文名各一栏；别名一行一条，可写「台译: 航海王」「罗马字: ONE PIECE」。</div>' +
-      '<label>中文名</label><input id="at270ProfTitle" value="' + esc(s.title || '') + '"/>' +
-      '<label>原文名</label><input id="at270ProfJp" value="' + esc(s.nameJp || '') + '"/>' +
-      '<label>别名（每行一条）</label><textarea id="at270ProfAlias" rows="4">' + esc((s.aliases || []).join('\n')) + '</textarea>' +
-      '<label>年份</label><input id="at270ProfYear" value="' + esc(s.year || '') + '"/>' +
+      '<label>中文名</label><input id="at270ProfTitle" value="' + esc(s.title || '') + '" aria-label="标题"/>' +
+      '<label>原文名</label><input id="at270ProfJp" value="' + esc(s.nameJp || '') + '" aria-label="原文名"/>' +
+      '<label>别名（每行一条）</label><textarea id="at270ProfAlias" rows="4" aria-label="别名（每行一条）">' + esc((s.aliases || []).join('\n')) + '</textarea>' +
+      '<label>年份</label><input id="at270ProfYear" value="' + esc(s.year || '') + '" aria-label="年份"/>' +
       '<div class="msg" id="at270ProfMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" id="at270ProfCancel">取消</button><button type="button" class="b1" id="at270ProfSave">保存</button></div>' +
       '</div></div>');
@@ -4894,13 +4902,13 @@ setTimeout(function(){
     AT270._relPick = null;
     closeM('at270RelMask');
     var wrap = makeEl('<div id="at270RelMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">添加关联条目</h3><button type="button" id="at270RelX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">添加关联条目</h3><button type="button" id="at270RelX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">为《' + esc(s.title) + '》建立双向关联：原作 / 续作 / 同系列 / 联动。在输入框里从联想列表选择目标条目。</div>' +
       '<label>关联类型</label><div class="rangeline" id="at270RelTypes">' +
       ['原作', '续作', '同系列', '联动', '其他'].map(function (t, i) {
         return '<label><input type="radio" name="at270RelT" value="' + t + '"' + (i === 0 ? ' checked' : '') + '/> ' + t + '</label>';
       }).join('') + '</div>' +
-      '<label>目标条目（从联想中选择）</label><input id="at270RelKw" placeholder="输入名称，出现候选后点选" style="caret-color:var(--accent)"/>' +
+      '<label>目标条目（从联想中选择）</label><input id="at270RelKw" placeholder="输入名称，出现候选后点选" style="caret-color:var(--accent)" aria-label="关联条目名称搜索"/>' +
       '<div class="msg" id="at270RelMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" id="at270RelCancel">取消</button><button type="button" class="b1" id="at270RelSave">建立关联</button></div>' +
       '</div></div>');
@@ -4997,7 +5005,7 @@ setTimeout(function(){
     var topUnknown = a.bySeries.slice().sort(function (x, y) { return (y.cov ? y.cov.unknown : 0) - (x.cov ? x.cov.unknown : 0); }).slice(0, 5);
     var topTrans = a.bySeries.slice().sort(function (x, y) { return (y.missingOrig + y.missingCn) - (x.missingOrig + x.missingCn); }).slice(0, 5);
     var wrap = makeEl('<div id="at270QualMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">数据质量</h3><button type="button" id="at270QX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">数据质量</h3><button type="button" id="at270QX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">片单 ' + a.series + ' 部 · 剧集 ' + a.eps + ' 条（含剧集数据 ' + a.withEps + ' 部）· Filler 数据版本 ' + SNAP + '</div>' +
       '<div class="statgrid" style="margin-top:12px">' +
       '<div class="stat"><b>' + a.cov.canon + '</b><span>漫改</span></div>' +
@@ -5349,7 +5357,7 @@ setTimeout(function(){
         '<button type="button" id="at270AiX" aria-label="关闭" style="background:none;border:none;font-size:20px;line-height:1.2;color:var(--muted);padding:2px 4px">×</button>' +
       '</div>' +
       '<p class="aihint">把 AI 对《' + esc(s.title) + '》原创集的回答<b style="color:var(--ink)">整段贴进来</b>，自动认集号，不用整理格式。</p>' +
-      '<textarea id="at270AiText" class="aibox" placeholder="例：1-10集漫改，11-15集TV原创，16集半原创" >' + esc(prev && prev.raw || '') + '</textarea>' +
+      '<textarea id="at270AiText" class="aibox" placeholder="例：1-10集漫改，11-15集TV原创，16集半原创"  aria-label="AI 分集描述原文">' + esc(prev && prev.raw || '') + '</textarea>' +
       '<div style="display:flex;gap:8px;margin-top:12px">' +
         '<button type="button" class="sybtn" id="at270AiHelp" style="flex:1">复制提问给 AI</button>' +
         (prev ? '<button type="button" class="sybtn" id="at270AiClear">清除已存结果</button>' : '') +
@@ -5917,7 +5925,7 @@ setTimeout(function(){
         '复制下面这段固定格式发给任意 AI，回答<b style="color:var(--ink)">整段贴回来</b>，' +
         '就能建成整条条目：分季、双语集名、来源角标一次到位。</p>') +
       (upd ? '' : '<label>剧名（只为了生成提问，可留空）</label>' +
-        '<input id="at270StdName" placeholder="如：老友记" style="caret-color:var(--accent)"/>') +
+        '<input id="at270StdName" placeholder="如：老友记" style="caret-color:var(--accent)" aria-label="番剧名称"/>') +
       /* v2.19.1：搜索一条都没有时直接把关键词带进来（用户指令「别让我再点一次进去」） */
       '<div style="display:flex;gap:8px;margin-top:12px">' +
         '<button type="button" class="sybtn" id="at270StdAsk" style="flex:1">复制提问给 AI</button>' +
@@ -5932,15 +5940,15 @@ setTimeout(function(){
         '<summary style="cursor:pointer;color:var(--muted)">⚙ 自动模式（可选）：填一次 API key，搜不到时自动问 AI</summary>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">' +
         '<label style="margin:0">服务商</label>' +
-        '<select id="at270AutoProv">' + AI_PROVIDERS.map(function (p) {
+        '<select id="at270AutoProv" aria-label="AI 服务商">' + AI_PROVIDERS.map(function (p) {
           return '<option value="' + p.id + '">' + esc(p.n) + '</option>';
         }).join('') + '</select>' +
         '<label style="margin:0">模型</label>' +
-        '<input id="at270AutoModel" placeholder="如 deepseek-chat" style="caret-color:var(--accent)"/>' +
+        '<input id="at270AutoModel" placeholder="如 deepseek-chat" style="caret-color:var(--accent)" aria-label="模型"/>' +
         '<label style="margin:0">接口地址（OpenAI 兼容 /chat/completions）</label>' +
-        '<input id="at270AutoBase" placeholder="https://api.deepseek.com/chat/completions" style="caret-color:var(--accent)"/>' +
+        '<input id="at270AutoBase" placeholder="https://api.deepseek.com/chat/completions" style="caret-color:var(--accent)" aria-label="接口地址"/>' +
         '<label style="margin:0">API Key（只存本机；导出备份 / 云同步会自动剔除）</label>' +
-        '<input id="at270AutoKey" type="password" placeholder="sk-…" autocomplete="off" style="caret-color:var(--accent)"/>' +
+        '<input id="at270AutoKey" type="password" placeholder="sk-…" autocomplete="current-password" style="caret-color:var(--accent)" aria-label="API 密钥"/>' +
         '<div class="msg" id="at270AutoMsg"></div>' +
         '<div class="row2" style="margin-top:2px">' +
         '<button type="button" class="b2" id="at270AutoSave" style="flex:1">保存</button>' +
@@ -5952,7 +5960,7 @@ setTimeout(function(){
         /* 触屏可点区 ≥38px（批次R 立的规矩：20~30px 的按钮拇指按不中就等于功能不存在） */
         '<button type="button" id="at270StdClr" style="background:none;border:none;font-size:12px;line-height:1;color:var(--muted);padding:12px 8px;min-height:38px;border-radius:8px">清空</button>' +
       '</div>' +
-      '<textarea id="at270StdText" class="aibox" placeholder="名称: 老友记&#10;原文: Friends&#10;产地: 美国&#10;年份: 1994&#10;类型: 真人剧&#10;总集数: 236&#10;S01E01 初来乍到 | The One Where Monica Gets a Roommate">' +
+      '<textarea id="at270StdText" class="aibox" placeholder="名称: 老友记&#10;原文: Friends&#10;产地: 美国&#10;年份: 1994&#10;类型: 真人剧&#10;总集数: 236&#10;S01E01 初来乍到 | The One Where Monica Gets a Roommate" aria-label="AI 标准格式原文">' +
         esc(drafts[dKey] || '') + '</textarea>' +
       '<div id="at270StdPrev" class="aiflow"></div>' +
       '<div class="msg" id="at270StdMsg"></div>' +

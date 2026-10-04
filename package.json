@@ -1,6 +1,6 @@
 {
   "name": "anitracker",
-  "version": "2.29.2",
+  "version": "2.29.3",
   "description": "番剧追记 PWA",
   "homepage": "https://venus521.github.io/anitracker/",
   "private": true,
@@ -16,6 +16,7 @@
     "test:phone-look": "node tests/phone-look.js",
     "test:phone-use": "node tests/phone-use.js",
     "test:cloud-entry": "node tests/cloud-entry-check.js",
+    "test:a11y": "node tests/a11y-check.js",
     "test:csp": "node tests/csp-check.js"
   },
   "dependencies": {

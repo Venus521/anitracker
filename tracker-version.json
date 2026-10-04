@@ -1,7 +1,7 @@
 {
   "app": "anitracker",
-  "version": "2.29.2",
-  "build": "20261004a",
-  "note": "v2.29.2 安全头(CSP/Referrer-Policy/X-Content-Type-Options) + 错误网关(去重/阈值/汇总) + 版本单一源对账（外部审计项 2/4/10）",
-  "ts": 1791116448507
+  "version": "2.29.3",
+  "build": "20261005a",
+  "note": "a11y 改造：键盘焦点可见 + 可访问名称全覆盖（审计项 3）",
+  "ts": 1791137798459
 }
