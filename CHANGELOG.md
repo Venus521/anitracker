@@ -1311,3 +1311,30 @@ SW 离线回退会喂旧缓存页、用户不知要刷新）；账号面板里�
 
 **门禁**：`run-regression` 29/29、`phone-look` 15 屏 PASS、双入口 MATCH。
 **版本**：`AT_VERSION` 2.29.0 → **2.29.1**、`AT_BUILD` 20261003a → **20261003b**（SW 缓存名随 build 推进 `anitracker-v29-20261003a` → `anitracker-v29-20261003b`，避免同 2.29.0 撞名）、`build-apk.py` VERSION_CODE 15 → 16 → 17（壳本体未变，纯走线）、`package.json`/`tracker-version.json` 经 `发版.py` 同步。
+
+## v2.29.2（2026-10-04）安全头落地 + 错误网关收口（外部审计项 2 / 4 / 10）
+
+**背景**：外部审计《AniTracker 追迹 项目缺点审计报告》点名「HTML 头里任何安全相关 meta/header 都没有」「60 处 innerHTML 写入 = XSS 攻击面」「130 处 try/catch 多为吞错」「版本 4 处来源彼此漂移」。本版落地安全头（按审计**方案 A「最小暴露」**）并把 `at_errlog` 升级为有去重、有当日计数、有汇总入口的错误网关，另补版本单一源的两处对账。**追记主链路零逻辑改动。**
+
+**① 安全头（index.html / ani-tracker.html 头部）**
+- 基础 CSP：`default-src 'self'`、`script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudbase.net`（单文件内联脚本架构，拆单文件后才可能去掉 'unsafe-inline' 改 nonce；`vendor/cloudbase.full.js` 的 CDN 兜底 onerror 依赖这条；**`'wasm-unsafe-eval'` 不能省——见下条**）、`style-src 'self' 'unsafe-inline'`、`img-src 'self' data: blob: https:`（TMDB 外链封面 + 豆瓣小图 + 本地 dataURL 封面）、`object-src 'none'`、`form-action 'self'`、`base-uri 'self'`、`frame-src 'none'`、`worker-src 'self' blob:`。
+- **`connect-src` 必须写 `*`（本版最关键的取舍，写错当场废功能）**：AI 供应商 base 由用户自填（`at_ai_cfg`；预设 deepseek / 智谱 GLM / Kimi / 千问 DashScope / 硅基流动，还可能是 `http://192.168.x.x:11434` 这类本地 Ollama），而 `aiAutoAsk()` 是**直连 `fetch(c.base)`**。CSP 无法动态放行用户自填域名——写成域名白名单会当场拦死「问 AI 加片」。故 connect-src 显式 `*`，XSS 面靠 script-src / object-src / form-action / base-uri 兜。
+- **`frame-ancestors` 不写进 meta**：该指令**只在 HTTP 响应头生效**，写在 `<meta>` 里等于空转——留个假保护比没有更糟。防点击劫持待服务器侧（`服务器-空闲自退.py`）或托管平台响应头补，注释里已记这一笔。
+- **两条隐藏坑（puppeteer 探针实测：写错不报错、只是功能坏）**：① 域名白名单会当场拦死 AI 直连；② `script-src` 少了 `'wasm-unsafe-eval'` 会**静默**拦掉 `vendor/cloudbase.full.js`（CloudBase SDK）的 WebAssembly 编译（实测违规 `script-src :: wasm-eval`，账号云同步链路会被拖下水）。探针逐项验证结果：`https://api.deepseek.com` 真连上（HTTP 401 = 无 key，非拦截）、本地 `http://127.0.0.1:11434` 与任意自定义端点为网络层失败而非 CSP 拦截、**CSP 违规 0 条 / 控制台 CSP 告警 0 条 / 页面错误 0 条**。
+- `Referrer-Policy: strict-origin-when-cross-origin` + `X-Content-Type-Options: nosniff`。
+
+**② 错误网关（审计项 10）**
+- `atErr()` 加同源 60s 去重：同一 where 一分钟只记 1 条，死循环不再淹没 100 条环形日志；
+- 60s 内 ≥5 个**不同**来源报错 → 置 `at_unhealthy`（带时间戳），供账号面板 / CI 轮询；
+- 新增 `at_errlog_today` 当日计数；
+- 新增 `window.atErrSummary()`：返回 `{todayCount, totalLen, unhealthySince, topSources}`（top5 按次数排序）。
+
+**③ 版本单一源（审计项 4）**
+- 启动期 `_atVersionCheck()` 拉 `tracker-version.json` 与页面 `AT_VERSION/AT_BUILD` 对账，不一致记 `at_errlog`（`version-mismatch`）并派发 `at-version-json` 事件；
+- `发版.py --check` 补「sw 缓存 build == AT_BUILD」一项——此前只校验缓存序号 vNN 与次版本，**build 漂移查不出来**，正是审计里「版本多来源彼此漂移」的漏点；`tracker-sw.js` 头部注释声称的 assert 至此名副其实。
+
+**门禁**：`run-regression` **29/29**（含 T18 全程无页面级 JS 错误——CSP 未拦任何被覆盖路径）、`phone-look` **PASS**（15 屏无出界 / 触点全部 ≥34px / 页面报错：无）、`phone-use` **BAD 0 · MID 1**（唯一 MID 是「低频工具排在剧集列表前」的旧排版取舍，与本版无关）、`tests/_syntax.js` 6 块全 OK、`发版.py --check` 全部一致 ✓、双入口 SHA256 MATCH（3f60d04d）、新增 `csp-check` **12/12 PASS**（**做过负向测试**：把 connect-src 写回域名白名单 + 删掉 `'wasm-unsafe-eval'` 时必红，实测报出 `connect-src :: https://api.deepseek.com/…` 与 `connect-src :: http://127.0.0.1:11434/…`——门禁真拦得住，不是摆设）。
+**版本**：`AT_VERSION` / `AT_BUILD` 仍为 **2.29.1 / 20261003b**——**本版尚未发版**，推进需跑 `python 发版.py 2.29.2 --note "…"`（六处同步 + 双入口）。SW 缓存名本次未动；`index.html` / `ani-tracker.html` 在 SW 里是 **network-first**，联网客户端下次打开即拿到新页面，无需等缓存名换。
+**测试基建**：新增 `tests/csp-check.js`（`npm run test:csp`，自起 :8141 + 本机 Chrome）——静态断言查「头怎么写」、运行期断言查「真跑起来违不违规」，专门接住「CSP 两条坑都是静默坏」这种情况；另外 `phone-look.js` / `phone-use.js` 原先硬写 `spawn('python')`，本机 `python` 若是 Microsoft Store 别名会**挂着不报错**、把整条门禁卡死——改成与 `run-regression.js` 同款 `AT_PY` 解析并给探测加 3s 超时（正对审计「测试换机器就废」那条）；`phone-live.js` / `account-live-verify.js` / `run-v270-tests.js` 仍硬写，留待下一轮统一。
+**待办**：`frame-ancestors` 需服务器侧响应头才算真防点击劫持；审计项 1（拆单文件）/ 3（a11y 补 aria-label 与 :focus-visible，扫描报告见 `docs/a11y-扫描报告-v2.29.2.md`）未动。
+

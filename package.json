@@ -15,7 +15,8 @@
     "test:register-e2e": "node tests/register-e2e.js",
     "test:phone-look": "node tests/phone-look.js",
     "test:phone-use": "node tests/phone-use.js",
-    "test:cloud-entry": "node tests/cloud-entry-check.js"
+    "test:cloud-entry": "node tests/cloud-entry-check.js",
+    "test:csp": "node tests/csp-check.js"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"

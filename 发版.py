@@ -66,6 +66,7 @@ def check_state(s, want_ver=None):
     ok = []
     ok.append(('index AT_VERSION/AT_BUILD', True))
     ok.append(('sw 缓存 vNN 与次版本一致', s['cache_n'] == minor))
+    ok.append(('sw 缓存 build 与 AT_BUILD 一致', s['cache_build'] == s['build']))
     ok.append(('tracker-version.json 一致', s['tv']['version'] == s['ver'] and s['tv']['build'] == s['build']))
     ok.append(('package.json 一致', s['pkg'] == s['ver']))
     ok.append(('壳 VERSION_CODE/NAME 存在', s['code'] > 0 and bool(s['shell'])))

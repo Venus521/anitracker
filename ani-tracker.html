@@ -3,6 +3,21 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<!-- v2.29.2 安全头：基础 CSP + Referrer-Policy。
+     注：当前为单文件内联脚本架构，script-src 必须保留 'unsafe-inline'。
+     拆单文件（项 1）落地后可去掉 'unsafe-inline' 并改用 nonce。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudbase.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src *; frame-src 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self' blob:;"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
+<meta http-equiv="X-Content-Type-Options" content="nosniff"/>
+<!-- v2.29.2 安全头收口（审计项 2 · 方案 A「最小暴露」）：
+     1) connect-src 用 * 而不是域名白名单——AI 供应商 base 由用户自填（at_ai_cfg；预设 deepseek/智谱/Kimi/千问/硅基流动，
+        还可能是 http://192.168.x.x:11434 这类本地 Ollama），CSP 无法动态放行任意域名，
+        写成白名单会当场拦死「问 AI 加片」自动路（AI_PROVIDERS 直连 fetch）。
+     2) frame-ancestors 只在 HTTP 响应头生效，写在 meta 里等于空转，已移除；
+        防点击劫持要服务器侧加头（见 服务器-空闲自退.py / 托管平台响应头配置）。
+     3) 仍起作用的是 script-src / object-src / form-action / base-uri / frame-src——XSS 面主要靠这几条。
+     4) script-src 必须留 'wasm-unsafe-eval'：vendor/cloudbase.full.js（CloudBase SDK）会做 WebAssembly 编译，
+        少了这一项账号云同步链路会被 CSP 静默拦掉（探针实测违规 script-src :: wasm-eval，页面不报错、只是功能坏）。 -->
 <title>追迹 · AniTracker</title>
 <link rel="manifest" href="tracker-manifest.webmanifest"/>
 <link rel="icon" type="image/png" sizes="512x512" href="tracker-icon-512.png"/>
@@ -686,12 +701,43 @@ window.addEventListener('resize',fabSync);
    账号面板「同步日志」下方可查看；同步/保存链路的空 catch 全部接进来。 */
 function atErr(where,e){
   try{ var L=rd('at_errlog',[]); if(!Array.isArray(L)) L=[];
-    L.push({t:Date.now(),w:String(where||''),m:String((e&&(e.message||e))||'').slice(0,300)});
-    if(L.length>100) L=L.slice(-100);
-    localStorage.setItem('at_errlog',JSON.stringify(L));
+    var wkey=String(where||'');
+    var now=Date.now();
+    /* v2.29.2 去重抑制：同一 where 在 60s 内只记 1 条,死循环也不会淹没 100 条环形日志 */
+    var last=L[L.length-1];
+    if(!(last&&last.w===wkey&&now-(last.t||0)<60000)){
+      L.push({t:now,w:wkey,m:String((e&&(e.message||e))||'').slice(0,300)});
+      if(L.length>100) L=L.slice(-100);
+      localStorage.setItem('at_errlog',JSON.stringify(L));
+    }
+    /* v2.29.2 当日快统：60s 内 ≥5 个不同源报错则置 at_unhealthy=1（CI/账号面板可轮询） */
+    window.__atErrWindow=window.__atErrWindow||[];
+    var win=window.__atErrWindow;
+    win.push({t:now,w:wkey});
+    win=win.filter(function(x){ return now-x.t<60000; });
+    window.__atErrWindow=win;
+    var uniq={}; win.forEach(function(x){ uniq[x.w]=1; });
+    var n=Object.keys(uniq).length;
+    if(n>=5){ try{ localStorage.setItem('at_unhealthy',String(now)); }catch(x){} }
+    try{ rd('at_errlog_today',{d:'',c:0}); var td=new Date().toISOString().slice(0,10);
+      var T=rd('at_errlog_today',{d:td,c:0});
+      if(T.d!==td){ T={d:td,c:1}; } else { T.c=(T.c||0)+1; }
+      wr('at_errlog_today',T);
+    }catch(x){}
   }catch(x){}
   try{ console.warn('[追迹·错误] '+(where||''), e); }catch(x){}
 }
+/* v2.29.2 错误网关入口：window.atErrSummary() 返回 {todayCount, totalLen, unhealthySince, topSources}
+   给账号面板「错误日志」按钮（CSP 后再上 UI）或调试控制台用 */
+function atErrSummary(){
+  var L=rd('at_errlog',[]);
+  var T=rd('at_errlog_today',{d:'',c:0});
+  var since=0; try{ since=parseInt(localStorage.getItem('at_unhealthy')||'0',10)||0; }catch(x){}
+  var src={}; (L||[]).forEach(function(x){ src[x.w]=(src[x.w]||0)+1; });
+  var top=Object.keys(src).map(function(k){ return {w:k,c:src[k]}; }).sort(function(a,b){return b.c-a.c;}).slice(0,5);
+  return {todayCount:T.c||0, totalLen:(L||[]).length, unhealthySince:since, topSources:top};
+}
+window.atErrSummary=atErrSummary;
 window.addEventListener('error',function(ev){ try{ atErr('全局:'+(ev.filename||'').split('/').pop()+':'+ev.lineno, ev.message); }catch(x){} });
 window.addEventListener('unhandledrejection',function(ev){ try{ atErr('Promise:'+String((ev.reason&&(ev.reason.message||ev.reason))||'').slice(0,120),''); }catch(x){} });
 /* ===== v2.13.0 主题化确认/输入弹窗 =====
@@ -1029,6 +1075,28 @@ function removeShowBySid(sid){
   });
 }
 var AT_VERSION='2.29.1', AT_BUILD='20261003b';
+/* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
+   但启动期去 fetch tracker-version.json 自检一次,
+   不一致记 at_errlog 并在账号面板版本行红字提示。
+   物理合并靠发版流水线完成——见发版.py 末尾的版本对账段。*/
+function _atVersionCheck(){
+  try{
+    fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'})
+      .then(function(r){ return r&&r.ok? r.json(): null; })
+      .then(function(j){
+        if(!j) return;
+        var v=String(j.version||''), b=String(j.build||'');
+        if(v!==AT_VERSION||b!==AT_BUILD){
+          atErr('version-mismatch','page='+AT_VERSION+'/'+AT_BUILD+' json='+v+'/'+b);
+        }
+        window._atVersionJSON=v; window._atVersionJSONBuild=b;
+        window.dispatchEvent(new CustomEvent('at-version-json',{detail:{version:v,build:b}}));
+      }).catch(function(e){ atErr('version-fetch',e); });
+  }catch(e){ atErr('version-fetch-sync',e); }
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',_atVersionCheck);
+}else{ _atVersionCheck(); }
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：

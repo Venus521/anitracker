@@ -277,9 +277,20 @@ const wallHtml = (shots, all, m, bad, errs, ts, use) => {
     '</body></html>';
 };
 
+/* 本机 python 不在 PATH 时回退已知路径（与 run-regression.js 同一手法，环境变量 AT_PY 可覆盖）。
+   execSync 带 3s 超时：Windows 上 `python` 可能是 Microsoft Store 别名，那种情况会一直挂着不报错，
+   没有超时就会把整条门禁卡死在这里。 */
+const PY = process.env.AT_PY || (function () {
+  try { require('child_process').execSync('python -c ""', { stdio: 'ignore', timeout: 3000 }); return 'python'; } catch (e) {
+    const fb = String.raw`C:\Users\Venus\.workbuddy-ai\binaries\python\versions\3.13.12\python.exe`;
+    console.warn('[tests] PATH 中未找到 python，回退旧写死路径：' + fb + '（可用环境变量 AT_PY 覆盖）');
+    return fb;
+  }
+})();
+
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const srv = spawn('python', [path.join(ROOT, '服务器-空闲自退.py'), '--port', String(PORT),
+  const srv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', String(PORT),
     '--host', '127.0.0.1', '--dir', ROOT, '--idle', '300'], { stdio: 'ignore' });
   let up = false;
   for (let i = 0; i < 40; i++) { if (await probe()) { up = true; break; } await sleep(500); }
