@@ -1334,7 +1334,7 @@ SW 离线回退会喂旧缓存页、用户不知要刷新）；账号面板里�
 - `发版.py --check` 补「sw 缓存 build == AT_BUILD」一项——此前只校验缓存序号 vNN 与次版本，**build 漂移查不出来**，正是审计里「版本多来源彼此漂移」的漏点；`tracker-sw.js` 头部注释声称的 assert 至此名副其实。
 
 **门禁**：`run-regression` **29/29**（含 T18 全程无页面级 JS 错误——CSP 未拦任何被覆盖路径）、`phone-look` **PASS**（15 屏无出界 / 触点全部 ≥34px / 页面报错：无）、`phone-use` **BAD 0 · MID 1**（唯一 MID 是「低频工具排在剧集列表前」的旧排版取舍，与本版无关）、`tests/_syntax.js` 6 块全 OK、`发版.py --check` 全部一致 ✓、双入口 SHA256 MATCH（3f60d04d）、新增 `csp-check` **12/12 PASS**（**做过负向测试**：把 connect-src 写回域名白名单 + 删掉 `'wasm-unsafe-eval'` 时必红，实测报出 `connect-src :: https://api.deepseek.com/…` 与 `connect-src :: http://127.0.0.1:11434/…`——门禁真拦得住，不是摆设）。
-**版本**：`AT_VERSION` / `AT_BUILD` 仍为 **2.29.1 / 20261003b**——**本版尚未发版**，推进需跑 `python 发版.py 2.29.2 --note "…"`（六处同步 + 双入口）。SW 缓存名本次未动；`index.html` / `ani-tracker.html` 在 SW 里是 **network-first**，联网客户端下次打开即拿到新页面，无需等缓存名换。
+**版本**：已发版——`python 发版.py 2.29.2` 完成六处同步，`AT_VERSION` / `AT_BUILD` = **2.29.2 / 20261004a**，SW 缓存名 `anitracker-v29-20261004a`，壳 **1.17（code 18）**、`package.json` 2.29.2；`发版.py --check` 六处全部一致 ✓，双入口 SHA256 MATCH `c6d2cad36996ab7e`（发版前 3f60d04d）。`index.html` / `ani-tracker.html` 在 SW 里是 **network-first**，联网客户端下次打开即拿到新页面，无需等缓存名换。
 **测试基建**：新增 `tests/csp-check.js`（`npm run test:csp`，自起 :8141 + 本机 Chrome）——静态断言查「头怎么写」、运行期断言查「真跑起来违不违规」，专门接住「CSP 两条坑都是静默坏」这种情况；另外 `phone-look.js` / `phone-use.js` 原先硬写 `spawn('python')`，本机 `python` 若是 Microsoft Store 别名会**挂着不报错**、把整条门禁卡死——改成与 `run-regression.js` 同款 `AT_PY` 解析并给探测加 3s 超时（正对审计「测试换机器就废」那条）；`phone-live.js` / `account-live-verify.js` / `run-v270-tests.js` 仍硬写，留待下一轮统一。
 **待办**：`frame-ancestors` 需服务器侧响应头才算真防点击劫持；审计项 1（拆单文件）/ 3（a11y 补 aria-label 与 :focus-visible，扫描报告见 `docs/a11y-扫描报告-v2.29.2.md`）未动。
 
