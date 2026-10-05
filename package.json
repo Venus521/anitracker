@@ -1,6 +1,6 @@
 {
   "name": "anitracker",
-  "version": "2.29.3",
+  "version": "2.30.0",
   "description": "番剧追记 PWA",
   "homepage": "https://venus521.github.io/anitracker/",
   "private": true,
@@ -17,7 +17,9 @@
     "test:phone-use": "node tests/phone-use.js",
     "test:cloud-entry": "node tests/cloud-entry-check.js",
     "test:a11y": "node tests/a11y-check.js",
-    "test:csp": "node tests/csp-check.js"
+    "test:csp": "node tests/csp-check.js",
+    "test:douban-sync": "node tests/douban-sync-e2e.js",
+    "test:douban-live": "node tests/douban-live-smoke.js"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"

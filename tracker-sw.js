@@ -7,7 +7,7 @@
    名字里带 build 号，门禁就能拿 index.html 的 AT_BUILD 对账——忘了改立刻红，不靠人记「这批该升到 v 几」。 */
 /* v2.29.2 版本单一源：此处 'anitracker-v29-20261003b' 与 tracker-version.json 的 build 必须一字不差。
    发版流水线（发版.py）已加 assert；运行期 index.html 的 _atVersionCheck 也会触发对账警告。 */
-var CACHE='anitracker-v29-20261005a';
+var CACHE='anitracker-v30-20261005b';
 var PRECACHE=['./index.html','./tracker-manifest.webmanifest','./ani-tracker-lib.json','./vendor/cloudbase.full.js','./tracker-filler-data.js','./favicon.ico'];
 /* 需要「永远尽量新」的资源：命中即走网络 */
 var NETWORK_FIRST=/(^|\/)(index\.html|ani-tracker\.html|tracker-version\.json)$/;

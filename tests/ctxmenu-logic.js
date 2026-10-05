@@ -96,9 +96,13 @@ check('S34', '菜单项文案用 esc() 转义', has('esc(it.t)'));
 console.log('\n--- setEpStat 防御性（statuses 缺失不能崩）---');
 const sesSrc = sliceBetween('function setEpStat(', 'function cntWatched(');
 function mkSetEpStat() {
+  /* setEpStat 标完一集要盖「开始看」的时间戳（stampStart），这段是从 index.html 里切出来的真函数，
+     不是空壳替身：哪天那个函数被改名或删掉，这里会当场报 ReferenceError，而不是静默放行。 */
+  const stampSrc = (html.match(/function stampStart\([^\n]*\n/) || [''])[0];
   const f = new Function('SHOW', `
     var s = SHOW;
     function epStat(s,n){ var v=(s.statuses||{})[n]; return v===undefined?null:v; }
+    ${stampSrc}
     ${sesSrc}
     return { setEpStat: setEpStat, epStat: epStat };
   `);

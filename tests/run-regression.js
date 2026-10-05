@@ -65,7 +65,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
   await waitPort(8093, '/__state', 20);
   if (!srvUp) console.log('WARN: 8094 静态服务未就绪，浏览器类用例可能失败');
   await sleep(400);
-  let pageErrors = 0; let webReqs = 0;
+  let pageErrors = 0; let webReqs = 0; let wdReqs = 0;
   let browser;
   try {
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
@@ -79,6 +79,14 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       const u = req.url();
       if (u.includes('api.tvmaze.com')) { webReqs++; return req.continue({ url: u.replace('https://api.tvmaze.com', 'http://127.0.0.1:8093') }); }
       /* v2.29.0：豆瓣联想（云函数）不出网——本地直接应答，带 CORS 头（v2.20.0 教训：少头=页面判网络不可用） */
+      /* v2.30.0：Wikidata / Commons 兜底源不许出网。本机代理对 wikidata 每次要 19.6s 才
+         ConnectionReset（实测 3/3 次），六个待补条目就是 6×19.6s，直接把「等自愈跑完」的 90s 撑爆——
+         于是 T22 读到的永远是「heal-fail 还没轮到」，看着像本页的 bug，其实是量具在测代理。
+         这里空结果秒答（照 v2.20.0 教训带 CORS 头），断言的仍是本页自己那条退避登记。 */
+      if (u.includes('wikidata.org') || u.includes('commons.wikimedia.org')) {
+        wdReqs++;
+        return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ search: [] }) });
+      }
       if (u.includes('service.tcloudbase.com')) {
         webReqs++;
         return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' },
@@ -94,13 +102,15 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     /* 开机自检：index.html 的脚本是一整块，里面任何一处语法错都会让整块失效，
        于是后面的用例全以「xxx is not defined」炸掉、看不出根因（v2.17.0 实测踩过）。
        所以先把「关键函数在不在」单独列一条，缺谁点名谁。 */
-    const boot = await page.evaluate(() => ({
-      missing: ['renderList', 'renderDetail', 'doSearch', 'webSearchShows', 'webRowHtml', 'webAddShow',
-        'fillEpisodesNow', 'visEps', 'seasonKeyOf', 'ensureSeasons', 'autoCalibrateSrc', 'addShow', 'coverPH',
-        'doubanSuggest', 'dbAddShow']
-        .filter(n => typeof window[n] !== 'function')
-    }));
-    check('03', '开机自检：主脚本 15 个关键函数全部就位', boot.missing.length === 0, '缺失：' + boot.missing.join(','));
+    const BOOT_FN = ['renderList', 'renderDetail', 'doSearch', 'webSearchShows', 'webRowHtml', 'webAddShow',
+      'fillEpisodesNow', 'visEps', 'seasonKeyOf', 'ensureSeasons', 'autoCalibrateSrc', 'addShow', 'coverPH',
+      'doubanSuggest', 'dbAddShow',
+      /* v2.30.0 豆瓣勾选同步 + 观看时间账（细节用例在 tests/douban-sync-e2e.js，这里只保「函数还在」） */
+      'openDoubanSync', 'dbnPull', 'dbnImport', 'dbApplyOne', 'timeLineHtml', 'editWatchTime', 'fmtDay', 'parseDay'];
+    const boot = await page.evaluate((names) => ({
+      missing: names.filter(n => typeof window[n] !== 'function')
+    }), BOOT_FN);
+    check('03', '开机自检：主脚本 ' + BOOT_FN.length + ' 个关键函数全部就位', boot.missing.length === 0, '缺失：' + boot.missing.join(','));
 
     // ===== T19 默认浅色（用户指令「默认浅色系统」）：必须在任何切换动作之前量 =====
     // 占位图联动只看「浅色档取 L、深色档取 D，且两档不同」——不钉具体色值，v2.21.0 占位改灰阶骨架后不必回来改测试
@@ -315,15 +325,25 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     check('16', '单季作品不出季度条（#dParts 留空）', single.parts === 0 && single.html === 0, JSON.stringify(single));
 
     /* T15 标记已看：本地生效且不发出任何写请求 */
+    /* 计量前先让后台安静：开机小批量补封面 / 上一条 addShow 的请求尾巴正好可能落进这 1.2s 窗口，
+       那测的就不是「标记这一击发不发请求」了（v2.30.0 把 Wikidata 桩进门禁后补齐变快，就是这个窗口先撞红）。
+       判据一个字没松——仍然是窗口内 webReqs 必须为 0，只是先把不属于本击的流量排除在外。 */
+    const quietThenZero = async () => {
+      for (let q = 0; q < 24; q++) {
+        const a = webReqs; await sleep(500); const b = webReqs;
+        if (a === b) { webReqs = 0; return 'settled(前置后台流量 ' + b + ' 次)'; }
+      }
+      webReqs = 0; return 'NOT-QUIET';
+    };
     await page.evaluate(() => openDetail('tv900003')); await sleep(500);
-    webReqs = 0;
+    const t15quiet = await quietThenZero();
     await page.evaluate(() => { const els = document.querySelectorAll('#dGroups .eprow'); els[1] && els[1].click(); });
     await sleep(1200);
     const markedLocal = await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem('tr_shows')).filter(x => x.sid === 'tv900003')[0];
       return Object.keys(s.statuses || {}).length;
     });
-    check('15', '标记已看：本地记录生效，且不发任何外部写请求', webReqs === 0 && markedLocal >= 2, 'webReqs=' + webReqs + ' localMarked=' + markedLocal);
+    check('15', '标记已看：本地记录生效，且不发任何外部写请求', webReqs === 0 && markedLocal >= 2, t15quiet + ' webReqs=' + webReqs + ' localMarked=' + markedLocal);
 
     /* T28 来源角标：动画每一集一律带角标（没有开关可关），真人剧不套这条轴（用户指令） */
     const badge = await page.evaluate(() => {
@@ -450,10 +470,23 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await sleep(7000);
-    await page.waitForFunction(() => window._coverHealRunning === false, { timeout: 90000, polling: 400 }).catch(() => { });
+    /* 自愈队列排空：超时不再装作没事——把「ok/超时 + 耗时」记下来贴进用例明细，
+       下次再撑爆一眼就能看出是时间不够，而不是本页逻辑错。 */
+    const healDrain = [];
+    const drainHeal = (label) => {
+      const t0 = Date.now();
+      return page.waitForFunction(() => window._coverHealRunning === false, { timeout: 120000, polling: 400 })
+        .then(() => { healDrain.push(label + '=ok ' + (Date.now() - t0) + 'ms'); })
+        .catch(() => { healDrain.push(label + '=TIMEOUT ' + (Date.now() - t0) + 'ms'); });
+    };
+    await drainHeal('boot');
+    /* 手动补齐只有在闸门空了才会真跑（_coverHealRunning 时 coverHealAll 直接 return）——
+       没空就再排空一次，别把「压根没跑起来」当成「跑错了」。 */
+    for (let g = 0; g < 3; g++) { if (await page.evaluate(() => !window._coverHealRunning)) break; await drainHeal('boot' + g); }
+    const gateOpen = await page.evaluate(() => !window._coverHealRunning);
     await page.evaluate(() => { coverHealAll(true); return true; });
     await sleep(800);
-    await page.waitForFunction(() => window._coverHealRunning === false, { timeout: 90000, polling: 400 }).catch(() => { });
+    await drainHeal('manual');
     await sleep(800);
     const heal1 = await page.evaluate(() => {
       const a = JSON.parse(localStorage.getItem('tr_shows') || '[]');
@@ -468,9 +501,9 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       };
     });
     check('21', '封面自愈：tvId 直拉 + 按剧名命中，外链一律转存为本地 dataURL',
-      heal1.t.indexOf('data:image') === 0 && heal1.r.indexOf('data:image') === 0, JSON.stringify(heal1).slice(0, 220));
+      heal1.t.indexOf('data:image') === 0 && heal1.r.indexOf('data:image') === 0, 'drain ' + healDrain.join(',') + ' wd=' + wdReqs + ' ' + JSON.stringify(heal1).slice(0, 150));
     check('22', '封面自愈：查不到的条目登记退避且不误报',
-      heal1.f === '' && heal1.tryT === true && heal1.tryF === false, JSON.stringify(heal1).slice(0, 220));
+      heal1.f === '' && heal1.tryT === true && heal1.tryF === false, 'drain ' + healDrain.join(',') + ' gateOpen=' + gateOpen + ' wd=' + wdReqs + ' ' + JSON.stringify(heal1).slice(0, 150));
 
     await page.reload({ waitUntil: 'domcontentloaded' }); await sleep(900);
     const persist = await page.evaluate(() => {
