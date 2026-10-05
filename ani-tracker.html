@@ -4335,7 +4335,7 @@ async function dbnPull(scope, keepMsg){
   try { j = await fetch(GW + '/hub/api/db/pull?limit=300' + (scope !== 'all' ? '&type=' + scope : ''), { cache: 'no-store' }).then(function (r) { return r.json(); }); }
   catch (e) { clearInterval(tick); dbnNote('拉取异常：' + ((e && e.message) || e), 'bad'); return; }
   clearInterval(tick);
-  if(!j||!j.ok){ dbnNote('拉取失败：'+((j&&j.msg)||'未知错误'),'bad'); return; }
+  if(!j||!j.ok){ dbnNote('拉取失败：'+((j&&j.msg)||'未知错误'),'bad'); if(j&&j.kind==='no-uid'){ var u2=document.getElementById('dbnUid'); if(u2) u2.style.display=''; } return; }
   var items=j.items||[];
   if(!items.length){ dbnNote('没抓到条目 —— Cookie 可能过期了，重新粘贴一次','bad'); if(au) au.style.display=''; return; }
   dbnItems=items.map(function(d){
@@ -4358,7 +4358,27 @@ async function dbnConnect(){
   catch(e){ dbnNote('连接异常：'+((e&&e.message)||e),'bad'); return; }
   if(!c||!c.ok){ dbnNote('连接失败：'+((c&&c.msg)||'未知错误'),'bad'); return; }
   if(ck) ck.value='';
+  /* uid 读不出来时说清下一步该做什么，别让「连接成功」和「拉不到东西」互相打架 */
+  if(c.uidUnknown||!c.uid){
+    var ui=document.getElementById('dbnUid'); if(ui) ui.style.display='';
+    dbnNote('Cookie 已存下，但豆瓣没让程序读出你的 uid —— 拉收藏页需要它。把个人页地址（形如 douban.com/people/xxxx）粘进第二个框点「填 uid」即可','bad');
+    return;
+  }
   dbnNote('豆瓣已连接（uid '+(c.uid||'')+'）','ok');
+  var sc=document.querySelector('#dbnScope .dbn-q.on');
+  await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
+}
+/* 手填 uid：填完当场验一次收藏页通不通，填错当场说 */
+async function dbnSaveUid(){
+  var el=document.getElementById('dbnUid'), v=el?String(el.value||'').trim():'';
+  if(!v){ dbnNote('还没填 uid —— 个人页地址或纯 uid 都行','bad'); if(el) el.focus(); return; }
+  dbnNote('正在核对 uid…');
+  var r;
+  try{ r=await fetch(GW+'/hub/api/db/uid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:v})}).then(function(x){ return x.json(); }); }
+  catch(e){ dbnNote('连接异常：'+((e&&e.message)||e),'bad'); return; }
+  if(!r||!r.ok){ dbnNote('uid 填不了：'+((r&&r.msg)||'未知错误'),'bad'); return; }
+  if(el) el.value='';
+  dbnNote('uid 记下了（'+r.uid+'）'+(r.n?('，收藏页读到 '+r.n+' 条'):'')+' —— 开始拉取','ok');
   var sc=document.querySelector('#dbnScope .dbn-q.on');
   await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
 }
@@ -4372,7 +4392,10 @@ function openDoubanSync(){
     '<div id="dbnAuth" style="display:none">'+
       '<div class="dbn-note">Cookie 只发给本机 :3000 网关、由它代为请求豆瓣；追迹不保存，拉取成功即清空输入框。</div>'+
       '<input class="dbn-in" id="dbnCookie" type="text" placeholder="粘贴豆瓣 Cookie" aria-label="豆瓣 Cookie" />'+
-      '<div class="dbn-foot"><button type="button" class="b1" id="dbnConn">连接并拉取</button></div>'+
+      /* Cookie 有效但程序认不出账号时的兜底：豆瓣 2026-10-06 起 /mine/ 对已登录 Cookie 也返回 403，
+         uid 常常读不出来，而收藏页必须靠 uid 才拉得到。让人手填一次最省事。 */
+      '<input class="dbn-in" id="dbnUid" type="text" placeholder="豆瓣个人页地址或 uid（认不出账号时才需填）" aria-label="豆瓣 uid" />'+
+      '<div class="dbn-foot"><button type="button" class="b2" id="dbnUidGo">填 uid</button><button type="button" class="b1" id="dbnConn">连接并拉取</button></div>'+
     '</div>'+
     '<div class="dbn-quick" id="dbnScope">'+
       '<button type="button" class="dbn-q on" data-sc="tv">只看剧集</button>'+
@@ -4422,6 +4445,7 @@ function openDoubanSync(){
   });
   dbnDirNote();
   box.querySelector('#dbnConn').onclick=dbnConnect;
+  box.querySelector('#dbnUidGo').onclick=dbnSaveUid;
   box.querySelector('#dbnGo').onclick=function(){ if(dbnDir==='push') dbnPush(); else dbnImport(); };
   box.querySelector('#dbnFile').onchange=function(){ importDoubanFile(null,this.files&&this.files[0]); };
   dbnQ='';
