@@ -295,7 +295,10 @@ body.dragmark,body.dragmark *{user-select:none;cursor:crosshair}
 .panel select{width:100%;border:none;border-bottom:1px solid var(--line);background:none;padding:12px 2px;font-size:14px;color:var(--ink);outline:none;margin-bottom:2px}
 .panel .row2{display:flex;gap:8px;margin-top:20px}
 .panel .row2 button{flex:1;border-radius:var(--r-3);padding:12px;font-size:14px}
-.b1{background:var(--ink);color:var(--bg);border:none;font-weight:500}
+/* v2.31.0：.b1 原先没给 padding/min-height，高度全由内容撑出来 —— 面板里那个
+   「导入/推送」按钮实测只有 19px 高，小屏上点不准。给一份和其它按钮一致的底子，
+   各处原有的行内 padding 仍能按需覆盖。 */
+.b1{background:var(--ink);color:var(--bg);border:none;font-weight:500;padding:11px 20px;min-height:38px;border-radius:var(--r-3)}
 .b2{background:none;border:1px solid var(--line);color:var(--muted)}
 .b3{background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent)}
 .msg{font-size:12px;color:var(--muted);margin:12px 0;min-height:18px}
@@ -496,6 +499,9 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   .acctbk .lnk{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px 16px;min-height:38px}
   .dbn-row{min-height:60px}
   .dbn-q,.dbn-file{min-height:38px}
+  /* v2.31.0：面板主按钮（导入/推送）原先漏在小屏触点规则外，实测 393 宽下只有 19px 高。
+     推送一次要连点几十条，19px 的按钮在小屏上点不准比什么都劝退 —— 和 .dbn-q 同规格补齐。 */
+  .dbn-foot .b1{min-height:38px;padding:8px 16px}
   .timline .lnk{min-height:38px;padding:8px 14px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
   .acctbk .sep{display:none}
   /* 面板右上角的 × 全是 h3 的紧邻兄弟，一条选择器覆盖 11 个浮层，不必逐个加类 */
@@ -4141,6 +4147,49 @@ function dbnMatch(d){
   if(!dbnQ) return true;
   return (String(d.title||'')+' '+String(d.origTitle||'')).toLowerCase().indexOf(dbnQ) >= 0;
 }
+/* —— v2.31.0 推送（追迹 → 豆瓣）——
+   清单来源不变：还是 dbnItems，只是方向反过来。「拉」时条目是豆瓣给的，
+   「推」时以片单为准，豆瓣那边现有的标记写进 dbnBySid 做差异比对。
+   凡是豆瓣条目（subjectId 纯数字）且已在片单才有得推 —— 离线文件进来的没这个号，
+   推不了就明说，不能静默跳过。 */
+var dbnDir='pull';                 /* pull=豆瓣→追迹；push=追迹→豆瓣 */
+var dbnBySid={};                   /* subjectId → 豆瓣侧当前状态 */
+var dbnPushMsg=null;               /* 推送完成后要补回的提示（别被随后的重拉覆盖） */
+function dbnPushable(d){
+  var t=dbTargetOf(d);
+  return !!(t && /^\d+$/.test(String(d.subjectId||'')) && t.dbId);
+}
+/* 本机想去的状态 ← 片单条目 status；推的是状态，不是时间（豆瓣标记日期不可写） */
+function dbnWantStatus(d){
+  var t=dbTargetOf(d); if(!t) return '';
+  var back={watching:'do',done:'collect',want:'wish'};
+  return back[t.status||'watching']||'';
+}
+function dbnPushDiff(d){
+  var want=dbnWantStatus(d), now=(dbnBySid[String(d.subjectId||'')]||'');
+  return (want&&now&&want!==now)?((DB_ST_NAME[now]||now)+' → '+(DB_ST_NAME[want]||want)):'';
+}
+/* 方向不同，能做的事完全不同 —— 把话说清楚，别让用户拿「推」去期待「入库」的效果 */
+function dbnDirNote(cap){
+  var el=document.getElementById('dbnDirNote'); if(!el) return;
+  if(dbnDir!=='push'){
+    el.textContent='拉取＝把豆瓣标记收进片单，状态以豆瓣为准；没勾的一条都不动。';
+    return;
+  }
+  el.textContent='推送＝把片单里的状态写回豆瓣（想看/在看/看过）。只推真正带豆瓣号的条目；标记日期推不了，豆瓣那边的日期仍是它自己记的。';
+  /* 写通道探不通时把按钮直接置灰：让人在动手前就知道，而不是点了几十下才失败 */
+  var btn=document.getElementById('dbnGo');
+  if(btn){
+    if(cap&&cap.writable===false){
+      btn.disabled=true; btn.style.opacity=.5;
+      btn.textContent='豆瓣现在不让我们写回';
+      el.textContent+='（写回通道被豆瓣拦住了：'+((cap&&cap.reason)||'')+'。拉取照常可用。）';
+    } else {
+      btn.style.opacity='';
+      dbnFoot();
+    }
+  }
+}
 function dbnVisIdx(){ var a=[]; dbnItems.forEach(function(d,i){ if(dbnMatch(d)) a.push(i); }); return a; }
 function dbnRowHtml(d,i){
   var tgt=dbTargetOf(d), stt=DB_ST[d.status]||'watching';
@@ -4150,7 +4199,14 @@ function dbnRowHtml(d,i){
   if(d.ep) bits.push('看到第 '+d.ep+' 集');
   if(d.markedAt) bits.push('标记 '+d.markedAt);
   var mm=bits.join(' · ');
-  if(tgt) mm+=' · '+(same?'已在片单（一致）':('已在片单 → 改为'+(ST_NAME[stt]||stt)));
+  if(dbnDir==='push'){
+    /* 推送方向：这条要写回什么、豆瓣现在是什么、够不够格推 —— 一行说全 */
+    var df=dbnPushDiff(d), want=dbnPushable(d);
+    mm = want ? ('推成'+(DB_ST_NAME[dbnWantStatus(d)]||'—')+(df?('（豆瓣现在是 '+df+'）'):'（豆瓣已是这个状态）'))
+      : (tgt?'推不了：这条没有豆瓣号':'推不了：还没进片单');
+  } else if(tgt){
+    mm+=' · '+(same?'已在片单（一致）':('已在片单 → 改为'+(ST_NAME[stt]||stt)));
+  }
   return '<button type="button" class="dbn-row'+(d.pick?' on':'')+(tgt?' has':'')+'" data-i="'+i+'" aria-pressed="'+(d.pick?'true':'false')+'">'+
     '<span class="dbn-box">'+(d.pick?'✓':'')+'</span>'+
     (d.pic?('<img src="'+esc(d.pic)+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="__coverFail(this)"/>'):'<span class="dbn-noimg"></span>')+
@@ -4185,15 +4241,18 @@ function dbnRender(){
   });
   var q=function(id,fn){ var b=document.getElementById(id); if(b) b.onclick=fn; };
   var setPick=function(fn){ dbnVisIdx().forEach(function(i){ dbnItems[i].pick=fn(dbnItems[i])?1:0; }); dbnRender(); };
-  q('dbnAll',function(){ setPick(function(){ return true; }); });
-  q('dbnNew',function(){ setPick(function(d){ return !dbTargetOf(d); }); });
+  q('dbnAll',function(){ setPick(function(d){ return dbnDir==='push'?dbnPushable(d):true; }); });
+  q('dbnNew',function(){ setPick(function(d){ return dbnDir==='push'?dbnPushable(d):!dbTargetOf(d); }); });
   q('dbn0',function(){ setPick(function(){ return false; }); });
   dbnFoot();
 }
 function dbnFoot(){
   var b=document.getElementById('dbnGo'), c=document.getElementById('dbnCnt'), k=0;
   dbnItems.forEach(function(d){ if(d.pick) k++; });
-  if(b){ b.disabled=!k; b.style.opacity=k?1:.5; b.textContent=k?('导入勾上的 '+k+' 部'):'还没勾条目'; }
+  if(b){
+    b.disabled=!k; b.style.opacity=k?1:.5;
+    b.textContent=k?(dbnDir==='push'?('把勾上的 '+k+' 部推到豆瓣'):('导入勾上的 '+k+' 部')):'还没勾条目';
+  }
   if(!c) return;
   var vis=dbnQ?dbnVisIdx().length:dbnItems.length;
   c.textContent=dbnItems.length?('共 '+dbnItems.length+' 条'+(dbnQ&&vis!==dbnItems.length?(' · 过滤后 '+vis+' 条'):'')+' · 已勾 '+k):'';
@@ -4208,8 +4267,49 @@ function dbnImport(){
   dbnItems=[]; dbnFrom=''; dbnRender();
 }
 /* 面板一开就自动拉：自动的是「拉」，自选的是「入库」 */
-async function dbnPull(scope){
-  dbnItems=[]; dbnFrom=''; dbnRender();
+/* 推送：一条一条来，不并发 —— 豆瓣对短时间密集写会风控，
+   而且每条写完都要回读核对，并发的话回读会读到别条还没落库的中间态。 */
+async function dbnPush(){
+  var sel=dbnItems.filter(function(d){ return d.pick; });
+  if(!sel.length){ dbnNote('一条都没勾 —— 先勾左边的框，再点推送','bad'); return; }
+  /* 写之前先问网关「现在写得进去吗」。被豆瓣反爬挡住时，别让用户对着一个必然失败的按钮点几十下。 */
+  var cap;
+  try{ cap=await fetch(GW+'/hub/api/db/cap',{cache:'no-store'}).then(function(r){ return r.json(); }); }
+  catch(e){ dbnNote('问不到本机豆瓣网关（:3000）—— 推送走不通','bad'); return; }
+  if(cap&&cap.writable===false){
+    dbnNote('推送现在走不通：'+((cap&&cap.reason)||'豆瓣拦了写入通道')+'。拉取不受影响，照常能用','bad');
+    return;
+  }
+  var bad=sel.filter(function(d){ return !dbnPushable(d); });
+  if(bad.length===sel.length){ dbnNote('勾的这些都推不了 —— 推送只认真正豆瓣条目（片单里有、且带豆瓣 id）；离线文件进来的条目没有豆瓣号','bad'); return; }
+  var btn=document.getElementById('dbnGo'); if(btn){ btn.disabled=true; btn.textContent='推送中…'; }
+  var done=0, changed=0, same=0, fail=0, noop=0, notes=[];
+  for(var i=0;i<sel.length;i++){
+    var d=sel[i];
+    dbnNote('正在推送 '+d.title+'（'+(i+1)+'/'+sel.length+'）…');
+    if(!dbnPushable(d)){ noop++; continue; }
+    try{
+      var r=await fetch(GW+'/hub/api/db/mark',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({subjectId:String(d.subjectId),status:dbnWantStatus(d)})}).then(function(x){ return x.json(); });
+      if(r&&r.ok){ if(r.changed)changed++; else same++; }
+      else{ fail++; notes.push(d.title+'：'+((r&&r.msg)||'失败')); }
+    }catch(e){ fail++; notes.push(d.title+'：'+((e&&e.message)||e)); }
+    done++;
+    /* 限速：豆瓣写操作密集会触发风控，700ms 一条是实测下来稳的节奏 */
+    if(i<sel.length-1) await new Promise(function(r){ setTimeout(r,700); });
+  }
+  if(noop) notes.push(noop+' 条没有豆瓣号、没推');
+  var summary='推送完成：改动 '+changed+' · 本来就是 '+same+' · 没推成 '+fail+(notes.length?(' —— '+notes.slice(0,3).join('；')+(notes.length>3?' 等':'')):'');
+  if(btn){ btn.disabled=false; dbnFoot(); }
+  /* 推完把豆瓣侧现状拉回来，让 dbnBySid 跟真实状态对齐（差异提示不能停在旧值上） */
+  var sc=document.querySelector('#dbnScope .dbn-q.on');
+  dbnPushMsg={t:summary,k:fail?'bad':'ok'};
+  await dbnPull(sc?sc.getAttribute('data-sc'):'tv', true);
+  dbnPushMsg=null;
+  dbnNote(summary, fail?'bad':'ok');
+}
+async function dbnPull(scope, keepMsg){
+  dbnItems=[]; dbnFrom=''; dbnBySid={}; dbnRender();
   var au=document.getElementById('dbnAuth'), st, why='';
   try{ st=await fetch(GW+'/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }); }
   catch(e){ st={ok:false,logged:false}; why=String((e&&e.message)||e); }
@@ -4242,9 +4342,12 @@ async function dbnPull(scope){
     return { subjectId:d.subjectId, title:d.title, origTitle:d.origTitle, year:d.year, genres:d.genres||[],
       isAnime:!!d.isAnime, rating:d.rating, markedAt:d.markedAt, pic:d.pic, status:d.status, ep:d.ep, pick:0 };
   });
-  dbnFrom='豆瓣共 '+dbnItems.length+' 条'+(j.truncated?'（每种状态只取了最近 300 条）':'')+' · 已在片单的默认不勾，勾了才会改';
+  /* 记下豆瓣侧「现在是什么」，推送方向的差异提示全靠它 */
+  dbnItems.forEach(function(d){ if(d.subjectId) dbnBySid[String(d.subjectId)]=d.status; });
+  dbnFrom='豆瓣共 '+dbnItems.length+' 条'+(j.truncated?'（每种状态只取了最近 300 条）':'')
+    +' · 已在片单的默认不勾，勾了才会改';
   dbnRender();
-  dbnNote('拉到了 —— 勾选要入库的条目，不勾的一条都不动','ok');
+  if(!keepMsg) dbnNote('拉到了 —— 勾选要入库的条目，不勾的一条都不动','ok');
 }
 async function dbnConnect(){
   var ck=document.getElementById('dbnCookie'), v=ck?String(ck.value||'').trim():'';
@@ -4275,6 +4378,11 @@ function openDoubanSync(){
       '<button type="button" class="dbn-q on" data-sc="tv">只看剧集</button>'+
       '<button type="button" class="dbn-q" data-sc="all">含电影</button>'+
     '</div>'+
+    '<div class="dbn-quick" id="dbnDir">'+
+      '<button type="button" class="dbn-q on" data-dir="pull">拉：豆瓣 → 追迹</button>'+
+      '<button type="button" class="dbn-q" data-dir="push">推：追迹 → 豆瓣</button>'+
+    '</div>'+
+    '<div class="dbn-note" id="dbnDirNote"></div>'+
     '<input class="dbn-in" id="dbnQ" type="text" inputmode="search" placeholder="按片名过滤（条目几百条时先筛再勾），空=看全部" aria-label="按片名过滤" />'+
     '<div id="dbnBody"></div>'+
     '<div class="dbn-foot">'+
@@ -4294,8 +4402,27 @@ function openDoubanSync(){
       dbnPull(b.getAttribute('data-sc'));
     };
   });
+  Array.prototype.forEach.call(box.querySelectorAll('#dbnDir .dbn-q'),function(b){
+    b.onclick=function(){
+      Array.prototype.forEach.call(box.querySelectorAll('#dbnDir .dbn-q'),function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      dbnDir=b.getAttribute('data-dir');
+      dbnItems.forEach(function(d){ d.pick=0; });
+      if(dbnDir==='push'){
+        dbnDirNote();
+        /* 探写通道：能写才让点，不能写当场说清，不让人白点 */
+        fetch(GW+'/hub/api/db/cap',{cache:'no-store'}).then(function(r){ return r.json(); })
+          .then(function(c){ dbnDirNote(c); })
+          .catch(function(){ dbnDirNote({writable:false,reason:'问不到本机豆瓣网关（:3000）'}); });
+      } else {
+        dbnDirNote();
+      }
+      dbnRender();
+    };
+  });
+  dbnDirNote();
   box.querySelector('#dbnConn').onclick=dbnConnect;
-  box.querySelector('#dbnGo').onclick=dbnImport;
+  box.querySelector('#dbnGo').onclick=function(){ if(dbnDir==='push') dbnPush(); else dbnImport(); };
   box.querySelector('#dbnFile').onchange=function(){ importDoubanFile(null,this.files&&this.files[0]); };
   dbnQ='';
   box.querySelector('#dbnQ').oninput=function(){ dbnQ=String(this.value||'').trim().toLowerCase(); dbnRender(); };

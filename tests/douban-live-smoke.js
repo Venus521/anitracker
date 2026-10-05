@@ -114,7 +114,32 @@ const get = (host, port, p, ms) => new Promise(res => {
     await shot('live-douban-filter.png');
     console.log('FILTER ' + JSON.stringify(fq));
     if (fq.shown < 1 || !/金田一/.test(fq.first)) { console.log('SMOKE FAIL 片名过滤在真数据上不成立'); code = 1; }
-    fs.writeFileSync(path.join(__dirname, 'last-douban-live.json'), JSON.stringify({ at: new Date().toISOString(), probe, tv, all, errs }, null, 2));
+    /* —— 推送方向：只读核对，绝不点推送 ——
+       真数据上验三件事：① 方向切换后面板和说明都换过来；② 每行都写清「推成什么 / 推不了」，
+       没有一条含糊成空；③ 「推不了」的理由分得清（没豆瓣号 vs 还没进片单）。
+       不点推送：点了就是往真实账号里写东西，这个冒烟是「读到什么」，不是「改动什么」。 */
+    await page.evaluate(() => { const q = document.getElementById('dbnQ'); if (q) { q.value = ''; q.dispatchEvent(new Event('input')); } });
+    await page.evaluate(() => document.querySelector('#dbnDir [data-dir="push"]').click());
+    await sleep(600);
+    const push = await page.evaluate(() => {
+      const rows = Array.prototype.map.call(document.querySelectorAll('#dbnBody .dbn-row'), x => x.textContent.replace(/\s+/g, ' '));
+      return {
+        rows: rows.length,
+        withVerdict: rows.filter(t => /推成|推不了/.test(t)).length,
+        noDbId: rows.filter(t => /推不了：这条没有豆瓣号/.test(t)).length,
+        notInLib: rows.filter(t => /推不了：还没进片单/.test(t)).length,
+        note: (document.getElementById('dbnDirNote') || {}).textContent || '',
+        first: rows[0] || ''
+      };
+    });
+    await shot('live-douban-push.png');
+    console.log('PUSH  ' + JSON.stringify(push));
+    if (push.note.indexOf('写回豆瓣') < 0) { console.log('SMOKE FAIL 切到推送方向后说明没换过来'); code = 1; }
+    if (push.rows > 0 && push.withVerdict < push.rows) {
+      console.log('SMOKE FAIL 真数据上有 ' + (push.rows - push.withVerdict) + ' 行没给出「推成什么/推不了」的结论（含糊 = 会误推）');
+      code = 1;
+    }
+    fs.writeFileSync(path.join(__dirname, 'last-douban-live.json'), JSON.stringify({ at: new Date().toISOString(), probe, tv, all, push, errs }, null, 2));
     if (ticking < 2) { console.log('SMOKE FAIL 拉取期间没有走秒的进度话术（用户会以为卡死）'); code = 1; }
     if (tv.rows < 1 || tv.withDate < 1 || errs.length) {
       console.log('SMOKE FAIL 真豆瓣清单不成立 :: rows=' + tv.rows + ' 带日期=' + tv.withDate + ' errs=' + errs.slice(0, 2).join(' | '));

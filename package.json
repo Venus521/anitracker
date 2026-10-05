@@ -19,7 +19,8 @@
     "test:a11y": "node tests/a11y-check.js",
     "test:csp": "node tests/csp-check.js",
     "test:douban-sync": "node tests/douban-sync-e2e.js",
-    "test:douban-live": "node tests/douban-live-smoke.js"
+    "test:douban-live": "node tests/douban-live-smoke.js",
+    "test:douban-push": "node tests/douban-push-e2e.js"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"

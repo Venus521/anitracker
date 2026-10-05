@@ -106,7 +106,10 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       'fillEpisodesNow', 'visEps', 'seasonKeyOf', 'ensureSeasons', 'autoCalibrateSrc', 'addShow', 'coverPH',
       'doubanSuggest', 'dbAddShow',
       /* v2.30.0 豆瓣勾选同步 + 观看时间账（细节用例在 tests/douban-sync-e2e.js，这里只保「函数还在」） */
-      'openDoubanSync', 'dbnPull', 'dbnImport', 'dbApplyOne', 'timeLineHtml', 'editWatchTime', 'fmtDay', 'parseDay'];
+      'openDoubanSync', 'dbnPull', 'dbnImport', 'dbApplyOne', 'timeLineHtml', 'editWatchTime', 'fmtDay', 'parseDay',
+      /* v2.31.0 推送（追迹 → 豆瓣）：写回走本机 :3000 网关的 /hub/api/db/mark，
+         面板加方向切换后，拉方向的老用例一根都不能少。 */
+      'dbnPush', 'dbnPushable', 'dbnWantStatus', 'dbnPushDiff', 'dbnDirNote'];
     const boot = await page.evaluate((names) => ({
       missing: names.filter(n => typeof window[n] !== 'function')
     }), BOOT_FN);
