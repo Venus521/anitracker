@@ -220,7 +220,7 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
    两笔账用同一个视觉层（meta 小字 + 分隔点）区分就够了，区分靠内容不靠框。
    时间部分用更淡的字色：它是全剧的时间，不是漫改子集的时间，视觉上就该退半步。 */
 .cnpline{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;font-size:var(--fs-meta);color:var(--muted);margin:0 0 8px;padding:0 2px;line-height:1.6}
-.cnpline b{color:var(--ink);font-weight:600;font-family:var(--serif);font-size:var(--fs-body)}
+.cnpline b{color:var(--ink);font-weight:600;font-family:var(--serif);font-size:var(--fs-body);white-space:nowrap}
 .cnpline .ds{opacity:.45}
 .cnpline .cnp-time{opacity:.72}
 /* v2.37.0：漫改块（#dCanonProg）在「全部/漫改」两条平行行模式下的容器样式；
@@ -1195,7 +1195,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.39.0', AT_BUILD='20261006a';
+var AT_VERSION='2.39.1', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
