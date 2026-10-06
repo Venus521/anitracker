@@ -198,6 +198,8 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .type-tag.manga-adapt{background:#e8f0ff;color:#2d6a9f;border:1px solid #b4d4f0}
 .type-tag.semi-original{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
 .type-tag.unknown{background:#f0f0f0;color:#888;border:1px solid #d0d0d0}
+.dtools{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 12px}
+#dMoreBtn{display:none}
 .statgrid{display:flex;gap:8px;margin:4px 0 16px}
 .stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--r-3);padding:12px 0;text-align:center}
 .stat b{font-family:var(--serif);font-size:var(--fs-h3);display:block}
@@ -212,6 +214,19 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .timline .ds{opacity:.45}
 .timline .src{font-size:var(--fs-meta);border:1px solid var(--line);border-radius:var(--r-pill);padding:1px 8px;margin-left:5px;color:var(--muted)}
 .timline .lnk{color:var(--accent);cursor:pointer;font-weight:600;margin-left:auto;background:none;border:none;font-size:var(--fs-meta)}
+/* v2.35.0 漫改进度行：与整部进度（dStats 的四格）并列的第二笔账。
+   **故意不做成方框**：上面已经有一行带边框的时间行（timline），这里再来一个带边框的块，
+   首屏就被挤掉一整行剧集（phone-use 的「首屏连一整行剧集都看不见」就是它挤出来的，实测差 7px）。
+   两笔账用同一个视觉层（meta 小字 + 分隔点）区分就够了，区分靠内容不靠框。
+   时间部分用更淡的字色：它是全剧的时间，不是漫改子集的时间，视觉上就该退半步。 */
+.cnpline{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;font-size:var(--fs-meta);color:var(--muted);margin:0 0 8px;padding:0 2px;line-height:1.6}
+.cnpline b{color:var(--ink);font-weight:600;font-family:var(--serif);font-size:var(--fs-body)}
+.cnpline .ds{opacity:.45}
+.cnpline .cnp-time{opacity:.72}
+@media(hover:none){
+  /* 手机上这一行与上面时间行视觉权重再压一点，别把首屏挤下去 */
+  .cnpline{margin:0 0 6px;font-size:calc(var(--fs-meta) - 1px)}
+}
 .dbn-grp{font-size:var(--fs-meta);letter-spacing:2px;color:var(--muted);margin:16px 0 8px}
 .dbn-quick{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .dbn-q{font-size:var(--fs-meta);border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 14px;background:var(--card);color:var(--muted);cursor:pointer;min-height:34px}
@@ -254,6 +269,17 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .searchrow2{display:flex;gap:0;border-bottom:1px solid var(--line);margin:8px 0 12px}
 .searchrow2 input{flex:1;border:none;background:none;font-size:14px;padding:8px 2px;color:var(--ink);outline:none}
 .typerow{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+@media(hover:none){
+  /* v2.35.0（用户令「漫改这些恢复原来的」）：类型筛选行在手机上恢复可见之后，
+     393 宽下 5 颗按钮折成两行、吃掉 84px，第一行剧集就被顶到视口外
+     （phone-use 实测 firstEp.bottom=858 >视口 851）。
+     改成单行横向滚动条：手机上本来就是拇指横划的姿势，一行 38px 就够，
+     省下的 46px 留给剧集——恢复功能不能拿首屏可读性去换。 */
+  #vDetail>.typerow{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+  #vDetail>.typerow::-webkit-scrollbar{display:none}
+  #vDetail>.typerow>.ty{flex:none}
+}
+.srcbar.off{display:none}
 .ty{background:none;border:1px solid var(--line);border-radius:var(--r-3);padding:4px 12px;font-size:var(--fs-meta);color:var(--muted);min-height:30px}
 .ty.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 #showTypeRow:empty{display:none}
@@ -531,6 +557,7 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   #vDetail>.hero{order:1}
   #vDetail>.strow{order:2}
   #vDetail>.timline{order:2}
+  #vDetail>.cnpline{order:2}
   #vDetail>#dParts{order:3}
   #vDetail>.quickrow{order:4}
   #vDetail>.dtools{order:5}
@@ -544,6 +571,31 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   #vDetail>#dGroups{order:13}
   #vDetail>#delBtn{order:14}
   #vDetail>div:last-child{order:99}
+  #vDetail>#dMoreBtn{order:5}
+  /* v2.35.0：管理箱恢复了，但它在 #vDetail 的 flex 里没有 order，会落到第 0 位顶在片名上方。
+     给它一个明确位置：排在「从片单移除」之后、页尾留白之前（order 14 与 99 之间）。 */
+  #vDetail>#at270Box{order:15}
+  /* v2.34.0 手机只留追剧：低频工具从主路拿走（收进「⋯ 更多工具」抽屉，见 openDTools），
+     抽屉里还是那批按钮本身，不是第二套界面；它仍排在「标记下一集」后面，没有沉到页尾。 */
+  #vDetail>.dtools{display:none}
+  #dMoreBtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:44px;
+    margin:-6px 0 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-3);
+    color:var(--muted);font-size:var(--fs-meta);letter-spacing:1px}
+  #dMoreBtn:active{border-color:var(--accent);color:var(--accent)}
+  #dToolsMask .ty{flex:1 1 40%;min-height:48px;display:flex;align-items:center;justify-content:center}
+  /* 统计四卡压成一行文字（数字留着，卡片壳子去掉），时长条同样只留字 */
+  .statgrid{display:flex;flex-wrap:wrap;gap:2px 14px;margin:2px 0 6px}
+  .statgrid .stat{flex:0 0 auto;display:flex;align-items:baseline;gap:5px;min-height:0;padding:0;text-align:left;background:none;border:none}
+  .statgrid .stat b{display:inline;font-size:var(--fs-body)}
+  .statgrid .stat span{font-size:var(--fs-meta)}
+  .durline{border:none;background:none;padding:0;margin:0 0 10px;line-height:1.6}
+  /* 加片页这一屏只剩一个动作：那颗「搜索」实测 36×42（两个汉字挤到边框），抬到 44 见方 */
+  .searchrow button{min-width:44px;min-height:44px;font-size:15px;padding:0 10px}
+  /* v2.35.0（用户令「漫改这些恢复原来的」）：片单页的来源筛选条与类型行、
+     详情页的类型行、集级「改来源标注」长按项，v2.34.0 都按输入能力从手机上拿掉了。
+     这一版全部撤回——分档只保留「低频工具进抽屉」「统计压成一行」「加片页只留搜索框」
+     这三条真正减负的，漫改/来源这条轴不再参与分档。
+     下面不留任何 display:none：撤干净了才叫恢复，留一条空规则只会让人以为还在生效。 */
 }
 /* 悬浮添加钮：默认不存在于桌面（desktop 由这条 display:none 挡着，只在触屏下由 JS 决定何时露面） */
 #fabAdd{display:none}
@@ -678,9 +730,10 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     </div>
     <div class="strow" id="dStatus"></div>
     <div class="timline" id="dTime" style="display:none"></div>
+    <div class="cnpline" id="dCanonProg" style="display:none"></div>
     <div id="dParts"></div>
-    <div class="dtools" style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 12px">
-      <button class="ty" onclick="aiUpd()" id="btnAiUpd" title="让 AI 按固定格式补出没收录的分集和双语集名：只追加缺的集，绝不改动已看进度">✧ 让 AI 补新集</button>
+    <div class="dtools" id="dTools">
+      <button class="ty" onclick="refreshNamesNow()" id="btnRefreshNames" title="不通过 AI：按网上号取官方片名与官方集名，内置库顺带补中文集名。只补空、只追加缺的集，你手改过的名字一律不动">⟳ 刷新片名与集名</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
       <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / 豆瓣重新拉封面（免配置，拉不到会保留原来那张）">⟳ 重拉封面</button>
       <button class="ty" onclick="pickCover()" id="btnPickCover" title="全网库 / TMDB 都查不到的中文剧、国产剧：从本机选一张海报，或直接 Ctrl+V 粘贴图片">⇪ 本地封面</button>
@@ -694,6 +747,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div class="quickrow" style="padding:12px 16px">
       <button id="nextBtn" style="width:100%;background:none;border:none;font-size:14px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:8px"></button>
     </div>
+    <button type="button" class="dmore" id="dMoreBtn" onclick="openDTools()" aria-controls="dTools" aria-expanded="false">⋯ 更多工具</button>
     <div class="searchrow2"><input id="qFilter" placeholder="按集标题/集号筛选…" oninput="renderGrid()" aria-label="按集标题或集号筛选"/></div>
     <div class="typerow" id="typeRow"></div>
     <div class="seclabel" style="font-size:12px;letter-spacing:2px;color:var(--muted);margin:12px 0 8px">剧集 EPISODES</div>
@@ -704,12 +758,12 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
   <div id="vAdd" style="display:none">
     <button class="back" onclick="backList()">← 返回</button>
     <div class="searchrow">
-      <input id="qKw" placeholder="搜索剧名（中文/英文都行 · 本地 + 全网）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doSearch();}" aria-label="搜索剧名"/>
+      <input id="qKw" placeholder="搜索剧名（中文/英文都行）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doSearch();}" aria-label="搜索剧名"/>
       <button onclick="doSearch()">搜索</button>
     </div>
     <div id="srMsg" class="msg"></div>
     <div id="addHint" class="srchint" style="padding:2px 0 8px"></div>
-    <div class="srcbar" style="padding:0 0 8px"><button class="srcchip tool" onclick="manualAdd()" title="完全不依赖网络的本地添加">＋ 手动添加</button><button class="srcchip tool" onclick="aiAdd()" id="btnAiAdd" title="全网库只有英文条目名，中文老剧常常搜不到：复制这段固定格式去问任意 AI，回答原样贴回来就能建整条条目（分季 + 双语集名 + 来源角标）">✧ 问 AI 加片</button></div>
+    <div class="srcbar off" id="addTools" style="padding:0 0 8px"><button class="srcchip tool" onclick="manualAdd()" title="完全不依赖网络的本地添加">＋ 手动添加</button><button class="srcchip tool" onclick="aiAdd()" id="btnAiAdd" title="全网库只有英文条目名，中文老剧常常搜不到：复制这段固定格式去问任意 AI，回答原样贴回来就能建整条条目（分季 + 双语集名 + 来源角标）">✧ 问 AI 加片</button></div>
     <div class="histrow" id="bgmHist"></div>
     <div id="srList"></div>
 
@@ -964,7 +1018,19 @@ function mergeShowArrays(loc,cld,tL,tC){
   merged=dedupeByTitle(merged,tomb,stats);
   return {list:merged, stats:stats, tomb:tomb};
 }
-window.AT_MERGE={ mergeShows:mergeShowArrays, tombKey:TOMB_KEY };
+window.AT_MERGE={ mergeShows:mergeShowArrays, tombKey:TOMB_KEY,
+  /* v2.35.0：豆瓣片单快照。它不是逐条记账的数据，而是「某一刻从豆瓣整体拉回来的一张名单」，
+     逐条合并没有意义——整份比时间戳，新的一方胜。否则按默认规则（别的 key 只补本机没有的），
+     电脑上再怎么刷新，手机上永远是第一次那份。 */
+  snapKeys:['tr_db_snap'],
+  mergeSnap:function(localStr,remoteStr){
+    var la=0,ra=0;
+    try{ var L=JSON.parse(localStr||'null'); la=(L&&L.at)||0; }catch(e){}
+    try{ var R=JSON.parse(remoteStr||'null'); ra=(R&&R.at)||0; }catch(e){}
+    if(!ra) return null;
+    if(!la||ra>la) return remoteStr;
+    return null;
+  } };
 
 var ST_NAME={watching:'在看',want:'想看',done:'看完',drop:'弃'};
 var TYPE_NAME={canon:'漫改',semi:'半原创',filler:'TV原创',movie:'剧场版',unknown:'待核'};
@@ -1122,7 +1188,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.33.0', AT_BUILD='20261006a';
+var AT_VERSION='2.35.0', AT_BUILD='20261006b';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1575,6 +1641,35 @@ function renderSrcBar(){
     ((on1||on2)?'<button class="srcchip" onclick="clearHide()">恢复全部显示</button><span class="srchint">统计与「下一集」按可见集计算</span>':'')+
     '<button class="srcchip tool" onclick="coverHealAll(true)" title="为所有缺失/失效封面的条目从全网库补齐封面并转存到本地">⟳ 补封面</button>';
 }
+/* ===== v2.34.0：手机端「⋯ 更多工具」抽屉 =====
+   判据只有输入能力这一条（触屏 = 手机档），桌面永远拿不到这个抽屉。 */
+function AT_TOUCH(){ try{ return window.matchMedia("(hover: none) and (pointer: coarse)").matches; }catch(e){ return false; } }
+function closeDTools(){
+  var m=document.getElementById("dToolsMask"); if(!m) return;
+  var t=document.getElementById("dTools");
+  if(t&&t._home){ t._home.insertBefore(t,t._next||null); }
+  m.parentNode&&m.parentNode.removeChild(m);
+  var b=document.getElementById("dMoreBtn"); if(b){ b.setAttribute("aria-expanded","false"); }
+}
+function openDTools(){
+  if(!AT_TOUCH()){ return; }
+  var t=document.getElementById("dTools"); if(!t){ return; }
+  if(document.getElementById("dToolsMask")){ return; }
+  if(!t._home){ t._home=t.parentNode; t._next=t.nextSibling; }
+  var wrap=document.createElement("div"); wrap.id="dToolsMask"; wrap.className="mask";
+  var box=document.createElement("div"); box.className="panel";
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">更多工具</h3><button type="button" id="dToolsX" aria-label="关闭">×</button></div>';
+  box.appendChild(t);
+  box.addEventListener("click",function(e){ if(e.target&&e.target.closest&&e.target.closest("button")) closeDTools(); });
+  wrap.appendChild(box); document.body.appendChild(wrap);
+  window.__atEscDTools=function(e){ if(e.key==="Escape") closeDTools(); };
+  document.addEventListener("keydown",window.__atEscDTools);
+  wrap.addEventListener("click",function(e){ if(e.target===wrap) closeDTools(); });
+  var x=document.getElementById("dToolsX"); if(x){ x.onclick=closeDTools; }
+  var b=document.getElementById("dMoreBtn"); if(b){ b.setAttribute("aria-expanded","true"); }
+}
+/* 抽屉里的动作跑完就收：手机上点「重拉封面」不该还得自己滑回去关 */
+function closeDToolsAfter(){ setTimeout(closeDTools,260); }
 function toggleHide(k){ HIDE_SRC[k]=!HIDE_SRC[k]; renderSrcBar(); renderList(); if(document.getElementById('vDetail').style.display!=='none') renderDetail(); }
 function clearHide(){ HIDE_SRC.filler=false; HIDE_SRC.semi=false; renderSrcBar(); renderList(); if(document.getElementById('vDetail').style.display!=='none') renderDetail(); }
 function libraryCov(){
@@ -2050,6 +2145,7 @@ window.addEventListener('popstate', function(){
   }).observe(document.body, {childList:true, subtree:true});
 })();
 function openDetail(sid){
+  try{ closeDTools(); }catch(e){}
   curSid=sid; var s=bySid(sid); if(!s) return;
   atViewEnter('detail');
   document.getElementById('vList').style.display='none';
@@ -2095,6 +2191,11 @@ function renderDetail(){
   /* v2.30.0：观看时间行（一条都没记时整行不出现在界面上） */
   var _tl=document.getElementById('dTime');
   if(_tl){ var _th=timeLineHtml(s); _tl.innerHTML=_th; _tl.style.display=_th?'':'none'; }
+  /* v2.35.0：漫改进度行（用户令「除了整部进度，有漫改的还要显示漫改进度和时间」）。
+     整部进度在上面的 dStats 四格里，这是第二笔账，单独一行；有漫改标注才出现，
+     真人剧（没有「漫改/TV原创」之分）与无漫改的条目整行不占位。 */
+  var _cp=document.getElementById('dCanonProg');
+  if(_cp&&window.canonProgHtml){ var _cph=window.canonProgHtml(s); _cp.innerHTML=_cph; _cp.style.display=_cph?'':'none'; }
   var st=statOf(s);
   document.getElementById('dStats').innerHTML=
     '<div class="stat"><b>'+st.watched+'</b><span>已看</span></div>'+
@@ -2113,6 +2214,10 @@ function renderDetail(){
     covBox.innerHTML=_hidHtml; covBox.style.display=_hidHtml?'':'none';
   }
   /* v2.17.0：「补齐剧集」是低频入口，只在还没有单集数据时露出来 */
+  /* 手机端不渲染 AI 结果导入：那是坐在电脑前贴来贴去的活。
+     v2.35.0：原来的「✧ 让 AI 补新集」已换成「⟳ 刷新片名与集名」（联网按号，不经 AI），
+     两端都留着——手机上尤其需要它，因为那里原本唯一能补集名的路径就是问AI。 */
+  if(AT_TOUCH()){ var _ba=document.getElementById('btnAiPaste'); if(_ba){ _ba.style.display='none'; } }
   var _bf=document.getElementById('btnFillEps'); if(_bf){ _bf.style.display=((s.eps||[]).length?'none':''); }
   renderParts();
   renderGrid();
@@ -2374,6 +2479,7 @@ function delShow(){
   });
 }
 function backList(){
+  try{ closeDTools(); }catch(e){}
   atViewLeave();
   try{ pvDrop(); }catch(e){}
   document.getElementById('vDetail').style.display='none';
@@ -2392,6 +2498,7 @@ function showAdd(){
   window.scrollTo(0,0); fabSync();
   renderSearchHist();
   renderAddHint();
+  setAddTools(false);
   setTimeout(function(){ document.getElementById('qKw').focus(); },80);
 }
 /* ===== v2.17.0：在线源换成 TVMaze 全网库（用户指令「不要再BANGUMI拉取」+「老友记等真人剧也要能搜出来」）=====
@@ -2762,7 +2869,14 @@ function secHdr(t,r){ return '<div class="srsec"><span>'+t+'</span>'+(r?('<span 
 function renderAddHint(){
   var el=document.getElementById('addHint'); if(!el) return;
   if(el._offline){ el.innerHTML='<span style="color:var(--danger)">在线搜索暂不可用（网络问题）</span>——本地结果照常，可正常添加'; return; }
-  el.innerHTML='搜索源：本地库（离线可用）+ <b style="color:var(--ink)">全网（真人剧 + 动画，免注册）</b> + <b style="color:var(--ink)">AniList（中文名直搜动画）</b> · 搜不到就「✧ 问 AI 加片」';
+  /* v2.34.0：这行原本是「搜索源：本地库 + 全网 + AniList · 搜不到就问 AI」——机制说明书。     留空即整行不占位；真出状况时上面那句离线提示会来说话。*/
+  el.innerHTML='';
+}
+function setAddTools(on){
+  var el=document.getElementById('addTools'); if(!el){ return; }
+  el.classList[on?'remove':'add']('off');
+  var ai=document.getElementById('btnAiAdd');
+  if(ai){ ai.style.display=AT_TOUCH()?'none':''; }
 }
 function setAddOffline(off){ var el=document.getElementById('addHint'); if(el){ el._offline=!!off; renderAddHint(); } }
 /* v2.10.0：logAdd 原本只往「同步台账」写一条记录；台账已移除，这里保留空实现
@@ -2781,6 +2895,7 @@ async function addLibFromSearch(btn,id){
    同一关键词只自动开一次（回车重搜不再弹第二遍），面板已经在时也不抢。 */
 function autoAiAdd(kw){
   kw=String(kw||'').trim(); if(!kw) return;
+  if(AT_TOUCH()){ setAddTools(true); toast('没搜到 · 换个词试试，或用「＋ 手动添加」'); return; }
   if(document.getElementById('at270StdMask')) return;
   /* 同一关键词 10 秒内只自动开一次：回车重搜不连弹第二遍；换词或过一会儿再搜仍会递过来 */
   var now=Date.now();
@@ -2797,7 +2912,7 @@ async function doSearch(){
   var kw=document.getElementById('qKw').value.trim();
   var msg=document.getElementById('srMsg'), list=document.getElementById('srList');
   if(!kw){ msg.textContent='先输入番名'; return; }
-  pushSearchHist(kw); renderSearchHist(); setAddOffline(false); renderAddHint();
+  pushSearchHist(kw); renderSearchHist(); setAddOffline(false); renderAddHint(); setAddTools(false);
   /* ① 本地结果（即时、离线可用） */
   var owned=ownedInList(kw), lib=localLibHits(kw);
   var localHtml='';
@@ -2839,6 +2954,9 @@ async function doSearch(){
     onlineHtml+='<div class="srnote" id="srTvNote">全网无更多结果（全网库按英文条目名索引，中文名可能查不到）· 试下面的「✧ 问 AI 加片」：复制固定格式问任意 AI，回答贴回来即可建整条条目</div>';
   }
   list.innerHTML=localHtml+onlineHtml+'<div id="srAlBox"></div>';
+  /* 手机上那句「全网库按英文条目名索引…」是内部机制，换成一句人话 */
+  if(AT_TOUCH()){ var _tn=document.getElementById('srTvNote');
+    if(_tn){ _tn.textContent='没搜到 · 换个词或别名试试，或用下面的「＋ 手动添加」'; } }
   if(items.length) msg.textContent='本地 '+localN+' 条 + 全网 '+items.length+' 条 · 正在试 AniList…';
   else if(tvDown) msg.textContent=localN?('本地命中 '+localN+' 条 · TVMaze 不可用，正在试 AniList…'):'TVMaze 不可用，正在试 AniList…';
   else msg.textContent=localN?('本地命中 '+localN+' 条 · 全网没搜到，正在试 AniList…'):'全网没搜到，正在试 AniList…';
@@ -2887,12 +3005,13 @@ async function doSearch(){
   }
   /* 两条通道都断才算「网络不可用」：只剩一条挂着时另一条的结果就是活路，别误报离线 */
   if(tvDown&&alDown) setAddOffline(true);
+  if(!onlineN) setAddTools(true);
   if(onlineN){
     msg.textContent='本地 '+localN+' 条 + 全网 '+onlineN+' 条 · 点「添加」立刻入库，单集随后自动补齐';
   } else if(tvDown&&alDown){
-    msg.textContent=localN?'仅本地结果（网络不可用）':'网络不可用且本地未命中——可用「＋ 手动添加」「✧ 问 AI 加片」，或稍后重试';
+    msg.textContent=localN?'仅本地结果（网络不可用）':(AT_TOUCH()?'网络不可用，本地也没命中——可用「＋ 手动添加」，或稍后重试':'网络不可用且本地未命中——可用「＋ 手动添加」「✧ 问 AI 加片」，或稍后重试');
   } else {
-    msg.textContent='全网没搜到'+(localN?('（本地有 '+localN+' 条）'):'')+'，可换关键词/别名，或「✧ 问 AI 加片」';
+    msg.textContent='全网没搜到'+(localN?('（本地有 '+localN+' 条）'):'')+(AT_TOUCH()?'，可换关键词或别名试试':'，可换关键词/别名，或「✧ 问 AI 加片」');
   }
   /* v2.29.0：豆瓣联想第四区——中文国产剧在英文库（TVMaze/AniList）经常 0 结果，
      subject_suggest 补上豆瓣标准名+小图+集数；与已列出的本地/全网/AniList 条目按归一化名去重。
@@ -3690,6 +3809,146 @@ async function healCoverFor(s,opts){
     return true;
   }catch(e){ _cvRestore(s); return false; }
 }
+/* v2.35.0（用户令「就算加入片单也要自动联网更新封面和题目」）：按**网上号**校准片名。
+   只认号不认字面：条目有 TVMaze id 就去取它那一条的官方名，没号的**绝不改名**——
+   v2.14.0g 的老教训（按剧名松匹配把《海贼王》换成水墨错图）在名字上代价更大，
+   错名字会把去重、搜索、豆瓣匹配一起带偏，比旧名字糟得多。
+   两条豁免：用户亲手改过的名字（titleFrom='me'）永不覆盖；封面沿用 healCoverFor 的规则
+   （coverBy='user' 的手动封面不动）。返回值只回答「封面补到没有」——改名不该让
+   还缺封面的条目逃掉 coverHealAll 的退避重试。 */
+function tvIdOf(s){
+  var t = String((s && s.tvId) || '');
+  if(/^\d+$/.test(t)) return t;
+  var sid = String((s && s.sid) || '');
+  return /^tv\d+$/.test(sid) ? sid.slice(2) : '';
+}
+/* ===== v2.35.0（用户令「不通过 AI 刷新我片单的名字和剧集名」）=====
+   原来那颗「✧ 让 AI 补新集」要人坐电脑前贴来贴去，这里换成纯联网的自刷新：
+     片名  ← TVMaze /shows/{tvId} 的官方名（按号，不按字面松匹配）
+     集名  ← TVMaze /shows/{tvId}/episodes 的官方集名（原文）
+             + 内置库的中文集名（命中同一部时补tCn）
+     缺集  ← 官方集表比本地多出来的集，按 sn/en 追加，绝不改动已有集的任何标记
+   四条不可退让的规矩（每条都对应一个已经踩过的坑）：
+     ① **只补空，不覆盖**。已有 tOrig / tCn 一律不动；主名 e.t 只在它本来就是占位
+        （「第 N 集」或空）时才被真名替掉——用户手填的集名比官方名更可信。
+     ② **用户亲手改过的绝不覆盖**：片名看 titleFrom==='me'，集名看 nameFrom==='me'
+        （编辑集名时写入）。自动校准永远给手改让路。
+     ③ **按号取名，不按名取号**：没有 tvId 的条目宁可什么都不做，也不按剧名去猜是哪一部。
+        v2.14.0g 已经为封面栽过一次（《海贼王》被换成水墨错图），名字上代价更大。
+     ④ **纯离线优先**：内置库先查（302 部、零网络、带中文集名），查不到才联网。
+   返回 {renamed, named, added, from}，from 说明这轮名字是从哪儿来的，便于回执说人话。 */
+function libShowOf(s){
+  var lib = window.INTERNAL_SHOWS || [];
+  var hit = lib.filter(function(x){
+    return (normTxt(x.title) && normTxt(x.title)===normTxt(s.title)) ||
+           (s.nameJp && x.nameJp && normTxt(x.nameJp)===normTxt(s.nameJp)) ||
+           ((s.aliases||[]).some(function(a){ return normTxt(x.title)===normTxt(a); }));
+  })[0];
+  return (hit && (hit.eps||[]).length) ? hit : null;
+}
+/* 一集的「真名」判定：占位名（第 N 集 / 空 / 纯 SxxExx 标签）才允许被替换 */
+function epNameIsPlaceholder(e){
+  var t=String((e && e.t)||'').trim();
+  if(!t) return true;
+  if(/^第\s*\d{1,4}\s*[集话話]$/.test(t)) return true;
+  if(/^S\d{1,2}E\d{1,3}$/i.test(t)) return true;
+  if(/^Ep\.?\s*\d{1,4}$/i.test(t)) return true;
+  return false;
+}
+function canonEpList(s){ /* 官方集表按「季-集内号」建索引，sn/en 缺失时退回整部连号 */
+  var byKey={}, byS={};
+  (s.__webEps||[]).forEach(function(e){
+    if(e.sn&&e.en) byKey[e.sn+'-'+e.en]=e;
+    byS[e.s]=e;
+  });
+  return function(ex){
+    if(ex.sn&&ex.en&&byKey[ex.sn+'-'+ex.en]) return byKey[ex.sn+'-'+ex.en];
+    return byS[ex.s]||null;
+  };
+}
+async function refreshNamesFor(s,opts){
+  opts=opts||{};
+  var out={renamed:0,named:0,added:0,from:'',coverOk:false};
+  if(!s||s.pv) return out;
+  var tv=tvIdOf(s);
+
+  /* ---- 片名：TVMaze 官方名（按号） ---- */
+  if(tv && String(s.titleFrom)!=='me'){
+    try{
+      var d=null; try{ d=await _wget(WAPI+'/shows/'+tv); }catch(e){ d=null; }
+      var nm=d?String(d.name||'').trim():'';
+      if(nm&&normTxt(nm)!==normTxt(String(s.title||''))){ s.title=nm; out.renamed++; out.from='TVMaze'; }
+    }catch(e){}
+  }
+
+  /* ---- 集名：内置库（离线、带中文） → TVMaze 官方集表 ---- */
+  var lib=libShowOf(s), libEps={};
+  if(lib) lib.eps.forEach(function(e){ libEps[e.s]=e; });
+  if(tv){
+    try{ var we=await webEpisodes(tv); if(we&&we.length){ s.__webEps=we; if(!out.from) out.from='TVMaze'; } }
+    catch(e){}
+  }
+  var lookup=canonEpList(s), named=0, added=0;
+  /* 已有集：只填空位，绝不覆盖 */
+  (s.eps||[]).forEach(function(ex){
+    if(String(ex.nameFrom)==='me') return;           /* 亲手改过：让路 */
+    var w=lookup(ex), l=libEps[ex.s], gotOrig='', gotCn='';
+    if(l && String(l.t||'').trim()) gotCn=String(l.t).trim();      /* 内置库的 t 是中译 */
+    if(w){ gotOrig=String(w.tOrig||'').trim(); }
+    var ch=false;
+    if(gotOrig && !String(ex.tOrig||'').trim()){ ex.tOrig=gotOrig; ch=true; }
+    if(gotCn && !String(ex.tCn||'').trim()){ ex.tCn=gotCn; ch=true; }
+    if(ch){
+      /* 主名只在原来是占位时才换：用户填的名字、已存在的名字一律留着 */
+      if(epNameIsPlaceholder(ex)) ex.t = ex.tCn || ex.tOrig || ex.t;
+      named++;
+    }
+  });
+  /* 缺集：官方有、本地没有的追加在末尾（已看进度一律不动，追加集默认未看） */
+  if(s.__webEps && s.__webEps.length){
+    var have={}; (s.eps||[]).forEach(function(x){ have[x.s]=1; });
+    var maxS=(s.eps||[]).reduce(function(m,x){ return Math.max(m,Number(x.s)||0); },0);
+    s.__webEps.forEach(function(w){
+      if(have[w.s]) return;
+      maxS++;
+      s.eps.push({ s:w.s, sn:w.sn, en:w.en, tOrig:w.tOrig||'', t:w.tOrig||('第 '+w.s+' 集'), dur:w.dur||0, air:w.air||'' });
+      added++;
+    });
+    if(s.eps.length>(s.total||0)) s.total=s.eps.length;
+  }
+  if(named||added){ if(!out.from) out.from='内置库'; }
+  out.named=named; out.added=added;
+  if(named||added||out.renamed){ s.metaAt=Date.now(); s.updAt=Date.now(); }
+
+  /* ---- 封面顺带补（沿用既有规则：手动封面不动） ---- */
+  if(coverNeedsHeal(s)||opts.relay){ try{ out.coverOk=await healCoverFor(s,{save:false,relay:opts.relay}); }catch(e){ out.coverOk=false; } }
+  try{ delete s.__webEps; }catch(e){}   /* 临时索引不进存档、不进云同步、不进导出包 */
+  if(opts.save!==false) save();
+  return out;
+}
+/* 详情页手动入口的回执：说清楚这轮动了什么、没动什么 */
+function refreshNamesNow(sid){
+  var s=bySid(sid||curSid)||bySid(curSid); if(!s){ toast('先点一部剧'); return; }
+  if(s.pv){ toast('预览模式：先加入片单再刷新'); return; }
+  var nb=document.getElementById('nextBtn');
+  if(nb){ nb.disabled=true; nb.textContent='正在按网上号刷新片名与集名…'; }
+  toast('正在按网上号刷新片名与集名…','');
+  refreshNamesFor(s).then(function(r){
+    try{ statInvalidate(s.sid); }catch(e){}
+    renderDetail(); renderList();
+    var bits=[];
+    if(r.renamed) bits.push('片名按'+r.from+'官方名改了');
+    if(r.named) bits.push('补了 '+r.named+' 集的官方名');
+    if(r.added) bits.push('新增 '+r.added+' 集');
+    if(r.coverOk) bits.push('封面也补上了');
+    toast(bits.length? ('已刷新：'+bits.join(' · ')) : '片名与集名都是最新的，没有可补的（你手改过的名字不会被覆盖）');
+  }).catch(function(e){
+    try{ renderDetail(); }catch(e2){}
+    toast('刷新失败：'+((e&&e.message)||e));
+  });
+}
+window.refreshNamesNow = refreshNamesNow;
+window.refreshNamesFor = refreshNamesFor;
 /* 封面还原：只动「被洗掉/重拉失败」的那张，别的一律不碰。 */
 var _cvRestored=false;
 function _cvRestore(s){
@@ -3719,7 +3978,9 @@ async function coverHealAll(manual,limit){
          v2.28.0：熔断——连着 3 部全源失败就停用豆瓣（大概率撞上限流），本轮剩余只走其余源，
          免得把豆瓣本来就紧的额度烧光；批量时每部间隔放宽到 1.2s，降低风控触发。 */
       var relay=!!manual&&dbFail<3;
-      try{ ok=await healCoverFor(pool[i],{save:false, relay:relay}); }catch(e){ ok=false; }
+      /* v2.35.0：批量补封面顺带按号校准片名与集名（refreshNamesFor 一并做这些），
+         但判据仍只看封面 —— 名字刷新不该让还缺封面的条目逃掉退避重试。 */
+      try{ var _r=await refreshNamesFor(pool[i],{save:false, relay:relay}); ok=_r.coverOk; }catch(e){ ok=false; }
       if(manual&&!ok&&relay) dbFail++;
       coverMark(pool[i].sid,ok);
       if(ok) okN++; else failN++;
@@ -3922,9 +4183,10 @@ function addShow(item){
   shows.push(item); save();
   /* v2.17.0：加片即把来源校准到位（纯离线查表，不联网、不弹提示） */
   try{ if(autoCalibrateSrc(item)) save(); }catch(e){}
-  /* v2.14.0b 添加即联网拉封面（用户指令「以后每次搜索都要顺便把图片也联网搜索」）：
-     无封面时后台按剧名去全网库补拉，成功即重渲染列表，不留空封面。 */
-  if(!item.cover){ try{ healCoverFor(item).then(function(ok){ if(ok){ renderList(); var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none'&&curSid===item.sid) renderDetail(); } }); }catch(e){} }
+  /* v2.14.0b 添加即联网拉封面 → v2.35.0 扩成「封面 + 片名 + 集名一起校准」：
+     不再只在没封面时才动，加进来就后台按号取官方名、集名与官方图，取完无条件重渲染一次
+     （有没有改到都由那次渲染说清楚，用户不用点任何钮）。全程不问AI、不贴任何文本。 */
+  try{ refreshNamesFor(item).then(function(){ try{ renderList(); var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none'&&curSid===item.sid) renderDetail(); }catch(e2){} }); }catch(e){}
   var src=(String(item.source||'').indexOf('全网')>=0)?'在线搜索':((String(item.source||'').indexOf('内置库')>=0)?'本地库':((String(item.source||'').indexOf('手动')>=0)?'手动添加':(item.source||'未知')));
   try{ logAdd(item.title, src+(item.tvId?(' · 全网 #'+item.tvId):''), true); }catch(e0){}
   document.getElementById('srMsg').textContent='';
@@ -4103,6 +4365,33 @@ var dbnItems=[];
 var dbnQ='';
 var dbnFrom='';
 
+/* v2.35.0（用户令「可切换豆瓣的和追迹的片单」）：豆瓣整张片单只有本机 :3000 网关拉得到
+   （Cookie 存在网关那边，追迹自己不留），而手机上的 127.0.0.1 是手机自己——
+   所以手机上那份不能是「现拉」，只能是「拉过之后存下来的快照」。
+   每次拉取成功就落一份带时间戳的快照，它随账号云同步传播：电脑上拉一次，
+   手机离线也能切过去看、一键加进追迹片单。
+   刻意不存 dataURL 封面：几百条图几十 MB，本地配额（约 250 部封顶）当场爆。
+   pic 留豆瓣远程地址，手机上裂就裂——真要收进片单，加入那一步自己会补封面。 */
+var DB_SNAP_KEY='tr_db_snap', DB_SNAP_MAX=800;
+function dbSnapSave(items){
+  try{
+    var slim=(items||[]).slice(0,DB_SNAP_MAX).map(function(d){
+      return { subjectId:String(d.subjectId||''), title:String(d.title||''),
+        cnTitle:String(d.cnTitle||''), origTitle:String(d.origTitle||''),
+        year:String(d.year||''), status:String(d.status||''), pic:String(d.pic||''),
+        rating:d.rating||0, ep:d.ep||0, markedAt:String(d.markedAt||''),
+        isAnime:d.isAnime?1:0, genres:(d.genres||[]).slice(0,6) };
+    });
+    localStorage.setItem(DB_SNAP_KEY, JSON.stringify({ at:Date.now(), n:slim.length, items:slim }));
+    return slim.length;
+  }catch(e){ return 0; }
+}
+function dbSnapGet(){
+  try{ var o=JSON.parse(localStorage.getItem(DB_SNAP_KEY)||'null');
+    return (o&&o.items&&o.items.length)?o:null; }catch(e){ return null; }
+}
+/* 快照是「别处拉来的外部数据」，只读展示用；任何一条都不许混进 shows（那是用户自己的账本）。 */
+function dbSnapItems(){ var o=dbSnapGet(); return o?o.items:[]; }
 function dbTargetOf(d){
   var i,t=null,real=/^\d+$/.test(String(d.subjectId||''));
   if(real){ for(i=0;i<shows.length;i++){ if(String(shows[i].dbId||'')!==''&&String(shows[i].dbId)===String(d.subjectId)){ t=shows[i]; break; } } }
@@ -4142,6 +4431,11 @@ function dbApplyOne(d){
     shows.push(ns); return 'added';
   }
   if(!cur.dbId&&real){ cur.dbId=String(d.subjectId); ch=true; }
+  /* v2.35.0（用户令「加入片单也要自动更新题目」）：豆瓣是这条目的账本，按**号**改名是安全的，
+     v2.33.0 那条「已有条目一律不改名」因此放开——但用户在「编辑资料」里亲手改过的
+     （titleFrom='me'）还是不动，那是人给的名字，不是网给的名字。 */
+  var _want=dbShowTitle(d);
+  if(_want&&cur.titleFrom!=='me'&&String(cur.title||'')!==_want){ cur.title=_want; if(d.origTitle) cur.nameJp=d.origTitle; ch=true; }
   if(!cur.cover&&d.pic){ cur.cover=d.pic; ch=true; }
   if(!cur.year&&d.year){ cur.year=d.year; ch=true; }
   if(!cur.rating&&d.rating){ cur.rating=d.rating; ch=true; }
@@ -4360,6 +4654,8 @@ async function dbnPull(scope, keepMsg){
   });
   /* 记下豆瓣侧「现在是什么」，推送方向的差异提示全靠它 */
   dbnItems.forEach(function(d){ if(d.subjectId) dbnBySid[String(d.subjectId)]=d.status; });
+  /* 拉到的同时存成快照：这是手机上那份豆瓣片单的唯一来源（那边打不到网关）。 */
+  try{ dbSnapSave(dbnItems); }catch(e){}
   dbnFrom='豆瓣共 '+dbnItems.length+' 条'+(j.truncated?'（每种状态只取了最近 300 条）':'')
     +' · 已在片单的默认不勾，勾了才会改';
   dbnRender();
@@ -4610,6 +4906,13 @@ async function openAccount(focus){
       '<span class="sep">·</span><span class="mini" style="color:var(--muted)">拉回来先给清单，勾了才入库</span></div>'+
     '<input type="file" id="syFile" accept=".json" style="display:none" aria-label="选择要导入的备份文件"/>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
+  /* 手机端整块不渲染这两行：封面来源（TMDB 密钥）与豆瓣同步。豆瓣要够到本机 :3000 网关，
+     而手机上的 127.0.0.1 是手机自己——那颗钮按下去永远是 Failed to fetch。 */
+  if(AT_TOUCH()){
+    ['cvSrcOpen','dbSyncOpen'].forEach(function(id){
+      var b=box.querySelector('#'+id); if(b&&b.parentNode){ b.parentNode.remove(); }
+    });
+  }
   wrap.appendChild(box); document.body.appendChild(wrap);
   function escClose(e){ if(e.key==='Escape') window.__closeSync(); }
   window.__closeSync=function(){ document.removeEventListener('keydown',escClose); if(wrap&&wrap.parentNode) wrap.remove(); };
@@ -4685,8 +4988,9 @@ async function openAccount(focus){
     };
   }
   box.querySelector('#syExport').onclick=function(){ downloadBackup(); };  box.querySelector('#syImport').onclick=function(){ box.querySelector('#syFile').click(); };
-  box.querySelector('#cvSrcOpen').onclick=function(){ openCoverSrc(); };
-  box.querySelector('#dbSyncOpen').onclick=function(){ openDoubanSync(); };
+  /* 手机端这两行整块不在 DOM 上（见 openAccount 里的 AT_TOUCH 分支），绑定必须跟着认空 */
+  var _cvb=box.querySelector('#cvSrcOpen'); if(_cvb){ _cvb.onclick=function(){ openCoverSrc(); }; }
+  var _dbb=box.querySelector('#dbSyncOpen'); if(_dbb){ _dbb.onclick=function(){ openDoubanSync(); }; }
 /* ===== 封面来源设置（v2.25.0 建；v2.29.1 起 TMDB 密钥为可选进阶，主文案=全自动免配置）===== */
 function openCoverSrc(){
   var old=document.getElementById('cvSrcMask'); if(old) old.remove();
@@ -5196,6 +5500,9 @@ setTimeout(function(){
         if (tO) e.tOrig = tO; else delete e.tOrig;
         if (tC) e.tCn = tC; else delete e.tCn;
         e.t = e.tCn || e.tOrig || e.t;
+        /* v2.35.0：打上手改标记。「⟳ 刷新片名与集名」只补空、绝不覆盖用户填的名字，
+           靠的就是这个标记——没有它，自动校准分不清「官方名」和「你写的名」。 */
+        e.nameFrom = 'me';
         nameChanged = true;
         logEdit(s.sid, '集名双语', '第 ' + e.s + ' 集：' + (tO || '—') + ' / ' + (tC || '—'));
       }
@@ -5325,6 +5632,10 @@ setTimeout(function(){
     try {
       var vd = $('vDetail'); if (!vd || vd.style.display === 'none') return;
       var old = $('at270Box'); if (old) old.remove();
+      /* v2.35.0（用户令「漫改这些恢复原来的」）：管理箱与「改来源标注」「类型行」「来源筛选条」
+         同属漫改/来源这条轴，一并恢复。原先「手机上整块不渲染」是为了绕开它没排 order
+         会顶到片名上方的问题——那用 order 解决（见手机档 #vDetail>#at270Box），
+         不用「不渲染」当遮羞布：藏起来比排错位置更难排查。 */
       if (String(curSid).indexOf('int:') === 0) {
         var li = (window.INTERNAL_SHOWS || []).filter(function (x) { return x.id === curSid.slice(4); })[0];
         var boxI = makeEl('<div class="at270box" id="at270Box"><div class="sec"><div class="sech">双语与资料</div>' +
@@ -5426,7 +5737,7 @@ setTimeout(function(){
       nRaw.forEach(function (a) { a = a.trim(); if (a && nAliases.indexOf(a) < 0) nAliases.push(a); });
       var ny = $('at270ProfYear').value.trim().slice(0, 4);
       var changes = [];
-      if (nt !== s.title) { changes.push('中文名：' + s.title + ' → ' + nt); s.title = nt; }
+      if (nt !== s.title) { changes.push('中文名：' + s.title + ' → ' + nt); s.title = nt; s.titleFrom = 'me'; }  /* v2.35.0：亲手的名字是最终答案，自动校准一律让路 */
       if (njp !== (s.nameJp || '')) { changes.push('原文名：' + (s.nameJp || '—') + ' → ' + (njp || '—')); s.nameJp = njp; }
       if (nAliases.join('|') !== (s.aliases || []).join('|')) { changes.push('别名：' + ((s.aliases || []).length) + ' 条 → ' + nAliases.length + ' 条'); s.aliases = nAliases; }
       if (ny !== (s.year || '')) { changes.push('年份：' + (s.year || '—') + ' → ' + (ny || '—')); s.year = ny; }
@@ -5624,6 +5935,45 @@ setTimeout(function(){
      覆盖报告、补封面、数据质量）整体退役，主列表只留片单本身。
      底层函数（coverHealAll 启动自愈、单卡「重拉封面」）保留不动。
      ===================================================================== */
+  /* v2.35.0（用户令「除了整部进度，有漫改的还要显示漫改进度和时间」）：
+     漫改进度从类型筛选按钮行里挪出来，独立成一行（#dCanonProg）。
+     挪的原因：那行是「点一下筛集」的按钮，塞一个只读数字进去既不像按钮也不像数据，
+     用户看不出它是进度还是筛选项。独立行才读得出「整部进度」与「漫改进度」是两笔账。
+     口径诚实说明：
+       · 进度是「已看 / 共 N 集」+ 百分比，百分比只算已看，不含回看。
+       · 时间只能给到条目级（开始看 / 看完 / 用时）——单集时间戳自 v2.14 起就不记录，
+         漫改子集没有自己的开始/看完日期。这里给的是整部的时间，字面写明「全剧」，
+         不让用户误以为是漫改那几集单独的时间账。
+       · 只对动画这条轴成立的条目显示（真人剧没有「漫改/TV原创」之分，硬算就是编造）。 */
+  function canonProgOf(s){
+    if(!s || !fillerAxisApplies(s)) return null;
+    var cn=0, cw=0, cr=0;
+    (s.eps||[]).forEach(function(e){
+      if(srcInfoOf(s,e).src!=='canon') return;
+      cn++;
+      var v=(s.statuses||{})[e.s];
+      if(v==='watched') cw++; else if(v==='rewatch') cr++;
+    });
+    if(!cn) return null;
+    var pct=Math.round((cw/cn)*100);
+    return { total:cn, watched:cw, rewatch:cr, pct:pct };
+  }
+  function canonProgHtml(s){
+    var c=canonProgOf(s);
+    if(!c) return '';
+    var bits=['漫改 <b>'+c.watched+'</b> / '+c.total+' 集','<b>'+c.pct+'%</b>'];
+    if(c.rewatch) bits.push('回看 '+c.rewatch);
+    var t=[];
+    if(s.tStart) t.push('全剧开始 '+fmtDay(s.tStart));
+    if(s.tDone) t.push('全剧看完 '+fmtDay(s.tDone));
+    var days=(s.tStart&&s.tDone&&s.tDone>=s.tStart)?dayDiff(s.tStart,s.tDone):0;
+    if(days>0) t.push('全剧用时 '+days+' 天');
+    return '<span class="cnp-main">'+bits.join('<span class="ds">·</span>')+'</span>'+
+      (t.length?('<span class="cnp-time">'+t.join('<span class="ds">·</span>')+'</span>'):'');
+  }
+  window.canonProgHtml = canonProgHtml;
+  window.canonProgOf = canonProgOf;
+
   window._at270TyHtml = function () {
     /* v2.19.1 用户指令：「类型 ▴」折叠按钮删掉，类别直接常驻展开，
        少一次点击、少一层状态（_at270TyOpen 一并退役）。 */

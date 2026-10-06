@@ -321,8 +321,19 @@
     } catch (e) { lg('cloud', '片单合并异常：' + ((e && e.message) || e), 'warn'); }
     try {
       var cleaned = B ? B.sanitize(rem).ok : rem;
+      /* v2.35.0：豆瓣片单快照按「整份比时间，新的一方胜」合并，不进下面那条
+         「别的 key 只补本机没有的」——不然电脑上刷新一百次，手机上还是第一次那份，
+         用户看到的就是「同步没把豆瓣带过来」。 */
+      var SN = (M && M.snapKeys) || [];
+      res.snap = 0;
+      for (var si = 0; si < SN.length; si++) {
+        var sk = SN[si];
+        if (!(sk in cleaned)) continue;
+        var pick = (M && M.mergeSnap) ? M.mergeSnap(localStorage.getItem(sk), cleaned[sk]) : null;
+        if (pick != null && pick !== localStorage.getItem(sk)) { localStorage.setItem(sk, pick); res.changedAny = true; res.snap++; }
+      }
       for (var k in cleaned) {
-        if (k === 'tr_shows' || k === TK) continue;
+        if (k === 'tr_shows' || k === TK || SN.indexOf(k) >= 0) continue;
         if (localStorage.getItem(k) === null) { localStorage.setItem(k, cleaned[k]); res.changedAny = true; }
       }
     } catch (e) { lg('cloud', '杂项合并异常：' + ((e && e.message) || e), 'warn'); }

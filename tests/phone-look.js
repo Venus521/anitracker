@@ -454,6 +454,9 @@ const PY = process.env.AT_PY || (function () {
     await sleep(400);
     await page.evaluate(() => { backList(); openDetail('p-fr'); });
     await sleep(900);
+    /* v2.35.0：详情页那颗「✧ 让 AI 补新集」退役了，改从「✧ AI 结果导入」进。
+       但这屏量的弹窗（at270StdMask）本身没变——window.aiUpd() 仍在，弹窗还在，
+       只是没有可见按钮调它了。保留调用，别把这屏的量具一起删掉。 */
     await page.evaluate(() => window.aiUpd());
     await sleep(600);
     await page.evaluate(t => {
@@ -462,8 +465,8 @@ const PY = process.env.AT_PY || (function () {
     }, FX.FRIENDS);
     await sleep(900);
     await settled();
-    await shoot('5c-让AI补新集.png', '「让 AI 补新集」：点之前先把「新增/补名/跳过」报出来');
-    await meas('让AI补新集');
+    await shoot('5c-AI结果导入.png', 'AI 结果导入弹窗：点之前先把「新增/补名/跳过」报出来');
+    await meas('AI结果导入');
     await page.evaluate(() => { var b = document.getElementById('at270StdX'); if (b) b.click(); backList(); });
     await sleep(400);
 

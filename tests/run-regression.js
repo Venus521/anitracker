@@ -66,6 +66,10 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
   if (!srvUp) console.log('WARN: 8094 静态服务未就绪，浏览器类用例可能失败');
   await sleep(400);
   let pageErrors = 0; let webReqs = 0; let wdReqs = 0;
+  /* v2.35.0：光记次数不记是谁，加片那轮后台刷名（v2.14.0b 起就有、v2.35.0 又扩了名与集名）
+     一旦落进 T15 的测量窗口，只会看到「webReqs=1」猜不出是谁发的。留个尾巴列表，失败时直接读。 */
+  let webReqTail = [];
+  const noteWebReq = (u) => { webReqs++; webReqTail.push(String(u).replace('http://127.0.0.1:8093', 'api.tvmaze.com').slice(-96)); if (webReqTail.length > 8) webReqTail.shift(); };
   let browser;
   try {
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
@@ -77,7 +81,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     /* 规矩：整页只能有一个 request 监听器，两个监听器会把同一个请求 handle 两次而报错 */
     page.on('request', req => {
       const u = req.url();
-      if (u.includes('api.tvmaze.com')) { webReqs++; return req.continue({ url: u.replace('https://api.tvmaze.com', 'http://127.0.0.1:8093') }); }
+      if (u.includes('api.tvmaze.com')) { noteWebReq(u); return req.continue({ url: u.replace('https://api.tvmaze.com', 'http://127.0.0.1:8093') }); }
       /* v2.29.0：豆瓣联想（云函数）不出网——本地直接应答，带 CORS 头（v2.20.0 教训：少头=页面判网络不可用） */
       /* v2.30.0：Wikidata / Commons 兜底源不许出网。本机代理对 wikidata 每次要 19.6s 才
          ConnectionReset（实测 3/3 次），六个待补条目就是 6×19.6s，直接把「等自愈跑完」的 90s 撑爆——
@@ -88,7 +92,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
         return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ search: [] }) });
       }
       if (u.includes('service.tcloudbase.com')) {
-        webReqs++;
+        noteWebReq(u);
         return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' },
           body: JSON.stringify({ items: [{ title: 'Mock 国产剧 (豆瓣)', img: '', episode: '12', year: '2026', url: 'https://movie.douban.com/subject/99000001/' }] }) });
       }
@@ -111,7 +115,9 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
          面板加方向切换后，拉方向的老用例一根都不能少。 */
       'dbnPush', 'dbnPushable', 'dbnWantStatus', 'dbnPushDiff', 'dbnDirNote',
       /* v2.32.0 凭据跨设备：Cookie 加密存自己的 CloudBase 账号，换设备取回。 */
-      'dbnPutCred', 'dbnTakeCred', 'dbnCredRow', 'dbnAskPassword'];
+      'dbnPutCred', 'dbnTakeCred', 'dbnCredRow', 'dbnAskPassword',
+      /* v2.35.0 漫改进度行 + 非 AI 刷名：这两块是新入口，一处语法错就整页哑掉。 */
+      'canonProgOf', 'canonProgHtml', 'refreshNamesFor', 'refreshNamesNow'];
     const boot = await page.evaluate((names) => ({
       missing: names.filter(n => typeof window[n] !== 'function')
     }), BOOT_FN);
@@ -227,7 +233,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
 
     /* T12 点「添加」立刻回执，单集在后台补（主路径不联网——缺点5 的不变量） */
     const beforeCnt = await page.evaluate(() => JSON.parse(localStorage.getItem('tr_shows') || '[]').length);
-    webReqs = 0;
+    webReqs = 0; webReqTail = [];
     const tAdd = Date.now();
     await page.evaluate(() => {
       const b = Array.from(document.querySelectorAll('#srList .sr[data-tv="900003"] button')).find(x => /添加/.test(x.textContent));
@@ -290,7 +296,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       grid0.parts === 3 && /季度切换/.test(grid0.head) && grid0.rows === 5 && grid0.allS1, JSON.stringify(grid0).slice(0, 200));
 
     /* T13 切季：纯本地、零请求、秒开 */
-    webReqs = 0;
+    webReqs = 0; webReqTail = [];
     const t0 = Date.now();
     await page.evaluate(() => { const ps = document.querySelectorAll('#dParts .part'); ps[1] && ps[1].click(); });
     await sleep(350);
@@ -336,9 +342,9 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     const quietThenZero = async () => {
       for (let q = 0; q < 24; q++) {
         const a = webReqs; await sleep(500); const b = webReqs;
-        if (a === b) { webReqs = 0; return 'settled(前置后台流量 ' + b + ' 次)'; }
+        if (a === b) { webReqs = 0; webReqTail = []; return 'settled(前置后台流量 ' + b + ' 次)'; }
       }
-      webReqs = 0; return 'NOT-QUIET';
+      webReqs = 0; webReqTail = []; return 'NOT-QUIET';
     };
     await page.evaluate(() => openDetail('tv900003')); await sleep(500);
     const t15quiet = await quietThenZero();
@@ -348,7 +354,8 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       const s = JSON.parse(localStorage.getItem('tr_shows')).filter(x => x.sid === 'tv900003')[0];
       return Object.keys(s.statuses || {}).length;
     });
-    check('15', '标记已看：本地记录生效，且不发任何外部写请求', webReqs === 0 && markedLocal >= 2, t15quiet + ' webReqs=' + webReqs + ' localMarked=' + markedLocal);
+    check('15', '标记已看：本地记录生效，且不发任何外部写请求', webReqs === 0 && markedLocal >= 2,
+      t15quiet + ' webReqs=' + webReqs + ' localMarked=' + markedLocal + ' tail=' + JSON.stringify(webReqTail));
 
     /* T28 来源角标：动画每一集一律带角标（没有开关可关），真人剧不套这条轴（用户指令） */
     const badge = await page.evaluate(() => {
@@ -538,7 +545,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     /* T29 来源自动校准：只吃离线快照、零网络、不抬 updAt、一部只试一次
        （用户指令「默认自动校准好来源」；直接喂对象，绕开加片带来的后台请求） */
     await sleep(1500);
-    webReqs = 0;
+    webReqs = 0; webReqTail = [];
     const calib = await page.evaluate(() => {
       const ds = window.AFG_FILLER || {};   /* tracker-filler-data.js 同步注入，无异步 */
       const now = Date.now();

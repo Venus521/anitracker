@@ -158,6 +158,16 @@ const PY = process.env.AT_PY || (function () {
     /* ── 任务 1：加一部片（真人最常做的一步） ── */
     await tap('#vList>.top button[aria-label="添加番剧"]');
     await shot('01-添加面板.png');
+    /* 这一屏只剩一个动作，它就必须够大：桌面档规则下实测只有 36×42（两个汉字挤到边框） */
+    const searchBtn = await page.evaluate(() => {
+      const i0 = document.getElementById('qKw');
+      const b = i0 && i0.parentNode ? i0.parentNode.querySelector('button') : null;
+      if (!b) return { ok: false, why: '找不到搜索钮' };
+      const r = b.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), ok: r.width >= 44 && r.height >= 44 };
+    });
+    if (!searchBtn.ok) F('bad', '1 加片', '加片页唯一的动作钮不够大（手机上 <44px）', JSON.stringify(searchBtn));
+    else F('note', '1 加片', '搜索钮实测 ' + searchBtn.w + '×' + searchBtn.h + '（手机上 ≥44 见方）', JSON.stringify(searchBtn));
     const addFocus = await page.evaluate(() => ({
       active: document.activeElement && document.activeElement.id,
       inView: document.activeElement ? document.activeElement.getBoundingClientRect().bottom <= window.innerHeight : false,
@@ -195,20 +205,21 @@ const PY = process.env.AT_PY || (function () {
     /* toast 只活 2.2 秒，单点采样必然不是踩早就是踩晚（两版都翻过车：等 2200ms 采到
        「刚消失」、等 700ms 采到「还没出现」）。改成轮询：6 秒内闪过任何新回执就算有反馈，
        并记下它是点完第几毫秒冒出来的——这个数本身就是「点了有没有反应」的度量。 */
-    const feedback = await page.evaluate(async (prevToast) => {
+    const pollToast = (prevToast) => page.evaluate(async (prev) => {
       const el = () => document.getElementById('toast');
       const t0 = Date.now();
       while (Date.now() - t0 < 6000) {
         const e = el();
         const txt = e ? (e.textContent || '').trim() : '';
-        if (e && e.classList.contains('on') && txt && txt !== prevToast) {
+        if (e && e.classList.contains('on') && txt && txt !== prev) {
           return { toastOn: true, toast: txt, appearedAfterMs: Date.now() - t0 };
         }
         if (document.querySelector('.mask')) return { toastOn: false, dialog: true, appearedAfterMs: Date.now() - t0 };
         await new Promise((r) => setTimeout(r, 100));
       }
       return { toastOn: false, toast: (el() || {}).textContent || '', dialog: !!document.querySelector('.mask'), appearedAfterMs: -1 };
-    }, pre.toast);
+    }, prevToast);
+    const feedback = await pollToast(pre.toast);
     await shot('01c-加完之后.png');
     const addAfter = await page.evaluate(() => ({
       n: (window.shows || []).length,
@@ -243,23 +254,75 @@ const PY = process.env.AT_PY || (function () {
       const R = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect();
         return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; };
       return { vh: window.innerHeight, next: R('#nextBtn'), tools: R('#vDetail .dtools'),
+        toolsOn: !!(document.querySelector('#vDetail .dtools') || {}).offsetParent,
+        more: R('#dMoreBtn'), firstEp: R('#dGroups [data-ep]'),
         cov: R('#dSrcCov'), groups: R('#dGroups'), del: R('#delBtn') };
     });
     if (!fold.next) F('bad', '2 标记进度', '详情页找不到「标记下一集」', JSON.stringify(fold));
     else {
       if (fold.next.top < 0 || fold.next.bottom > fold.vh)
         F('bad', '2 标记进度', '点开一部番，主操作「标记下一集」不在首屏内，每次记进度都要先滚一趟', JSON.stringify(fold));
-      if (fold.tools && fold.groups && fold.tools.top < fold.groups.top)
-        F('mid', '2 标记进度', '低频工具（编辑集数/来源校准/AI 导入…）仍排在剧集列表前面', JSON.stringify(fold));
+      /* v2.34.0 起的铁律：低频工具不许占主屏（收进「⋯ 更多工具」抽屉），
+         而且打开一部番首屏就得露出至少一整行剧集——量的是「看得见一行集」，不是「DOM 里有集」。 */
+      if (fold.toolsOn)
+        F('mid', '2 标记进度', '低频工具条还占着主屏（应收进「⋯ 更多工具」抽屉）', JSON.stringify(fold));
+      if (!fold.firstEp || fold.firstEp.bottom > fold.vh)
+        F('bad', '2 标记进度', '打开一部番，首屏连一整行剧集都看不见（第一行 bottom=' + (fold.firstEp ? fold.firstEp.bottom : 'null') + ' · 视口 ' + fold.vh + '）', JSON.stringify(fold));
+      if (!fold.more || fold.more.top < 0 || fold.more.bottom > fold.vh)
+        F('mid', '2 标记进度', '「⋯ 更多工具」入口不在首屏内', JSON.stringify(fold));
       F('note', '2 标记进度', '首屏 ' + fold.vh + 'px 内各块位置', JSON.stringify(fold));
     }
+    /* ── 任务 2c：「⋯ 更多工具」抽屉（v2.34.0 手机端唯一的工具入口） ── */
+    const sheet = await page.evaluate(async () => {
+      openDTools();
+      await new Promise(r => setTimeout(r, 280));
+      const box = document.querySelector('#dToolsMask .panel');
+      const btns = box ? [].slice.call(box.querySelectorAll('button')).filter(b => b.offsetParent) : [];
+      const bx = box ? box.getBoundingClientRect() : null;
+      const hs = btns.map(b => Math.round(b.getBoundingClientRect().height));
+      return { on: !!box, n: btns.length, minH: hs.length ? Math.min.apply(null, hs) : 0,
+        inView: bx ? (bx.top >= 0 && bx.bottom <= window.innerHeight + 2) : false,
+        vh: window.innerHeight,
+        labels: btns.map(b => (b.textContent || '').trim()).filter(t => t && t !== '×') };
+    });
+    if (!sheet.on) F('bad', '2c 更多工具抽屉', '点「⋯ 更多工具」开不出抽屉', JSON.stringify(sheet));
+    else {
+      if (sheet.n < 3) F('bad', '2c 更多工具抽屉', '抽屉里只剩 ' + sheet.n + ' 颗钮，工具搬丢了', JSON.stringify(sheet));
+      if (sheet.minH < 44) F('mid', '2c 更多工具抽屉', '抽屉里的钮只有 ' + sheet.minH + 'px 高，拇指档要 44+', JSON.stringify(sheet));
+      if (!sheet.inView) F('mid', '2c 更多工具抽屉', '抽屉没落在视口内', JSON.stringify(sheet));
+      F('note', '2c 更多工具抽屉', '抽屉内容', JSON.stringify(sheet));
+    }
+    /* 抽屉里点一颗就跑掉：动作照原样触发，但人不必再滑回页尾去关它。
+       拿最后一颗（编辑集数）试——它开自己的面板，不会真改数据。 */
+    const autoClose = await page.evaluate(async () => {
+      const list = [].slice.call(document.querySelectorAll('#dToolsMask .ty')).filter(x => x.offsetParent);
+      const b = list[list.length - 1];
+      const label = b ? (b.textContent || '').trim() : '';
+      if (b) b.click();
+      await new Promise(r => setTimeout(r, 320));
+      const stillOpen = !!document.getElementById('dToolsMask');
+      const t = document.getElementById('dTools');
+      const back = !!(t && t.parentNode && t.parentNode.id === 'vDetail');
+      if (stillOpen) closeDTools();
+      [].slice.call(document.querySelectorAll('.mask')).forEach(m => { if (m.id !== 'dToolsMask') m.remove(); });
+      return { label: label, stillOpen: stillOpen, back: back };
+    });
+    if (autoClose.stillOpen || !autoClose.back)
+      F('mid', '2c 更多工具抽屉', '点了抽屉里的「' + autoClose.label + '」，抽屉没收干净或工具条没放回原位', JSON.stringify(autoClose));
+    else F('note', '2c 更多工具抽屉', '点「' + autoClose.label + '」后抽屉自动收起、工具条放回原位', JSON.stringify(autoClose));
+
     /* 真人：双击某一集 = 已看到这里（代码注释里写的手势）。两下都tap同一个点，中间 130ms。 */
     const epSel = '#dGroups [data-ep="16"]';
     const hasEp16 = await page.evaluate((s) => !!document.querySelector(s), epSel);
     let tapRes = null;
+    let markFb = null;
     if (hasEp16) {
+      const prevMark = await page.evaluate(() => {
+        const t = document.getElementById('toast');
+        return (t && t.classList.contains('on')) ? (t.textContent || '').trim() : '';
+      });
       tapRes = await tapEl(epSel, 2);
-      await sleep(900);
+      markFb = await pollToast(prevMark);
     }
     await shot('02b-标记后.png');
     const afterMark = await page.evaluate(() => {
@@ -271,8 +334,10 @@ const PY = process.env.AT_PY || (function () {
     });
     if (!afterMark.has) F('bad', '2 标记进度', '加完片回到列表却查不到任何条目（上一步「添加」其实没落库）', JSON.stringify(addAfter));
     if (hasEp16 && !afterMark.watched) F('bad', '2 标记进度', '双击某一集（文档写的「已看到这里」手势）没标记上任何集', JSON.stringify({ tapRes, afterMark }));
-    if (hasEp16 && !afterMark.toastOn) F('mid', '2 标记进度', '标记成功但没反馈', JSON.stringify(afterMark));
-    F('note', '2 标记进度', '双击第16话后', JSON.stringify({ tapRes, afterMark }));
+    /* 轮询与收尾各算一次证据：任一处看见闪过，就算用户看得见回执 */
+    if (hasEp16 && !(markFb && markFb.toastOn) && !afterMark.toastOn)
+      F('mid', '2 标记进度', '标记成功但没反馈', JSON.stringify({ markFb, afterMark }));
+    F('note', '2 标记进度', '双击第16话后', JSON.stringify({ tapRes, markFb, afterMark }));
 
     /* ── 任务 3：返回片单，进度是否带回来了 ── */
     await page.evaluate(() => backList());
@@ -642,6 +707,67 @@ const PY = process.env.AT_PY || (function () {
       F('note', '12 超长番', '末页双击第 ' + tail.max + ' 集后：已看 ' + marked.w + ' 集 · ' + marked.toast);
       await shot('12c-超长番跨页标记.png');
     }
+
+    /* ── 任务 13：按端分档（v2.34.0）── 手机上这些功能面必须整块不出现 ── */
+    const tier = await page.evaluate(async () => {
+      const vis = (el) => !!el && !!el.offsetParent;
+      const out = { ai: [], acct: '', qual: false, epCtx: [], addHint: 'x', addTools: true };
+      openDTools();
+      await new Promise(r => setTimeout(r, 260));
+      out.ai = [].slice.call(document.querySelectorAll('#dToolsMask .ty')).filter(vis)
+        .map(b => (b.textContent || '').trim());
+      closeDTools();
+      await new Promise(r => setTimeout(r, 140));
+      openAccount();
+      await new Promise(r => setTimeout(r, 520));
+      const ap = document.querySelector('#syncMask .panel');
+      out.acct = (ap ? (ap.innerText || '') : '(账号面板开不出来)').replace(/\s+/g, ' ').slice(0, 200);
+      if (window.__closeSync) window.__closeSync();
+      out.qual = vis(document.getElementById('at270QualBtn')) || vis(document.getElementById('at270AddRel'));
+      openEpCtx(120, 300, 3);
+      await new Promise(r => setTimeout(r, 240));
+      const cm = document.querySelector('.ctxmenu.on, .ctxmenu');
+      out.epCtx = cm ? [].slice.call(cm.querySelectorAll('.ctxi')).map(x => (x.textContent || '').trim()) : ['(弹不出集级菜单)'];
+      closeCtx();
+      showAdd();
+      await new Promise(r => setTimeout(r, 240));
+      out.addHint = ((document.getElementById('addHint') || {}).innerText || '').trim();
+      out.addTools = vis(document.getElementById('addTools'));
+      backList();
+      return out;
+    });
+    /* 抽屉与加片页默认态各留一张图：改完得让人看得见改成了什么样，不能只吐数字 */
+    await page.evaluate(() => openDTools());
+    await sleep(320);
+    await shot('13-更多工具抽屉.png');
+    await page.evaluate(() => closeDTools());
+    await sleep(160);
+    await page.evaluate(() => showAdd());
+    await sleep(260);
+    await shot('13b-加片页默认态.png');
+    await page.evaluate(() => backList());
+    await sleep(160);
+    if (tier.ai.some((t) => /AI/i.test(t)))
+      F('bad', '13 分档', '手机端抽屉里还留着 AI 工具：' + tier.ai.join(' / '), JSON.stringify(tier.ai));
+    else F('note', '13 分档', '抽屉里剩下的工具（AI 建档/导入已不上手机）', tier.ai.join(' / '));
+    if (/豆瓣|TMDB|封面来源/.test(tier.acct))
+      F('bad', '13 分档', '账号面板还留着豆瓣/封面来源——手机上按下去必死', tier.acct);
+    else F('note', '13 分档', '账号面板上有什么', tier.acct);
+    /* v2.35.0（用户令「漫改这些恢复原来的」）：下面这两条的判据方向反转了。
+       v2.34.0 按输入能力把「关联条目 / 数据质量」与集级「改来源标注」从手机上拿掉了，
+       用户明确说恢复——同漫改/来源这条轴一起恢复。所以现在守的是「必须还在」，
+       不再守「必须不在」。真要再分档，得先改用户指令，别让门禁替用户做决定。 */
+    if (!tier.qual) F('bad', '13 分档', '详情页的「关联条目 / 数据质量」入口不见了（用户令恢复过）', '(不 visible)');
+    else F('note', '13 分档', '关联条目 / 数据质量入口已恢复在手机上（v2.35.0 用户令）');
+    if (!tier.epCtx.some((t) => /来源标注/.test(t)))
+      F('bad', '13 分档', '集级长按的「改来源标注」不见了（用户令恢复过）', tier.epCtx.join(' / '));
+    else F('note', '13 分档', '集级长按菜单项（含恢复的「改来源标注」）', tier.epCtx.join(' / '));
+    if (/搜索源|AniList/.test(tier.addHint))
+      F('bad', '13 分档', '加片页首屏还在念机制说明书', tier.addHint);
+    if (tier.addTools)
+      F('bad', '13 分档', '还没搜就把「手动添加 / 问 AI」摆出来（应等搜不到再递到手边）', 'visible');
+    if (!tier.addTools && !/搜索源|AniList/.test(tier.addHint))
+      F('note', '13 分档', '加片页默认态', '只剩搜索框：说明书文案=空 · 备用行=收起');
 
     const perr = errs.filter((e) => e.indexOf('pageerror:') === 0);
     if (perr.length) F('bad', '全程', '跑这一趟抛了 JS 错', perr.slice(0, 3).join(' || '));

@@ -7,7 +7,9 @@
      · 失败必须报出来（半推成功要说清推了几条、没推几条）
    一个真实请求都不发：网关用 page.route 替身。替身刻意模拟「回读不通过」这一支，
    因为写回最大的坑就是「POST 没报错但没写进去」，这一支不测就等于没测。
-   用法：node tests/douban-push-e2e.js  ·  自起静态服务 8139 */
+   用法：node tests/douban-push-e2e.js  ·  自起静态服务 8139
+   v2.34.0 修量具：豆瓣行显示名自 v2.33.0 起按剧名铁律拼成双语，凡按身份取数改用 subjectId；
+   并加 P00 自检——某步勾中 0 条直接红，不再伪装成「推送坏了」。 */
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -122,18 +124,26 @@ const SEED = [
       return req.continue();
     });
 
-    await page.goto('http://127.0.0.1:' + PORT + '/index.html', { waitUntil: 'domcontentloaded' });
-    await page.evaluate((seed) => {
-      /* 键名照 tests/douban-sync-e2e.js 那一支（tr_shows，不是 'shows'）。
-         三个闸门标记都得种：漏 at_purge_v2140e，开机一次性大扫除会把刚种下的片单清空 —— 症状是
-         「dbTargetOf 全返回 null」，看起来像匹配逻辑坏了，其实是量具种漏了。 */
-      localStorage.setItem('tr_shows', JSON.stringify(seed));
+    /* 种子必须在页面脚本跑起来之前种（evaluateOnNewDocument，与 douban-sync 同一法）。
+       原来「先加载、再写 localStorage、再刷新」会被一次晚到的 save() 冲掉：
+       内置库数据集异步到达后，index.html:1680 那条一次性封面纠偏调用 save()，
+       落盘的是页面内存里的片单（此刻还是空），种子就这么没了 —— 症状是十几条断言
+       一起报「还没进片单」，看起来像产品匹配坏了。
+       at_cover_q_v22 一并种上：它是那条晚到 save() 的守门标记，种了就不会再触发。 */
+    await page.evaluateOnNewDocument((seedStr) => {
+      if (localStorage.getItem('at_e2e_seeded')) return;
+      localStorage.setItem('tr_shows', seedStr);
       localStorage.setItem('at_purge_v2140e', '1');
       localStorage.setItem('at_dedup_v2191', '1');
+      localStorage.setItem('at_cover_q_v22', 'v2');
       localStorage.setItem('at_e2e_seeded', '1');
-    }, SEED);
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await sleep(700);
+    }, JSON.stringify(SEED));
+    await page.goto('http://127.0.0.1:' + PORT + '/index.html', { waitUntil: 'domcontentloaded' });
+    await sleep(900);
+    /* 种子是否真的进了片单，这一步就该说：后面 11 条断言全依赖它，
+       不在这里拦住的话，量具失配又要伪装成「推送坏了」。 */
+    const seeded = await page.evaluate(() => ({ n: (typeof shows !== 'undefined' ? shows.length : -1), ids: (typeof shows !== 'undefined' ? shows.map(x => String(x.dbId || '')).join(',') : '') }));
+    check('00b', '量具前提：片单种子确实进了页面（后面十几条都靠它）', seeded.n === SEED.length, JSON.stringify(seeded) + '（应为 ' + SEED.length + ' 条）');
 
     /* —— 打开面板，切到推送方向 —— */
     await page.evaluate(() => openDoubanSync());
@@ -145,9 +155,13 @@ const SEED = [
       msg: (document.getElementById('dbnMsg') || {}).textContent || '',
       n: (typeof dbnItems !== 'undefined' ? dbnItems.length : -1),
       shows: (typeof shows !== 'undefined' ? shows.length : -1),
-      ids: (typeof shows !== 'undefined' ? shows.map(s => String(s.dbId || '')).join(',') : '')
+      ids: (typeof shows !== 'undefined' ? shows.map(s => String(s.dbId || '')).join(',') : ''),
+      ls: localStorage.getItem('tr_shows') || ''
     }));
     if (pre.n <= 0) console.log('  [量具前提] 面板未拉到数据：' + JSON.stringify(pre) + ' —— 后续断言会集体红，先看这里');
+    /* 现场一律打出来：这次 11 条一起红的方向是「片单里没有」，
+       不说清种进去几条、localStorage 里躺着什么，下一轮还是猜。 */
+    console.log('  [现场] ' + JSON.stringify(pre) + ' · ls=' + String(pre.ls || '').slice(0, 160));
     const dirBtns = await page.$$eval('#dbnDir .dbn-q', ns => ns.map(n => n.textContent.trim()));
     check('01', '面板有拉/推两个方向按钮', dirBtns.length === 2, dirBtns.join(' | '));
 
@@ -179,19 +193,19 @@ const SEED = [
 
     /* —— 状态映射：片单 watching/done/want → 豆瓣 do/collect/wish —— */
     const maps = await page.evaluate(() => {
-      const byT = {}; dbnItems.forEach(d => { byT[d.title] = d; });
+      const byId = {}; dbnItems.forEach(d => { byId[String(d.subjectId)] = d; });
       return {
-        done: dbnWantStatus(byT['测试剧·在看A']),      // 片单 done ⇒ 豆瓣 collect
-        watching: dbnWantStatus(byT['测试剧·想看D'])   // 片单 watching ⇒ 豆瓣 do
+        done: dbnWantStatus(byId['9001']),      // 片单 done ⇒ 豆瓣 collect
+        watching: dbnWantStatus(byId['9004'])   // 片单 watching ⇒ 豆瓣 do
       };
     });
     check('08', '状态映射：片单看完→豆瓣 collect、片单在看→豆瓣 do', maps.done === 'collect' && maps.watching === 'do', JSON.stringify(maps));
 
     /* —— 只推勾上的那一条，其余豆瓣现状一个字都不许变 —— */
-    await page.evaluate(() => {
-      dbnItems.forEach(d => { d.pick = 0; });
-      dbnItems.forEach(d => { if (d.title === '测试剧·在看A') d.pick = 1; });
+    const picked1 = await page.evaluate(() => {
+      dbnItems.forEach(d => { d.pick = (String(d.subjectId) === '9001') ? 1 : 0; });
       dbnRender();
+      return dbnItems.filter(d => d.pick).length;
     });
     const before = Object.assign({}, DB_NOW);
     await page.evaluate(() => dbnPush());
@@ -211,9 +225,10 @@ const SEED = [
     check('11', '推完重拉后该行显示「已是这个状态」（豆瓣现状已对齐）', /已是这个状态/.test(a9001), a9001.slice(0, 240));
 
     /* —— 一次性推多条：串行、逐条计数 —— */
-    await page.evaluate(() => {
-      dbnItems.forEach(d => { d.pick = (d.title === '测试剧·想看D' || d.title === '测试剧·看过C') ? 1 : 0; });
+    const picked2 = await page.evaluate(() => {
+      dbnItems.forEach(d => { d.pick = (String(d.subjectId) === '9004' || String(d.subjectId) === '9003') ? 1 : 0; });
       dbnRender();
+      return dbnItems.filter(d => d.pick).length;
     });
     markCalls.length = 0;
     await page.evaluate(() => dbnPush());
@@ -226,9 +241,10 @@ const SEED = [
 
     /* —— 回读不通过必须报出来，不能算成功 —— */
     failVerifyFor = '9004';
-    await page.evaluate(() => {
-      dbnItems.forEach(d => { d.pick = (d.title === '测试剧·想看D') ? 1 : 0; });
+    const picked3 = await page.evaluate(() => {
+      dbnItems.forEach(d => { d.pick = (String(d.subjectId) === '9004') ? 1 : 0; });
       dbnRender();
+      return dbnItems.filter(d => d.pick).length;
     });
     await page.evaluate(() => dbnPush());
     await sleep(2200);
@@ -237,9 +253,10 @@ const SEED = [
     failVerifyFor = null;
 
     /* —— 全都推不了时要拦下来并解释，而不是发一堆注定失败的请求 —— */
-    await page.evaluate(() => {
-      dbnItems.forEach(d => { d.pick = (d.title.indexOf('没进片单') >= 0) ? 1 : 0; });
+    const picked4 = await page.evaluate(() => {
+      dbnItems.forEach(d => { d.pick = (String(d.subjectId) === '9100') ? 1 : 0; });
       dbnRender();
+      return dbnItems.filter(d => d.pick).length;
     });
     markCalls.length = 0;
     await page.evaluate(() => dbnPush());
@@ -286,7 +303,7 @@ const SEED = [
       return { disabled: !!b && b.disabled, text: b ? b.textContent : '', note: (document.getElementById('dbnDirNote') || {}).textContent || '' };
     });
     check('21', '写通道被封时推送按钮置灰并明说原因', blocked.disabled === true && /不让.*写|拦/.test(blocked.note), JSON.stringify(blocked).slice(0, 260));
-    await page.evaluate(() => { dbnItems.forEach(d => { d.pick = 1; }); dbnRender(); });
+    const picked5 = await page.evaluate(() => { dbnItems.forEach(d => { d.pick = 1; }); dbnRender(); return dbnItems.filter(d => d.pick).length; });
     markCalls.length = 0;
     await page.evaluate(() => dbnPush());
     await sleep(900);
@@ -297,6 +314,9 @@ const SEED = [
     await sleep(700);
     const stillPull = await page.evaluate(() => ({ n: dbnItems.length, msg: (document.getElementById('dbnMsg') || {}).textContent || '' }));
     check('23', '写通道被封不影响拉取（拉方向照常能列条目）', stillPull.n > 0, JSON.stringify(stillPull).slice(0, 200));
+    const pickCounts = [picked1, picked2, picked3, picked4, picked5];
+    check('00', '量具前提：每一步都真的勾上了条目（勾中数 ' + pickCounts.join('/') + '，全应为正数）',
+      pickCounts.every(c => c > 0), pickCounts.join('/'));
   } catch (e) {
     check('99', '测试执行异常', false, (e && e.stack ? e.stack : String(e)).slice(0, 600));
   } finally {

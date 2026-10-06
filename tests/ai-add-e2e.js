@@ -152,12 +152,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       !!built && built.total === 73 && built.eps === 7 && built.parts.join(',') === 'S1:3,S2:2,S3:2' &&
       built.srcOn === 0 && built.inDetail && built.maskGone, JSON.stringify(built));
 
-    /* ---------- B7 详情页的「让 AI 补新集」入口 ---------- */
+    /* ---------- B7 详情页的「刷名」入口 ----------
+       v2.35.0：「✧ 让 AI 补新集」退役了，同位置换成「⟳ 刷新片名与集名」（联网按号，不经 AI）。
+       这里守的是「补名字的入口还在」——不管它内部是问 AI 还是自己按号取号。 */
     const updBtn = await page.evaluate(() => {
-      const b = document.getElementById('btnAiUpd');
-      return !!b && b.offsetParent !== null && /补新集/.test(b.textContent);
+      const b = document.getElementById('btnRefreshNames');
+      return !!b && b.offsetParent !== null && /刷新片名与集名/.test(b.textContent);
     });
-    check('7', '详情页有「让 AI 补新集」入口（就在 AI 结果导入旁边）', updBtn);
+    check('7', '详情页有「⟳ 刷新片名与集名」入口（补名字的路没断，只是不再经过 AI）', updBtn);
 
     /* ---------- B8 先记已看进度，再增量贴同一批 + 新集 ---------- */
     const before = await page.evaluate(() => {
