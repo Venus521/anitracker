@@ -87,6 +87,14 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
          ConnectionReset（实测 3/3 次），六个待补条目就是 6×19.6s，直接把「等自愈跑完」的 90s 撑爆——
          于是 T22 读到的永远是「heal-fail 还没轮到」，看着像本页的 bug，其实是量具在测代理。
          这里空结果秒答（照 v2.20.0 教训带 CORS 头），断言的仍是本页自己那条退避登记。 */
+      /* v2.41.0：AniList 进了封面源链（healCoverFor 现在会问它），这条必须补上。
+         不拦的后果是它真出网——那几秒刚好把后面的豆瓣 relay 推后，
+         于是豆瓣那一发落进 T15「标记已看」的 1.2s 计量窗口，看着像标记动作在发请求。
+         规矩没变：本门禁任何出网源都要在页内应答，一个都不许真出去。 */
+      if (u.includes('graphql.anilist.co')) {
+        return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ data: { Media: null } }) });
+      }
       if (u.includes('wikidata.org') || u.includes('commons.wikimedia.org')) {
         wdReqs++;
         return req.respond({ status: 200, contentType: 'application/json; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ search: [] }) });
@@ -156,7 +164,16 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     const advGone = await page.evaluate(() => ({
       dom: !!(document.getElementById('optRelay') || document.getElementById('optNoSync') ||
         document.getElementById('advUnmapped') || document.getElementById('optDupScan') || document.getElementById('optDupResult')),
-      srcBar: (function () { const b = document.getElementById('srcBar'); return !b || b.innerHTML.trim() !== '' || !!b.querySelector('button'); })(),
+      /* v2.41.0：这一项不再要求 srcBar 为空。上一轮把整行清空隐藏时，连带把「补封面」
+         入口也带走了——底层 coverHealAll 一直好好的，界面上却没处点，缺封面就一直缺着。
+         现在这一行只留那一枚按钮，于是判据改成「除了补封面按钮没有别的东西」：
+         守的仍是同一件事——被退役的那批工具 chips（隐藏 TV原创 / 恢复全部显示）不许回来。 */
+      srcBar: (function () {
+        const b = document.getElementById('srcBar'); if (!b) return true;
+        const bs = Array.from(b.querySelectorAll('button'));
+        const txt = b.textContent || '';
+        return bs.length !== 1 || !/一键拉封面/.test(txt) || /隐藏|恢复全部显示/.test(txt);
+      })(),
       fns: ['bindAdv', 'acctFoldPref', 'SEARCH_NOSYNC', 'setFlag', 'netRelaySet', 'findAllDupGroups', 'renderDupReport', 'dupSeverity', 'sortBySid',
         'acctStatus', 'saveHide', '_at270ToolToggle']
         .filter(n => typeof window[n] === 'function')
