@@ -1,11 +1,12 @@
 {
   "name": "anitracker",
-  "version": "2.39.1",
+  "version": "2.40.0",
   "description": "番剧追记 PWA",
   "homepage": "https://venus521.github.io/anitracker/",
   "private": true,
   "scripts": {
     "test:regression": "node tests/run-regression.js",
+    "test:contrast": "node tests/contrast-check.js",
     "test:syntax": "node tests/_syntax.js",
     "test:ctxmenu": "node tests/ctxmenu-logic.js",
     "test:register": "node tests/register-logic.js",

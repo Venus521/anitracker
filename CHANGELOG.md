@@ -2,6 +2,39 @@
 
 从 readme.md 迁出（v2.3 ~ v2.12，2026-09-25 迁移）。此后新版本记录请直接追加到本文件。
 
+## v2.40.0（2026-10-06 深夜）UI 精修轮：新图标（Web 三件套 + APK 猫重画）+ 印刷感精修 + 对比度门禁
+
+**用户令**：「做好看的图标，界面，UI」「越精美越好」。技能：redesign-existing-projects +
+web-interface-guidelines + accessibility（动手前），对照 OB 审美基调「安静、印刷感」。
+
+**一、图标全线换新**。
+- Web/PWA：`mobile-shell/make-icon-web.py` 生成——暖纸渐变底 + 黄铜双细线框（票券感）+
+  衬线大字「追」+ 黄铜播放三角小印章；`tracker-icon-512.png` / `tracker-icon-maskable-512.png`
+  （内容收进安全圆）/ `favicon.ico`（16/32/48）三件套，Chrome 无头栅格化保证曲线平滑。
+- APK：`make-icon.py` 重画——保留「可爱猫」创意（用户原令），几何全部重来：头改**正圆**
+  （圆形启动器遮罩零裁切，旧版圆角方头四角出安全圈被削平）、ω 嘴改贝塞尔采样曲线、
+  超采样 4x→6x、配色对齐品牌（纸底/蜜金/暖棕）；mipmap 五档 + 自适应层重生成。
+- manifest：icons 补 512 PNG（any）+ maskable PNG 双条目（原只有 data-URI SVG）；
+  build-apk WEB_FILES 收录 maskable。
+
+**二、界面精修（只加深不加新，OB 铁律 15：新色一律从主题变量派生）**。
+- **对比度门禁 `tests/contrast-check.js`（常驻，npm run test:contrast）**：浅/深主题 ×
+  前景/背景 16 组合脚本实测（铁律 16）。实测抓出真问题：**浅色 accent #b08d4f 当文字只有
+  2.92（评分按钮/链接/选中态全在裸奔）**。修法：accent 微调 #a67f45（装饰 3.45/3.66 过大字线，
+  视觉几乎无差）；新增 **--accent-ink 深黄铜（#7a5c28）专管文字**（5.84~6.20 过 4.5），
+  评分/改时间/选中态/悬停字色全部换掉；深色主题 accent-ink=accent（8.8 本来就过）。
+- 分层暖阴影 `--shadow-1/2`（ambient+direct，色相朝纸底暖棕）：海报、统计格、封面墙卡片；
+  列表行维持发丝线骨架（印刷感），深色主题独立覆写。
+- 全交互件（ty/fbtn/srcchip/st/abtn/fpc/topbtn）press 回馈 scale(.96) + 200ms 过渡，
+  `prefers-reduced-motion` 全量尊重（三件套 MUST）。
+- 数字排版 `tabular-nums`（统计/漫改行/时长行/集数对比不再左右乱跳，三件套 MUST）。
+- 来源角标 type-tag 硬编码浅色 hex 全部改 `color-mix` 从主题变量派生（深色下不再是突兀浅块）。
+- 海报 `image-rendering:pixelated` 移除（毛边改平滑）；进度条圆角 + 金色微渐变。
+
+**三、验收**：contrast 16/16 · 回归 33/33 · 15 屏 · a11y 7/7 · 双入口 MATCH；
+视觉验收 6 屏（新增深色列表/详情两张）逐张过目。图标预览：mobile-shell/icon-preview.png、
+icon-preview-web.png。**发版后 APK 需重打**（make-icon.py 已重生成 res 五档）。
+
 ## v2.39.1（2026-10-06 晚）漫改块数值不再从中间断行
 
 视觉验收（真机视口逐屏自查）揪出：「全部」行换行时把日期 2026-09-30 截成

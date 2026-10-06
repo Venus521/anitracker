@@ -4,10 +4,12 @@
   · 自适应图标（Android 8+）：背景层 + 前景层，由各厂商遮罩成圆形/方圆形，不会被切坏；
   · 传统 PNG（Android 5-7）：预先切成方圆形（squircle）的 48/72/96/144/192 五档。
 
-设计（用户指令「图标要可爱」）：奶白底 + 暖棕描边的奶黄小猫正脸，倒三角鼻子＝转了向的播放键。
+设计（用户指令「图标要可爱」+ v2.40.0「越精美越好」重画）：
+  奶白渐变底 + 蜜金圆脸猫 —— 头改成**正圆**：圆形启动器遮罩零裁切（旧版圆角方头四角
+  超出安全圈被削平）；ω 嘴改贝塞尔采样曲线（旧版 PIL arc 拼出来发糊）；配色对齐品牌
+  （纸底 #fff8ec→#f4e9d6、蜜金 #e2ad5c、暖棕描边 #4e3e2f）。
 用法：python mobile-shell/make-icon.py
 """
-import math
 import os
 
 from PIL import Image, ImageDraw
@@ -15,19 +17,15 @@ from PIL import Image, ImageDraw
 SRC = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.join(SRC, 'res')
 
-SS = 4                      # 超采样倍数，抗锯齿
+SS = 6                      # 超采样倍数（v2.40.0 从 4 提到 6，小尺寸边缘更润）
 FULL = 108 * SS             # 自适应图标标准画布（108dp）
-CREAM_TOP = (255, 248, 236)  # 奶白上沿
-CREAM_BOT = (248, 235, 213)  # 奶白下沿，稍暖一点
-GOLD = (224, 172, 94)        # 亮黄铜（比 UI 的 --accent 更跳，走可爱路线）
-GOLD_DK = (198, 146, 72)     # 内耳/阴影
-INK = (78, 62, 47)           # 暖棕描边——纯黑描边太硬，贴纸感就没了
-ROSE = (241, 168, 164)       # 腮红与内耳的粉
-
-
-def canvas(size, color):
-    im = Image.new('RGBA', (size, size), color + (255,))
-    return im, ImageDraw.Draw(im)
+CREAM_TOP = (255, 248, 236)  # 纸底上沿（同 Web 图标）
+CREAM_BOT = (244, 233, 214)  # 纸底下沿
+GOLD = (226, 173, 92)        # 蜜金（比 UI accent 亮一档，桌面缩略图才跳得出来）
+GOLD_DK = (196, 142, 66)     # 鼻子/阴影
+INK = (78, 62, 47)           # 暖棕描边
+ROSE = (243, 176, 170)       # 腮红
+CREAM_HI = (255, 250, 242)   # 眼睛高光
 
 
 def vertical_gradient(size, top, bottom):
@@ -41,90 +39,74 @@ def vertical_gradient(size, top, bottom):
     return im
 
 
+def dp(v):
+    return round(v * SS)
+
+
+def bezier(p0, p1, p2, n=48):
+    """二阶贝塞尔采样：ω 嘴和一切曲线都用它，PIL 自带 arc 拼不出平滑圆角。"""
+    return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+             (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1])
+            for t in (i / n for i in range(n + 1))]
+
+
 def draw_background():
     return vertical_gradient(FULL, CREAM_TOP, CREAM_BOT)
 
 
-def dp(v):
-    return v * SS
-
-
 def draw_foreground():
-    """一只奶黄小猫的正脸：三角鼻子＝播放键，追番和可爱就一个形状解决。
-
-    所有五官都压在 108dp 画布的 36dp 安全圆内——圆形启动器会裁掉圈外部分，
-    耳朵尖或下巴一出界就被削平，脸立刻变形。
-    """
+    """蜜金圆脸猫：头是正圆（r=29.5dp，圆心略沉），圆遮罩零裁切；五官全部落在安全圆内。"""
     im = Image.new('RGBA', (FULL, FULL), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    OL = int(dp(3.2))                    # 描边粗（PIL 12 要求 width 是整数）
+    OL = dp(3.0)
+    CX, CY = 54.0, 57.0
+    R = 29.5
+    head_box = [dp(CX - R), dp(CY - R), dp(CX + R), dp(CY + R)]
+    d.ellipse(head_box, fill=GOLD + (255,), outline=INK + (255,), width=OL)
 
-    # 头：60×52dp 圆角方块，圆角 22dp——越圆越软，且角尖刚好落在 36dp 安全圆内不被裁
-    # （试过加猫耳：耳尖要超出安全圆就会被圆形启动器裁掉，收进来又被头的圆角盖成两点碎屑，
-    #   读起来像瑕疵，所以干脆不要耳朵，团子脸本身就够萌）
-    head = [dp(24), dp(32), dp(84), dp(84)]
-    d.rounded_rectangle(head, radius=dp(22), fill=GOLD + (255,),
-                        outline=INK + (255,), width=OL)
+    # 耳朵内芯的两撇腮红代替耳朵（耳朵出安全圆必被裁，v2.14 就试过）：先腮红
+    for cx in (33.5, 74.5):
+        d.ellipse([dp(cx - 5.2), dp(CY + 3.5), dp(cx + 5.2), dp(CY + 9.5)], fill=ROSE + (235,))
 
-    # 眼睛：竖椭圆比正圆更「萌」，高光点在左上
-    for cx in (42, 66):
-        d.ellipse([dp(cx) - dp(4), dp(48), dp(cx) + dp(4), dp(61)], fill=INK + (255,))
-        d.ellipse([dp(cx) - dp(1.8), dp(50), dp(cx) + dp(0.4), dp(53)],
-                  fill=CREAM_TOP + (255,))
+    # 眼睛：竖椭圆 + 左上高光（高光偏左上，视线方向一致才「活」）
+    for cx in (43.0, 65.0):
+        d.ellipse([dp(cx - 4.2), dp(CY - 8.5), dp(cx + 4.2), dp(CY + 4.5)], fill=INK + (255,))
+        d.ellipse([dp(cx - 2.4), dp(CY - 6.8), dp(cx + 0.6), dp(CY - 3.8)], fill=CREAM_HI + (255,))
 
-    # 腮红
-    for cx in (33, 75):
-        d.ellipse([dp(cx) - dp(5), dp(60), dp(cx) + dp(5), dp(66)], fill=ROSE + (255,))
+    # 鼻子＝倒三角（转了向的播放键），圆角采样
+    nose = [(49.2, CY + 3.2), (58.8, CY + 3.2), (54.0, CY + 9.6)]
+    d.polygon([tuple(map(dp, p)) for p in bezier_corners(nose, 2.0)], fill=GOLD_DK + (255,),
+              outline=INK + (255,), width=dp(2.0))
 
-    # 鼻子＝倒三角＝转了个方向的播放键
-    nose = [(dp(48.5), dp(64)), (dp(59.5), dp(64)), (dp(54), dp(71.5))]
-    d.polygon(rounded_polygon(nose, dp(2.2)), fill=GOLD_DK + (255,),
-              outline=INK + (255,), width=int(dp(2.4)))
-
-    # 「ω」嘴：两道小弧
-    d.arc([dp(46), dp(69), dp(54), dp(76.5)], start=15, end=165, fill=INK + (255,),
-          width=int(dp(2.4)))
-    d.arc([dp(54), dp(69), dp(62), dp(76.5)], start=15, end=165, fill=INK + (255,),
-          width=int(dp(2.4)))
+    # ω 嘴：两段对称贝塞尔，从鼻底垂到两侧，末端微微上翘
+    mouth_l = bezier((54.0, CY + 9.8), (51.5, CY + 14.5), (46.5, CY + 13.2))
+    mouth_r = bezier((54.0, CY + 9.8), (56.5, CY + 14.5), (61.5, CY + 13.2))
+    d.line([tuple(map(dp, p)) for p in mouth_l], fill=INK + (255,), width=dp(2.2), joint='curve')
+    d.line([tuple(map(dp, p)) for p in mouth_r], fill=INK + (255,), width=dp(2.2), joint='curve')
+    for end in (mouth_l[-1], mouth_r[-1]):   # 线帽圆头
+        d.ellipse([dp(end[0]) - dp(1.1), dp(end[1]) - dp(1.1),
+                   dp(end[0]) + dp(1.1), dp(end[1]) + dp(1.1)], fill=INK + (255,))
     return im
 
 
-def rounded_polygon(points, radius, ss_steps=10):
-    """把多边形每个角切成正圆角：沿两边取切点，再用圆弧补角。
-       （直接在顶点叠圆会把角凸成「球头」，不是圆角。）"""
-    n = len(points)
+def bezier_corners(pts, r):
+    """三点三角形的圆角版（鼻子用）：每个角用贝塞尔切角。"""
     out = []
+    n = len(pts)
     for i in range(n):
-        p = points[i]
-        a, b = points[i - 1], points[(i + 1) % n]
-        va = (a[0] - p[0], a[1] - p[1])
-        vb = (b[0] - p[0], b[1] - p[1])
-        la, lb = math.hypot(*va), math.hypot(*vb)
-        ua, ub = (va[0] / la, va[1] / la), (vb[0] / lb, vb[1] / lb)
-        ang = math.acos(max(-1.0, min(1.0, ua[0] * ub[0] + ua[1] * ub[1])))
-        r = min(radius, la / 2.5, lb / 2.5)
-        t = r / math.tan(ang / 2.0)                 # 切点距顶点
-        d = r / math.sin(ang / 2.0)                 # 圆心距顶点
-        bis = ((ua[0] + ub[0]) / 2.0, (ua[1] + ub[1]) / 2.0)
-        bl = math.hypot(*bis)
-        cx, cy = p[0] + bis[0] / bl * d, p[1] + bis[1] / bl * d
-        ta = (p[0] + ua[0] * t, p[1] + ua[1] * t)
-        tb = (p[0] + ub[0] * t, p[1] + ub[1] * t)
-        a1, a2 = math.degrees(math.atan2(ta[1] - cy, ta[0] - cx)), \
-                 math.degrees(math.atan2(tb[1] - cy, tb[0] - cx))
-        delta = (a2 - a1) % 360.0
-        if delta > 180.0:
-            a1, a2, delta = a2, a1, 360.0 - delta
-        out.append(ta)
-        for s in range(1, ss_steps):
-            th = math.radians(a1 + delta * s / ss_steps)
-            out.append((cx + r * math.cos(th), cy + r * math.sin(th)))
-        out.append(tb)
+        p, a, b = pts[i], pts[i - 1], pts[(i + 1) % n]
+        for t in (0.62, 0.8, 0.9):
+            out.append((p[0] + (a[0] - p[0]) * t, p[1] + (a[1] - p[1]) * t))
+        mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+        out.append(bezier((p[0] + (a[0] - p[0]) * 0.9, p[1] + (a[1] - p[1]) * 0.9),
+                          (p[0] + (mid[0] - p[0]) * 0.95, p[1] + (mid[1] - p[1]) * 0.95),
+                          (p[0] + (b[0] - p[0]) * 0.9, p[1] + (b[1] - p[1]) * 0.9), 10)[3])
+        for t in (0.9, 0.8, 0.62):
+            out.append((p[0] + (b[0] - p[0]) * t, p[1] + (b[1] - p[1]) * t))
     return out
 
 
 def squircle(size, radius_ratio=0.225):
-    """Android 高版本默认遮罩是方圆形，传统图标照这个比例切，摆一起才不打架。"""
     r = int(size * radius_ratio)
     m = Image.new('L', (size, size), 0)
     d = ImageDraw.Draw(m)
@@ -133,7 +115,6 @@ def squircle(size, radius_ratio=0.225):
 
 
 def legacy_sizes(bg, fg):
-    """mipmap 五档：把背景+前景叠好后按各档尺寸重绘，再切方圆形。"""
     tiers = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
     full = Image.alpha_composite(bg.convert('RGBA'), fg.convert('RGBA'))
     for name, px in tiers.items():
@@ -166,12 +147,12 @@ def main():
 
     legacy_sizes(bg, fg)
 
-    # 验收预览：把遮罩成圆形/方圆形的效果、以及桌面真实尺寸一起排出来看
+    # 验收预览：圆形/方圆形遮罩 + 桌面真实尺寸，左深右浅壁纸
+    from PIL import ImageDraw as _ID
     comp = Image.alpha_composite(bg.convert('RGBA'), fg.convert('RGBA'))
     sheet = Image.new('RGBA', (660, 240), (150, 158, 172, 255))
-    # 左半深壁纸、右半浅壁纸：奶白图标只在其中一边显眼，两边都要看到才敢定稿
     sheet.paste(Image.new('RGBA', (210, 240), (246, 243, 238, 255)), (450, 0))
-    sd = ImageDraw.Draw(sheet)
+    sd = _ID.Draw(sheet)
 
     def masked(size, kind):
         im = comp.resize((size, size), Image.LANCZOS)
@@ -192,7 +173,6 @@ def main():
         tile = masked(size, kind)
         sheet.paste(tile, (x, 20), tile)
         x += size + 20
-    # 桌面真实大小：48/72 各档，挨着摆看小尺寸下还认不认得出
     y = 40
     for px in (72, 48):
         tile = masked(px, 'circle')

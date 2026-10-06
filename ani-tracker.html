@@ -89,8 +89,14 @@ function atVerCheck(){
 /* ============ 追迹 v2 · preset 11 Build 奢侈极简 ============ */
 :root{
   --bg:#faf8f4; --card:#ffffff; --ink:#17150f; --muted:#6f695c; --line:#e8e3d9;
-  --accent:#b08d4f; --accent-soft:#f2e9d8; --danger:#a8552f;
+  /* v2.40.0 精修：accent #b08d4f→#a67f45（实测对比度 bg 3.45/card 3.66；原值 2.92 连大字线都不过）；
+     --accent-ink=强调「文字」专用深黄铜（对 bg/card/soft 5.14~6.20 全过 4.5）——文字与装饰分家：
+     border/进度条/底色继续用 accent，凡是拿 accent 当字色的地方一律改 accent-ink */
+  --accent:#a67f45; --accent-ink:#7a5c28; --accent-soft:#f2e9d8; --danger:#a8552f;
   --ok:#5c7f4a; --info:#2d6a9f; --warn:#9a6420;
+  /* v2.40.0 分层阴影（ambient+direct，色相朝纸底暖棕 tint，告别纯黑）；深色主题另行覆写 */
+  --shadow-1:0 1px 2px rgba(80,62,32,.07),0 2px 10px rgba(80,62,32,.07);
+  --shadow-2:0 1px 2px rgba(80,62,32,.16),0 8px 22px rgba(80,62,32,.18);
   --serif:Georgia,'Source Han Serif SC','Noto Serif SC',serif;
   --sans:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
   /* v2.23.0 排版令牌 —— 对齐《排版-需求规格》R1/R2/R3/R5/R11 */
@@ -643,9 +649,11 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
 :root{--ink-2:#4a4438;--ink-3:#8a8377}
 html[data-theme=dark]{
   --bg:#12100d; --card:#1d1a15; --ink:#ece4d4; --muted:#9c9280; --line:#2d2820;
-  --accent:#d9a94b; --accent-soft:#2b2418; --danger:#d0704a;
+  --accent:#d9a94b; --accent-ink:#d9a94b; --accent-soft:#2b2418; --danger:#d0704a;
   --ok:#9cc28a; --info:#8ab6e0; --warn:#e0b060;
   --ink-2:#c9c0ae; --ink-3:#90866f;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4),0 2px 10px rgba(0,0,0,.3);
+  --shadow-2:0 1px 2px rgba(0,0,0,.5),0 8px 22px rgba(0,0,0,.4);
   color-scheme:dark;
 }
 html[data-theme=dark] .mask{background:rgba(0,0,0,.62)}
@@ -694,6 +702,36 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,
 a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scrlbtn:focus-visible,.back:focus-visible{outline-offset:3px}
+
+/* ============ v2.40.0 UI 精修轮（用户令「做好看的图标，界面，UI」「越精美越好」）============
+   方向=OB 审美基调「安静、印刷感」：只加深不加新。四件事：
+   ① 强调文字一律 --accent-ink（对比度实测 5.14~6.20；浅色 accent 当字色只有 2.92，铁律 16 门禁拦下）；
+   ② 分层暖阴影 --shadow-1/2 替换散落的黑阴影（深色主题独立覆写）；
+   ③ 全交互件 press 回馈 + 200ms 过渡（compositor 属性，prefers-reduced-motion 尊重）；
+   ④ 数字排版 tabular-nums（集数/百分比/时长对比不再左右乱跳）。 */
+.st.on{color:var(--accent-ink)}
+.ty.on{color:var(--accent-ink)}
+.timline .lnk{color:var(--accent-ink)}
+.part .pn,.part .pdt{color:var(--accent-ink)}
+.abtn:hover,.scrlbtn:hover{color:var(--accent-ink);border-color:var(--accent-ink)}
+.show img{box-shadow:var(--shadow-1);image-rendering:auto}
+.stat{box-shadow:var(--shadow-1)}
+/* 列表行维持发丝线（印刷感的骨架），阴影只给封面墙卡片/统计格/海报 */
+.cards.grid .show{border:1px solid var(--line);background:var(--card);box-shadow:var(--shadow-1)}
+.ty,.fbtn,.srcchip,.st,.abtn,.fpc,.topbtn,.lnk{transition:transform .12s ease,background-color .2s ease,border-color .2s ease,color .2s ease}
+.ty:active,.srcchip:active,.st:active,.abtn:active,.fpc:active,.topbtn:active{transform:scale(.96)}
+.fbtn:active{opacity:.6}
+.stat b,.cnpline b,.show .num,.durline b,.timline b,.statgrid .stat b{font-variant-numeric:tabular-nums}
+.show .prog i{border-radius:inherit;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#fff))}
+.type-tag{border:none;background:color-mix(in srgb,var(--muted) 14%,var(--card));color:var(--muted)}
+.type-tag.tv-original{background:color-mix(in srgb,var(--danger) 12%,var(--card));color:var(--danger)}
+.type-tag.manga-adapt{background:color-mix(in srgb,var(--info) 12%,var(--card));color:var(--info)}
+.type-tag.semi-original{background:color-mix(in srgb,var(--warn) 12%,var(--card));color:var(--warn)}
+.type-tag.unknown{background:color-mix(in srgb,var(--muted) 14%,var(--card));color:var(--muted)}
+@media (prefers-reduced-motion:reduce){
+  .ty,.fbtn,.srcchip,.st,.abtn,.fpc,.topbtn,.lnk{transition:none}
+  .ty:active,.srcchip:active,.st:active,.abtn:active,.fpc:active,.topbtn:active{transform:none}
+}
 </style>
 
 <script>
@@ -1195,7 +1233,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.39.1', AT_BUILD='20261006a';
+var AT_VERSION='2.40.0', AT_BUILD='20261007a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -2200,7 +2238,7 @@ function renderDetail(){
   document.getElementById('dJp').textContent=s.nameJp||'';
   var diff=(s.bgmTotal&&s.bgmTotal!==s.total)?' · 原记 '+s.bgmTotal+' 集':'';
   var src=s.source?' · 数据源：'+esc(s.source):'';
-  document.getElementById('dMeta').innerHTML=esc(s.year||'')+' · 共 '+s.total+' 集'+diff+src+' · <span class="ratebtn" onclick="editRate()" style="cursor:pointer;color:var(--accent);font-weight:600" title="点按修改评分（0=清除）">'+(s.rating?('★'+s.rating):'☆ 评分')+'</span>';
+  document.getElementById('dMeta').innerHTML=esc(s.year||'')+' · 共 '+s.total+' 集'+diff+src+' · <span class="ratebtn" onclick="editRate()" style="cursor:pointer;color:var(--accent-ink);font-weight:600" title="点按修改评分（0=清除）">'+(s.rating?('★'+s.rating):'☆ 评分')+'</span>';
   document.getElementById('dStatus').innerHTML=FIL.slice(1).map(function(f){
     return '<button class="st'+((s.status||'watching')===f?' on':'')+'" onclick="setStatus(\''+f+'\')">'+ST_NAME[f]+'</button>';
   }).join('');
