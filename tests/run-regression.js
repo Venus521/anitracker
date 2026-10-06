@@ -593,22 +593,24 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     check('32', 'v2.36.0 单集时间戳：单标与批量标记都记 epT，取消即清',
       ept.stamped && ept.bulkN >= 4 && ept.cleared, JSON.stringify(ept));
 
-    /* T33 v2.36.0 漫改行两档时间：有 epT → 漫改自己的开始~看完+用时；老数据无 epT → 退回全剧口径；无漫改集整行为空 */
+    /* T33 v2.36.0/1 漫改行：集数+两档日期时间 + 时长进度（真时长不带约、估的带约、看完无还剩） */
     const cnp = await page.evaluate(() => {
-      const mk = (withT) => {
-        const eps = []; for (let i = 1; i <= 4; i++) eps.push({ s: i, t: '第' + i + '集', src: i <= 3 ? 'canon' : 'filler' });
+      const mk = (withT, durOn) => {
+        const eps = []; for (let i = 1; i <= 4; i++) eps.push({ s: i, t: '第' + i + '集', src: i <= 3 ? 'canon' : 'filler', dur: durOn ? 24 : 0 });
         const s = { sid: 'cnp-t', title: 'x', kind: '动画', eps: eps, statuses: { 1: 'watched', 2: 'watched', 3: 'watched' } };
         if (withT) { s.epT = { 1: Date.now() - 4 * 86400000, 2: Date.now() - 2 * 86400000, 3: Date.now() }; }
         s.tStart = Date.now() - 9 * 86400000; s.tDone = Date.now();
         return s;
       };
-      const withT = canonProgHtml(mk(true)), noT = canonProgHtml(mk(false));
+      const withT = canonProgHtml(mk(true, true)), noT = canonProgHtml(mk(false, false));
       const noCn = canonProgHtml({ sid: 'cnp-n', title: 'x', kind: '动画', eps: [{ s: 1, t: 'e1', src: 'filler' }], statuses: { 1: 'watched' } });
       return { withT: withT, noT: noT, noCn: noCn === '' };
     });
-    check('33', 'v2.36.0 漫改行时间两档：有 epT 给漫改账（看完含用时）；老数据退回全剧口径；无漫改整行为空',
-      /漫改 <b>3<\/b> \/ 3 集/.test(cnp.withT) && /漫改用时/.test(cnp.withT) && /全剧开始/.test(cnp.noT) && !/漫改开始/.test(cnp.noT) && cnp.noCn,
-      JSON.stringify(cnp).slice(0, 300));
+    check('33', 'v2.36.1 漫改行：集数+时长进度（真值不带约/估的带约/看完无还剩）+ 两档日期账 + 无漫整行为空',
+      /漫改 <b>3<\/b> \/ 3 集/.test(cnp.withT) && /时长 <b>1 小时 12 分<\/b> \/ 1 小时 12 分/.test(cnp.withT) && !/还剩/.test(cnp.withT) &&
+      /时长 <b>约 1 小时 12 分<\/b> \/ 约 1 小时 12 分/.test(cnp.noT) &&
+      /全剧开始/.test(cnp.noT) && !/漫改开始/.test(cnp.noT) && cnp.noCn,
+      JSON.stringify(cnp).slice(0, 320));
 
     // T18 无页面级 JS 错误
     check('18', '全程无页面级 JS 错误', pageErrors === 0, 'pageErrors=' + pageErrors);

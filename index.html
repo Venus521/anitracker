@@ -1188,7 +1188,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.36.0', AT_BUILD='20261006a';
+var AT_VERSION='2.36.1', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -5987,14 +5987,18 @@ setTimeout(function(){
      漫改进度从类型筛选按钮行里挪出来，独立成一行（#dCanonProg）。
      挪的原因：那行是「点一下筛集」的按钮，塞一个只读数字进去既不像按钮也不像数据，
      用户看不出它是进度还是筛选项。独立行才读得出「整部进度」与「漫改进度」是两笔账。
-     时间口径（v2.36.0 起分两档，用户令「要显示漫改的详细进度时间」）：
-       · 有单集标记时间（s.epT，v2.36.0 起随每次标记记录）→ 给漫改自己的账：
-         看完了给「漫改 开始 ~ 看完 · 用时 N 天」，没看完给「漫改开始 · 最近标记」。
-       · 老数据没有 epT 的集 → 退回条目级账，字面写明「全剧」——不编造漫改子集的日期。
+     时间口径（v2.36.1 起三段，用户令「漫改是要显示集数进度，漫改所有所需用时的进度」）：
+       ① 集数进度：已看 / 共 N 集 + 百分比（只算已看，不含回看，有回看另注）。
+       ② 时长进度：漫改集所需总时长 vs 已看掉的（口径同 durOf：watched/rewatch 都算
+          已看；无单集时长按类型估并带「约」——与全剧时长账同一约定）。
+       ③ 日期账（v2.36.0 单集时间戳 s.epT）：看完了给「漫改 开始 ~ 看完 · 用时 N 天」，
+          没看完给「漫改开始 · 最近标记」；老数据没有 epT 退回「全剧」并字面写明。
        · 只对动画这条轴成立的条目显示（真人剧没有「漫改/TV原创」之分，硬算就是编造）。 */
   function canonProgOf(s){
     if(!s || !fillerAxisApplies(s)) return null;
     var cn=0, cw=0, cr=0, tMin=0, tMax=0, tN=0;
+    var du={total:0,watched:0,remain:0,known:false};
+    var def=defDurMin(s);
     (s.eps||[]).forEach(function(e){
       if(srcInfoOf(s,e).src!=='canon') return;
       cn++;
@@ -6002,16 +6006,26 @@ setTimeout(function(){
       if(v==='watched') cw++; else if(v==='rewatch') cr++;
       var t=+((s.epT||{})[e.s]||0);
       if(t){ tN++; if(!tMin||t<tMin) tMin=t; if(t>tMax) tMax=t; }
+      var d=Number(e.dur)||0, m=d>0?d:def;
+      if(d>0) du.known=true;
+      du.total+=m;
+      if(v==='watched'||v==='rewatch') du.watched+=m; else du.remain+=m;
     });
     if(!cn) return null;
     var pct=Math.round((cw/cn)*100);
-    return { total:cn, watched:cw, rewatch:cr, pct:pct, tMin:tMin, tMax:tMax, tN:tN, done:(cw+cr>=cn) };
+    return { total:cn, watched:cw, rewatch:cr, pct:pct, tMin:tMin, tMax:tMax, tN:tN, done:(cw+cr>=cn), dur:du };
   }
   function canonProgHtml(s){
     var c=canonProgOf(s);
     if(!c) return '';
     var bits=['漫改 <b>'+c.watched+'</b> / '+c.total+' 集','<b>'+c.pct+'%</b>'];
     if(c.rewatch) bits.push('回看 '+c.rewatch);
+    /* v2.36.1：时长进度——漫改集所需总时长 vs 已看掉的（估的带「约」） */
+    if(c.dur&&c.dur.total>0){
+      var est=c.dur.known?'':'约 ';
+      bits.push('时长 <b>'+est+fmtDur(c.dur.watched)+'</b> / '+(c.dur.known?'':'约 ')+fmtDur(c.dur.total));
+      if(c.dur.remain>0) bits.push('还剩 '+(c.dur.known?'':'约 ')+fmtDur(c.dur.remain));
+    }
     var t=[];
     if(c.tN){
       /* v2.36.0：有单集标记时间 → 漫改自己的时间账（展示到天） */
