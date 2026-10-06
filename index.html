@@ -1122,7 +1122,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.32.0', AT_BUILD='20261006a';
+var AT_VERSION='2.33.0', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4051,6 +4051,17 @@ function dbNormTitle(t){
     .replace(/[\s·・:：\-—~～!！?？.,，、'"“”‘’()（）\[\]【】]/g,'')
     .replace(/[0-9]+$/,'');
 }
+/* —— 剧名铁律（用户令 2026-10-06）：外语剧＝中文+原文，中文剧＝中文名，已有条目永不改名 ——
+   网关把豆瓣收藏页的「中文名 / 原名」按 / 拆成 title/origTitle 两截；外语剧在片单里要双语，
+   入库前把两截拼回「中文名 原文」。主标题本身中英粘连的（Working!!迷糊餐厅，没有 / 拆分）
+   和纯外文的（豆瓣没建中文名，如 The Pitt）没有「中文段+原名」可拼，原样保留。
+   中文段单独存 cnTitle，给 dbTargetOf 的片名匹配兜底——片单里的旧条目多是纯中文名。 */
+function dbShowTitle(d){
+  var t=String(d.title||'').trim(), o=String(d.origTitle||'').trim();
+  if(!t||!o) return t;
+  if(t.toLowerCase().indexOf(o.toLowerCase())>=0) return t;   /* 原名已在主标题里，不重复拼 */
+  return t+' '+o;
+}
 /* v2.17.0 移除：seriesBase / classifyPart / cnNum / 系列缓存（at_series_cache 的读写）/
    pvBuild / pvCommit / prefetchParts / ensureSeries / findSeriesParts / groupSeriesItems /
    srItemHtml / srChipLabel / bgmAttachGroup —— 这些是「跨 Bangumi 条目找齐同系列」的整套，
@@ -4095,7 +4106,11 @@ var dbnFrom='';
 function dbTargetOf(d){
   var i,t=null,real=/^\d+$/.test(String(d.subjectId||''));
   if(real){ for(i=0;i<shows.length;i++){ if(String(shows[i].dbId||'')!==''&&String(shows[i].dbId)===String(d.subjectId)){ t=shows[i]; break; } } }
-  if(!t){ for(i=0;i<shows.length;i++){ if(dbNormTitle(shows[i].title||'')===dbNormTitle(d.title||'')){ t=shows[i]; break; } } }
+  /* 片名匹配认两个名：双语名(d.title)和中文段(cnTitle)。豆瓣行按剧名铁律拼成双语后，
+     和片单里纯中文的旧条目对不上字面，靠中文段才判得出「已在片单」（v2.33.0）。 */
+  if(!t){ var n1=dbNormTitle(d.title||''), n2=dbNormTitle(d.cnTitle||'');
+    for(i=0;i<shows.length;i++){ var ns=dbNormTitle(shows[i].title||'');
+      if((n1&&ns===n1)||(n2&&ns===n2)){ t=shows[i]; break; } } }
   return t;
 }
 /* 豆瓣给的时间只填空缺：手改过的（From=me）永不覆盖，豆瓣给的可以被下一次豆瓣更新。 */
@@ -4339,7 +4354,8 @@ async function dbnPull(scope, keepMsg){
   var items=j.items||[];
   if(!items.length){ dbnNote('没抓到条目 —— Cookie 可能过期了，重新粘贴一次','bad'); if(au) au.style.display=''; return; }
   dbnItems=items.map(function(d){
-    return { subjectId:d.subjectId, title:d.title, origTitle:d.origTitle, year:d.year, genres:d.genres||[],
+    return { subjectId:d.subjectId, title:dbShowTitle(d), cnTitle:String(d.title||'').trim(),
+      origTitle:String(d.origTitle||'').trim(), year:d.year, genres:d.genres||[],
       isAnime:!!d.isAnime, rating:d.rating, markedAt:d.markedAt, pic:d.pic, status:d.status, ep:d.ep, pick:0 };
   });
   /* 记下豆瓣侧「现在是什么」，推送方向的差异提示全靠它 */
@@ -4543,7 +4559,8 @@ function importDoubanFile(box,f){
         arr.forEach(function(d,i){
           if(!d) return;
           var t=String(d.title||d.name||d['书名']||d['名称']||d['视频名']||'').trim(); if(!t) return;
-          rows.push({ title:t, year:String(d.year||d['年份']||'').slice(0,4),
+          rows.push({ title:t, origTitle:String(d.origTitle||d['原名']||'').trim(),
+            year:String(d.year||d['年份']||'').slice(0,4),
             status:String(d.status||d['状态']||''), rating:parseFloat(d.rating||d['评分']||0)||0,
             markedAt:String(d.markedAt||d['标记时间']||d['时间']||d.date||'').slice(0,10),
             subjectId:'f'+i });
@@ -4563,7 +4580,8 @@ function importDoubanFile(box,f){
     ['do','collect','wish'].forEach(function(k){ back[DB_ST_NAME[k]]=k; });
     dbnItems=rows.map(function(d){
       var k=DB_ST[d.status]?d.status:(back[d.status]||'do');
-      return { subjectId:d.subjectId, title:d.title, origTitle:'', year:d.year, genres:[], isAnime:false,
+      return { subjectId:d.subjectId, title:dbShowTitle(d), cnTitle:String(d.title||'').trim(),
+        origTitle:String(d.origTitle||'').trim(), year:d.year, genres:[], isAnime:false,
         rating:d.rating, markedAt:d.markedAt, pic:'', status:k, ep:0, pick:0, source:'豆瓣·文件' };
     });
     dbnFrom='从文件「'+f.name+'」解析到 '+dbnItems.length+' 条 · 勾选才入库';

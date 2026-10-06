@@ -325,6 +325,26 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
       JSON.stringify(flt));
     await page.evaluate(() => window.__closeDbn());
 
+    /* ---------- B19 剧名铁律：外语剧＝中文+原文，中文段兜底匹配（用户令 2026-10-06） ---------- */
+    /* 9001 夹具自带 origTitle:'TEST A' —— 按新规矩，清单和片单里它都该是双语名「测试剧·在看A TEST A」。
+       中文段匹配用单元式断言：临时塞一条同名纯中文名条目（无 dbId），用假 subjectId 绕开 dbId 命中，
+       dbTargetOf 必须靠 cnTitle 判出「已在片单」；完事移除且不 save()，B14 的条数不受影响。 */
+    await page.evaluate(() => { window.shows.push({ sid: 'cn9001x', title: '测试剧·在看A', total: 0, eps: [], statuses: {}, status: 'watching', addedAt: 1, updAt: 1 }); });
+    await page.evaluate(() => window.openDoubanSync());
+    await page.waitForFunction(() => document.querySelectorAll('#dbnBody .dbn-row').length >= 5, { timeout: 8000, polling: 100 });
+    const bi = await page.evaluate(() => {
+      const rows = Array.prototype.slice.call(document.querySelectorAll('#dbnBody .dbn-row'));
+      const r = rows.filter(x => /测试剧·在看A/.test(x.textContent))[0];
+      const hit = !!window.dbTargetOf({ subjectId: '999999', title: '测试剧·在看A TEST A', cnTitle: '测试剧·在看A' });
+      const s = (window.shows || []).filter(x => x.sid === 'db9001')[0] || {};
+      return { rowTitle: r ? ((r.querySelector('.dbn-tt') || {}).textContent || '') : '', hit, imported: s.title || '' };
+    });
+    check('19', '剧名铁律：豆瓣「中文名/原名」拼成双语剧名进清单和片单；片单里纯中文名的旧条目靠中文段判「已在片单」',
+      bi.rowTitle === '测试剧·在看A TEST A' && bi.hit && bi.imported === '测试剧·在看A TEST A',
+      JSON.stringify(bi));
+    await page.evaluate(() => { const i = (window.shows || []).findIndex(x => x.sid === 'cn9001x'); if (i >= 0) window.shows.splice(i, 1); });
+    await page.evaluate(() => window.__closeDbn());
+
     /* ---------- B14 刷新后时间账还在 · B15 全程无 JS 错误、没打真实外网 ---------- */
     await page.reload({ waitUntil: 'domcontentloaded' });
     await sleep(1200);
