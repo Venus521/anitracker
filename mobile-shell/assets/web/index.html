@@ -3,6 +3,21 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<!-- v2.29.2 安全头：基础 CSP + Referrer-Policy。
+     注：当前为单文件内联脚本架构，script-src 必须保留 'unsafe-inline'。
+     拆单文件（项 1）落地后可去掉 'unsafe-inline' 并改用 nonce。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudbase.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src *; frame-src 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self' blob:;"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
+<meta http-equiv="X-Content-Type-Options" content="nosniff"/>
+<!-- v2.29.2 安全头收口（审计项 2 · 方案 A「最小暴露」）：
+     1) connect-src 用 * 而不是域名白名单——AI 供应商 base 由用户自填（at_ai_cfg；预设 deepseek/智谱/Kimi/千问/硅基流动，
+        还可能是 http://192.168.x.x:11434 这类本地 Ollama），CSP 无法动态放行任意域名，
+        写成白名单会当场拦死「问 AI 加片」自动路（AI_PROVIDERS 直连 fetch）。
+     2) frame-ancestors 只在 HTTP 响应头生效，写在 meta 里等于空转，已移除；
+        防点击劫持要服务器侧加头（见 服务器-空闲自退.py / 托管平台响应头配置）。
+     3) 仍起作用的是 script-src / object-src / form-action / base-uri / frame-src——XSS 面主要靠这几条。
+     4) script-src 必须留 'wasm-unsafe-eval'：vendor/cloudbase.full.js（CloudBase SDK）会做 WebAssembly 编译，
+        少了这一项账号云同步链路会被 CSP 静默拦掉（探针实测违规 script-src :: wasm-eval，页面不报错、只是功能坏）。 -->
 <title>追迹 · AniTracker</title>
 <link rel="manifest" href="tracker-manifest.webmanifest"/>
 <link rel="icon" type="image/png" sizes="512x512" href="tracker-icon-512.png"/>
@@ -47,7 +62,7 @@
 })();
 </script>
 <script src="vendor/cloudbase.full.js" onerror="(function(){var s=document.createElement('script');s.src='https://static.cloudbase.net/cloudbase-js-sdk/3.7.0/cloudbase.full.js';document.head.appendChild(s);})()"></script>
-<script src="cloudbase-sync.js?v=20261002b"></script>
+<script src="cloudbase-sync.js?v=20261006a"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   window.addEventListener('load',function(){ navigator.serviceWorker.register('tracker-sw.js').catch(function(){}); try{ atVerCheck(); }catch(e){} });
@@ -191,6 +206,35 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .durline{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:var(--fs-meta);color:var(--muted);border:1px solid var(--line);border-radius:var(--r-3);padding:8px 12px;margin:-8px 0 12px;background:var(--card);line-height:1.75}
 .durline b{color:var(--ink);font-weight:600;font-family:var(--serif);font-size:var(--fs-body)}
 .durline .ds{opacity:.5}
+/* ===== v2.30.0 观看时间行（开始看 / 看完）+ 豆瓣同步面板 ===== */
+.timline{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:var(--fs-meta);color:var(--muted);border:1px solid var(--line);border-radius:var(--r-3);padding:8px 12px;margin:0 0 12px;background:var(--card);line-height:1.7}
+.timline b{color:var(--ink);font-weight:600;font-family:var(--serif);font-size:var(--fs-body)}
+.timline .ds{opacity:.45}
+.timline .src{font-size:var(--fs-meta);border:1px solid var(--line);border-radius:var(--r-pill);padding:1px 8px;margin-left:5px;color:var(--muted)}
+.timline .lnk{color:var(--accent);cursor:pointer;font-weight:600;margin-left:auto;background:none;border:none;font-size:var(--fs-meta)}
+.dbn-grp{font-size:var(--fs-meta);letter-spacing:2px;color:var(--muted);margin:16px 0 8px}
+.dbn-quick{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.dbn-q{font-size:var(--fs-meta);border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 14px;background:var(--card);color:var(--muted);cursor:pointer;min-height:34px}
+.dbn-q.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.dbn-row{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--r-3);padding:8px 10px;margin:0 0 6px;cursor:pointer;color:var(--ink);font-size:var(--fs-body)}
+.dbn-row:hover{background:var(--accent-soft)}
+.dbn-row.on{border-color:var(--accent);background:var(--accent-soft)}
+.dbn-row.has{opacity:.72}
+.dbn-row img{width:38px;height:54px;object-fit:cover;border-radius:6px;flex:none;background:var(--bg)}
+.dbn-box{width:20px;height:20px;border:1.5px solid var(--line);border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:13px;background:var(--bg)}
+.dbn-row.on .dbn-box{border-color:var(--accent);background:var(--card)}
+.dbn-tx{min-width:0;flex:1}
+.dbn-tt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.dbn-mm{font-size:var(--fs-meta);color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbn-mm .ok{color:var(--ok)}
+.dbn-note{font-size:var(--fs-meta);color:var(--muted);line-height:1.7;margin:10px 0 0}
+.dbn-foot{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.dbn-foot .cnt{font-size:var(--fs-meta);color:var(--muted)}
+.dbn-noimg{width:38px;height:54px;flex:none;border-radius:6px;background:var(--bg);border:1px solid var(--line)}
+.dbn-tt,.dbn-mm{display:block}
+.dbn-in{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-3);background:var(--card);color:var(--ink);font-size:var(--fs-body);padding:11px 12px;outline:none;margin-top:10px;min-height:44px}
+.dbn-file{font-size:var(--fs-meta);border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 16px;background:var(--card);color:var(--accent);cursor:pointer;min-height:34px;font-weight:600}
+.dbn-file input{display:none}
 /* v2.19.1 电影部分进度条（一集＝一整片，进度按「看到百分之几」记，s.pos 0–100） */
 .filmpos{border:1px solid var(--line);border-radius:var(--r-3);padding:12px 12px 12px;margin:-4px 0 12px;background:var(--card)}
 .fpbar{display:flex;flex-wrap:wrap;gap:8px 8px;align-items:baseline;font-size:var(--fs-meta);color:var(--muted)}
@@ -251,7 +295,10 @@ body.dragmark,body.dragmark *{user-select:none;cursor:crosshair}
 .panel select{width:100%;border:none;border-bottom:1px solid var(--line);background:none;padding:12px 2px;font-size:14px;color:var(--ink);outline:none;margin-bottom:2px}
 .panel .row2{display:flex;gap:8px;margin-top:20px}
 .panel .row2 button{flex:1;border-radius:var(--r-3);padding:12px;font-size:14px}
-.b1{background:var(--ink);color:var(--bg);border:none;font-weight:500}
+/* v2.31.0：.b1 原先没给 padding/min-height，高度全由内容撑出来 —— 面板里那个
+   「导入/推送」按钮实测只有 19px 高，小屏上点不准。给一份和其它按钮一致的底子，
+   各处原有的行内 padding 仍能按需覆盖。 */
+.b1{background:var(--ink);color:var(--bg);border:none;font-weight:500;padding:11px 20px;min-height:38px;border-radius:var(--r-3)}
 .b2{background:none;border:1px solid var(--line);color:var(--muted)}
 .b3{background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent)}
 .msg{font-size:12px;color:var(--muted);margin:12px 0;min-height:18px}
@@ -450,6 +497,12 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   .scrlbtn{width:38px;height:38px}
   .acctbk{gap:12px;flex-wrap:wrap}
   .acctbk .lnk{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px 16px;min-height:38px}
+  .dbn-row{min-height:60px}
+  .dbn-q,.dbn-file{min-height:38px}
+  /* v2.31.0：面板主按钮（导入/推送）原先漏在小屏触点规则外，实测 393 宽下只有 19px 高。
+     推送一次要连点几十条，19px 的按钮在小屏上点不准比什么都劝退 —— 和 .dbn-q 同规格补齐。 */
+  .dbn-foot .b1{min-height:38px;padding:8px 16px}
+  .timline .lnk{min-height:38px;padding:8px 14px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
   .acctbk .sep{display:none}
   /* 面板右上角的 × 全是 h3 的紧邻兄弟，一条选择器覆盖 11 个浮层，不必逐个加类 */
   .panel h3+button{width:44px;height:44px;margin:-8px -12px 0 0;display:flex;align-items:center;justify-content:center}
@@ -477,6 +530,7 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   #vDetail>.back{order:0}
   #vDetail>.hero{order:1}
   #vDetail>.strow{order:2}
+  #vDetail>.timline{order:2}
   #vDetail>#dParts{order:3}
   #vDetail>.quickrow{order:4}
   #vDetail>.dtools{order:5}
@@ -576,6 +630,12 @@ html[data-theme=dark] .hero img{box-shadow:0 10px 34px rgba(0,0,0,.6)}
   .wrap{max-width:820px}
   .panel{max-width:680px}
 }
+
+/* a11y（审计项 3）：键盘焦点必须看得见。只在键盘导航时出现，鼠标点击不闪。 */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,
+a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scrlbtn:focus-visible,.back:focus-visible{outline-offset:3px}
 </style>
 
 <script>
@@ -600,7 +660,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     </div>
     <div class="frow">
       <div class="filter" id="filters"></div>
-      <input id="listQ" class="lq" type="search" placeholder="搜索片单…" autocomplete="off" oninput="setListQ(this.value)"/>
+      <input id="listQ" class="lq" type="search" placeholder="搜索片单…" autocomplete="off" oninput="setListQ(this.value)" aria-label="搜索片单"/>
     </div>
     <div class="srcbar" id="srcBar"></div>
     <div class="typerow" id="showTypeRow"></div>
@@ -617,6 +677,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
       </div>
     </div>
     <div class="strow" id="dStatus"></div>
+    <div class="timline" id="dTime" style="display:none"></div>
     <div id="dParts"></div>
     <div class="dtools" style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 12px">
       <button class="ty" onclick="aiUpd()" id="btnAiUpd" title="让 AI 按固定格式补出没收录的分集和双语集名：只追加缺的集，绝不改动已看进度">✧ 让 AI 补新集</button>
@@ -633,7 +694,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div class="quickrow" style="padding:12px 16px">
       <button id="nextBtn" style="width:100%;background:none;border:none;font-size:14px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:8px"></button>
     </div>
-    <div class="searchrow2"><input id="qFilter" placeholder="按集标题/集号筛选…" oninput="renderGrid()"/></div>
+    <div class="searchrow2"><input id="qFilter" placeholder="按集标题/集号筛选…" oninput="renderGrid()" aria-label="按集标题或集号筛选"/></div>
     <div class="typerow" id="typeRow"></div>
     <div class="seclabel" style="font-size:12px;letter-spacing:2px;color:var(--muted);margin:12px 0 8px">剧集 EPISODES</div>
     <div id="dGroups"></div>
@@ -643,7 +704,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
   <div id="vAdd" style="display:none">
     <button class="back" onclick="backList()">← 返回</button>
     <div class="searchrow">
-      <input id="qKw" placeholder="搜索剧名（中文/英文都行 · 本地 + 全网）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doSearch();}"/>
+      <input id="qKw" placeholder="搜索剧名（中文/英文都行 · 本地 + 全网）" style="caret-color:var(--accent)" onkeydown="if(event.key==='Enter'){event.preventDefault();doSearch();}" aria-label="搜索剧名"/>
       <button onclick="doSearch()">搜索</button>
     </div>
     <div id="srMsg" class="msg"></div>
@@ -686,12 +747,43 @@ window.addEventListener('resize',fabSync);
    账号面板「同步日志」下方可查看；同步/保存链路的空 catch 全部接进来。 */
 function atErr(where,e){
   try{ var L=rd('at_errlog',[]); if(!Array.isArray(L)) L=[];
-    L.push({t:Date.now(),w:String(where||''),m:String((e&&(e.message||e))||'').slice(0,300)});
-    if(L.length>100) L=L.slice(-100);
-    localStorage.setItem('at_errlog',JSON.stringify(L));
+    var wkey=String(where||'');
+    var now=Date.now();
+    /* v2.29.2 去重抑制：同一 where 在 60s 内只记 1 条,死循环也不会淹没 100 条环形日志 */
+    var last=L[L.length-1];
+    if(!(last&&last.w===wkey&&now-(last.t||0)<60000)){
+      L.push({t:now,w:wkey,m:String((e&&(e.message||e))||'').slice(0,300)});
+      if(L.length>100) L=L.slice(-100);
+      localStorage.setItem('at_errlog',JSON.stringify(L));
+    }
+    /* v2.29.2 当日快统：60s 内 ≥5 个不同源报错则置 at_unhealthy=1（CI/账号面板可轮询） */
+    window.__atErrWindow=window.__atErrWindow||[];
+    var win=window.__atErrWindow;
+    win.push({t:now,w:wkey});
+    win=win.filter(function(x){ return now-x.t<60000; });
+    window.__atErrWindow=win;
+    var uniq={}; win.forEach(function(x){ uniq[x.w]=1; });
+    var n=Object.keys(uniq).length;
+    if(n>=5){ try{ localStorage.setItem('at_unhealthy',String(now)); }catch(x){} }
+    try{ rd('at_errlog_today',{d:'',c:0}); var td=new Date().toISOString().slice(0,10);
+      var T=rd('at_errlog_today',{d:td,c:0});
+      if(T.d!==td){ T={d:td,c:1}; } else { T.c=(T.c||0)+1; }
+      wr('at_errlog_today',T);
+    }catch(x){}
   }catch(x){}
   try{ console.warn('[追迹·错误] '+(where||''), e); }catch(x){}
 }
+/* v2.29.2 错误网关入口：window.atErrSummary() 返回 {todayCount, totalLen, unhealthySince, topSources}
+   给账号面板「错误日志」按钮（CSP 后再上 UI）或调试控制台用 */
+function atErrSummary(){
+  var L=rd('at_errlog',[]);
+  var T=rd('at_errlog_today',{d:'',c:0});
+  var since=0; try{ since=parseInt(localStorage.getItem('at_unhealthy')||'0',10)||0; }catch(x){}
+  var src={}; (L||[]).forEach(function(x){ src[x.w]=(src[x.w]||0)+1; });
+  var top=Object.keys(src).map(function(k){ return {w:k,c:src[k]}; }).sort(function(a,b){return b.c-a.c;}).slice(0,5);
+  return {todayCount:T.c||0, totalLen:(L||[]).length, unhealthySince:since, topSources:top};
+}
+window.atErrSummary=atErrSummary;
 window.addEventListener('error',function(ev){ try{ atErr('全局:'+(ev.filename||'').split('/').pop()+':'+ev.lineno, ev.message); }catch(x){} });
 window.addEventListener('unhandledrejection',function(ev){ try{ atErr('Promise:'+String((ev.reason&&(ev.reason.message||ev.reason))||'').slice(0,120),''); }catch(x){} });
 /* ===== v2.13.0 主题化确认/输入弹窗 =====
@@ -699,7 +791,7 @@ window.addEventListener('unhandledrejection',function(ev){ try{ atErr('Promise:'
    读屏软件读不到语境。统一走 .mask/.panel，带焦点圈定、Enter 提交、Esc 取消。 */
 function uiDialog(o){
   var old=document.getElementById('uiDlgMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='uiDlgMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='uiDlgMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label',o.title||'确认');
   var h='<h3 style="margin:0 0 8px">'+esc(o.title||'确认')+'</h3>';
   if(o.msg) h+='<div class="mini" style="white-space:pre-wrap;line-height:1.6">'+esc(o.msg)+'</div>';
@@ -712,6 +804,8 @@ function uiDialog(o){
   h+='<div class="msg" id="udMsg"></div><div class="row2" style="margin-top:12px"><button type="button" class="b2" id="udNo">'+esc(o.cancelText||'取消')+'</button><button type="button" class="b1" id="udYes">'+esc(o.okText||'确定')+'</button></div>';
   box.innerHTML=h; wrap.appendChild(box); document.body.appendChild(wrap);
   var inpEl=box.querySelector('#udInp'), fieldEls=[].slice.call(box.querySelectorAll('.udF')), done=false;
+  /* a11y：label 是运行时由 o.title 拼的 h3，静态写死会错，这里按标题赋值 */
+  try{ if(inpEl) inpEl.setAttribute('aria-label', o.input.aria||o.title||'输入框'); }catch(x){}
   function dlgVal(){ if(inpEl) return inpEl.value.trim();
     if(fieldEls.length){ var v={}; fieldEls.forEach(function(el){ v[el.getAttribute('data-fid')]=el.value.trim(); }); return v; }
     return null; }
@@ -1028,7 +1122,29 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.29.1', AT_BUILD='20261003b';
+var AT_VERSION='2.32.0', AT_BUILD='20261006a';
+/* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
+   但启动期去 fetch tracker-version.json 自检一次,
+   不一致记 at_errlog 并在账号面板版本行红字提示。
+   物理合并靠发版流水线完成——见发版.py 末尾的版本对账段。*/
+function _atVersionCheck(){
+  try{
+    fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'})
+      .then(function(r){ return r&&r.ok? r.json(): null; })
+      .then(function(j){
+        if(!j) return;
+        var v=String(j.version||''), b=String(j.build||'');
+        if(v!==AT_VERSION||b!==AT_BUILD){
+          atErr('version-mismatch','page='+AT_VERSION+'/'+AT_BUILD+' json='+v+'/'+b);
+        }
+        window._atVersionJSON=v; window._atVersionJSONBuild=b;
+        window.dispatchEvent(new CustomEvent('at-version-json',{detail:{version:v,build:b}}));
+      }).catch(function(e){ atErr('version-fetch',e); });
+  }catch(e){ atErr('version-fetch-sync',e); }
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',_atVersionCheck);
+}else{ _atVersionCheck(); }
 /* ===== v2.10.0：方向转向【账号】 =====
    v2.9.x 一直在「同步」上做文章——频率分层、总开关、门户播放……
    但用户真正要的是：换设备能接着看。而「同步」这个词底下压着三件不相干的事：
@@ -1156,11 +1272,70 @@ function setEpStat(s,n,st){
      否则第一集标记就会 TypeError 崩掉（v2.12.0 右键菜单走到这条路时暴露）。 */
   if(!s.statuses) s.statuses={};
   if(st===null) delete s.statuses[n]; else s.statuses[n]=st;
+  if(st==='watched'||st==='rewatch') stampStart(s);
   s.updAt=Date.now();
 }
 function cntWatched(s){ var o=s.statuses||{}, n=0; for(var k in o){ if(o[k]==='watched') n++; } return n; }
 function cntRewatch(s){ var o=s.statuses||{}, n=0; for(var k in o){ if(o[k]==='rewatch') n++; } return n; }
 function pct(s){ return s.total? Math.min(100,Math.round((cntWatched(s)/s.total)*100)) : 0; }
+
+/* ===== v2.30.0 观看时间账：开始看 / 看完 =====
+   两个来源：本机操作（From='me'）与豆瓣标记日期（From='db'，精确到天）。
+   「豆瓣优先」只作用在导入那一刻——本机动作一律只在字段为空时填，绝不覆盖豆瓣给的值；
+   反过来豆瓣再拉一次也不覆盖本机记下的。手改（详情页「改时间」）把来源改写成 me。 */
+function fmtDay(ms){
+  if(!ms) return '';
+  var d=new Date(+ms); if(isNaN(d.getTime())) return '';
+  var p=function(x){ return x<10?('0'+x):(''+x); };
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+function parseDay(str){
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(str||'').trim());
+  if(!m) return 0;
+  var d=new Date(+m[1],(+m[2])-1,+m[3],12,0,0,0);
+  if(d.getFullYear()!==+m[1]||d.getMonth()+1!==+m[2]||d.getDate()!==+m[3]) return 0;
+  return d.getTime();
+}
+function dayDiff(a,b){ if(!a||!b||b<a) return 0; return Math.floor((b-a)/86400000); }
+function stampStart(s,ms,from){ if(!s||s.tStart) return; s.tStart=ms||Date.now(); s.tStartFrom=from||'me'; }
+function stampDone(s,ms,from){ if(!s||s.tDone) return; s.tDone=ms||Date.now(); s.tDoneFrom=from||'me'; }
+function clearDoneStamp(s){ if(s&&s.tDone&&s.tDoneFrom==='me'){ delete s.tDone; delete s.tDoneFrom; } }
+/* 详情页那一行：没记过时间的条目整行不出现，不占位 */
+function timeLineHtml(s){
+  if(!s||(!s.tStart&&!s.tDone)) return '';
+  var out=[], sid=esc(String(s.sid)).replace(/'/g,"\'");
+  if(s.tStart) out.push('开始 <b>'+fmtDay(s.tStart)+'</b>'+(s.tStartFrom==='db'?'<span class="src">豆瓣</span>':''));
+  if(s.tDone) out.push('看完 <b>'+fmtDay(s.tDone)+'</b>'+(s.tDoneFrom==='db'?'<span class="src">豆瓣</span>':''));
+  var days=(s.tStart&&s.tDone&&s.tDone>=s.tStart)?dayDiff(s.tStart,s.tDone):0;
+  if(days>0) out.push('用时 <b>'+days+'</b> 天');
+  return out.join('<span class="ds">·</span>')+'<button type="button" class="lnk" onclick="editWatchTime(\''+sid+'\')">✎ 改时间</button>';
+}
+function editWatchTime(sid){
+  var s=bySid(sid)||bySid(curSid); if(!s){ toast('找不到这部剧'); return; }
+  uiDialog({ title:'观看时间 · '+s.title,
+    msg:'按 年-月-日 填（例 2026-08-12）。留空=清除这一项。',
+    fields:[ {id:'st',label:'开始看',value:fmtDay(s.tStart),placeholder:'2026-08-12'},
+             {id:'dn',label:'看完',value:fmtDay(s.tDone),placeholder:'2026-09-03'} ],
+    okText:'保存',
+    validate:function(v){
+      v=v||{};
+      var e=[];
+      if(v.st&&!parseDay(v.st)) e.push('开始看');
+      if(v.dn&&!parseDay(v.dn)) e.push('看完');
+      if(e.length) return e.join('和')+'不是合法的 年-月-日，请照 2026-08-12 写';
+      if(parseDay(v.st)&&parseDay(v.dn)&&parseDay(v.dn)<parseDay(v.st)) return '看完时间早于开始看时间，改一下';
+      return null;
+    },
+    onDone:function(ok,v){
+      if(!ok) return; v=v||{};
+      var ms1=parseDay(v.st), ms2=parseDay(v.dn);
+      if(ms1){ s.tStart=ms1; s.tStartFrom='me'; } else { delete s.tStart; delete s.tStartFrom; }
+      if(ms2){ s.tDone=ms2; s.tDoneFrom='me'; } else { delete s.tDone; delete s.tDoneFrom; }
+      s.updAt=Date.now(); save(); renderList();
+      try{ if(document.getElementById('vDetail')&&document.getElementById('vDetail').style.display!=='none') renderDetail(); }catch(e){}
+      toast('观看时间已更新（手改后不再被豆瓣覆盖）');
+    }});
+}
 
 /* ===== v2.3 来源判定器（唯一口径；v2.4.2 起无系列级摊派）=====
    优先级：人工标注 > 标题【动画原创】 > 显式数据 > 校准区间 > 待核 */
@@ -1503,12 +1678,12 @@ function renderInternalLib(){
   /* v2.14.0b 片内搜索框只作用于「我的片单」，浏览内置库时隐藏 */
   var _lqh=document.getElementById('listQ'); if(_lqh) _lqh.style.display='none';
   var _sb0=document.getElementById('srcBar'); if(_sb0) _sb0.style.display='none';
-  document.querySelector('.top').innerHTML='<div class="brand">追迹<small>ANITRACKER 库</small></div><button class="topbtn" onclick="renderList()">←</button>';
+  document.querySelector('.top').innerHTML='<div class="brand">追迹<small>ANITRACKER 库</small></div><button class="topbtn" onclick="renderList()" aria-label="刷新列表">←</button>';
   var fe=document.getElementById('filters');
   if(!document.getElementById('libQ')){
     var sr=document.createElement('div');
     sr.className='searchrow2';
-    sr.innerHTML='<input id="libQ" placeholder="搜番名 / 英文名 / 集名…" oninput="libQInput()"/>';
+    sr.innerHTML='<input id="libQ" placeholder="搜番名 / 英文名 / 集名…" oninput="libQInput()" aria-label="搜索片库"/>';
     fe.parentNode.insertBefore(sr, fe);
     var hr=document.createElement('div');
     hr.className='histrow'; hr.id='libHist';
@@ -1726,6 +1901,9 @@ function renderList(){
     /* 电影看到一半也要在片单上写明白（进度条宽度由 statOf 的 pos 撑起） */
     var _fp=isFilmEntry(s)?filmPosOf(s):0;
     var _fpTxt=(_fp>0&&_fp<100)?(' · 看到 '+_fp+'%'):'';
+    /* 「看完」那天挪到状态词前面：尾巴上再挂一个「看完 2026-01-09」，一行里两个「看完」读着累 */
+    var _doneD=(s.status==='done'&&s.tDone)?fmtDay(s.tDone):'';
+    var _cn=(function(){ try{ return webCnName(s)||''; }catch(e){ return ''; } })();
     var _sidE=esc(String(s.sid)).replace(/'/g,"\\'");
     var _num=(_fp>0&&_fp<100)?(p+'%'):w;
     if(_grid){
@@ -1743,7 +1921,7 @@ function renderList(){
       '<img src="'+esc(s.cover||'')+'" onerror="__coverFail(this)" referrerpolicy="no-referrer" onclick="openDetail(\''+_sidE+'\')"/>'+
       '<div class="info" onclick="openDetail(\''+_sidE+'\')">'+
         '<div class="t">'+esc(s.title)+'</div>'+fCnt(s)+(s.parts&&s.parts.length>1?'<span class="type-tag unknown" style="background:var(--accent-soft);color:var(--accent);border-color:var(--accent)">共 '+s.parts.length+' 季</span>':'')+
-        '<div class="s">'+(ST_NAME[s.status||'watching']||s.status)+' · '+s.total+' 集'+(s.year?' · '+s.year:'')+(st.hidden>0?' · 隐 '+st.hidden:'')+_fpTxt+(_lt?(' · '+_lt):'')+'</div>'+
+        '<div class="s">'+(_doneD?_doneD+' 看完':(ST_NAME[s.status||'watching']||s.status))+' · '+s.total+' 集'+(_cn?(' · '+_cn):'')+(s.year?' · '+s.year:'')+(st.hidden>0?' · 隐 '+st.hidden:'')+_fpTxt+(_lt?(' · '+_lt):'')+'</div>'+
         '<div class="progline"><div class="prog"><i style="width:'+p+'%"></i></div><div class="num"><b>'+((_fp>0&&_fp<100)?(p+'%'):w)+'</b>/'+st.total+'</div></div>'+
       '</div>'+
       '<div class="acts">'+
@@ -1798,7 +1976,7 @@ function quickNext(sid){
    现在：开一层（详情/添加视图，或任意 .mask 弹层）压一格历史，回退时只关掉最上面那层。
    弹层走 DOM 观察统一接管：十来个入口各自 wrap.remove() 关，逐处挂接必漏；
    用户用 ×/取消/点遮罩 自己关掉的层，要补一格 history.back()，否则回退先吃掉空状态、像失灵。 */
-var AT_LAYERS=[], AT_CLOSING=0, AT_VIEW=null, AT_NAV=0;
+var AT_LAYERS=[], AT_CLOSING=0, AT_VIEW=null, AT_NAV=0, AT_SEQ=0, AT_WANTED=[];
 /* 深度对账：我们压进历史的那一格，state 里带着「压进来时栈深是几」（atDepth），
    于是当前深度随时能从现场读回来。为什么不自己记计数器：history.back() 是异步的，
    同一拍里「关一层 + 开一层」（长按菜单点「打开详情」、连续开关弹层）会让迟到的 popstate
@@ -1809,9 +1987,13 @@ function atSync(){
   if(AT_NAV) return;                     /* 我们那次 go() 还在路上，popstate 回来继续对账 */
   var want=AT_LAYERS.length, have=atDepth(), d=want-have;
   if(d>0){ for(var i=1;i<=d;i++){ try{ history.pushState({atDepth:have+i},''); }catch(e){ return; } } }
-  else if(d<0){ AT_NAV=1; try{ history.go(d); }catch(e){ AT_NAV=0; } }
+  else if(d<0){ /* 点名要关的是哪几层：history.go 是异步的，同一拍里若又开了新层，
+       popstate 回来时不能把新开的层当成「多出来的一层」关掉——
+       否则「换个面板」就变成了面板凭空消失（v2.30.0 豆瓣面板二次打开实测踩过）。 */
+    AT_WANTED=AT_LAYERS.slice(want+d).map(function(l){ return l.seq; });
+    AT_NAV=1; try{ history.go(d); }catch(e){ AT_NAV=0; } }
 }
-function atPush(layer){ AT_LAYERS.push(layer); atSync(); }
+function atPush(layer){ layer.seq=++AT_SEQ; AT_LAYERS.push(layer); atSync(); }
 function atCloseTop(){
   var l=AT_LAYERS.pop(); if(!l) return false;
   AT_CLOSING++;
@@ -1847,7 +2029,14 @@ window.addEventListener('popstate', function(){
   /* 谁按的返回都按现场处理：真实深度比栈浅，就把多出来的层关掉；
      是我们自己那次 go() 落点的话，栈已经等于深度，这里自然什么都不多做的。 */
   var have=atDepth();
-  while(AT_LAYERS.length>have){ if(!atCloseTop()) break; }
+  while(AT_LAYERS.length>have){
+    var top=AT_LAYERS[AT_LAYERS.length-1];
+    /* AT_WANTED 非空=这一跳是我们自己发起的：只关点过名的层，新开的留下。
+       为空=用户真按了返回键，照 v2.17.0 的老规矩关掉最上面一层。 */
+    if(AT_WANTED.length&&top&&AT_WANTED.indexOf(top.seq)<0) break;
+    if(!atCloseTop()) break;
+  }
+  AT_WANTED=[];
   atSync();
 });
 (function atObserveMasks(){
@@ -1903,6 +2092,9 @@ function renderDetail(){
   document.getElementById('dStatus').innerHTML=FIL.slice(1).map(function(f){
     return '<button class="st'+((s.status||'watching')===f?' on':'')+'" onclick="setStatus(\''+f+'\')">'+ST_NAME[f]+'</button>';
   }).join('');
+  /* v2.30.0：观看时间行（一条都没记时整行不出现在界面上） */
+  var _tl=document.getElementById('dTime');
+  if(_tl){ var _th=timeLineHtml(s); _tl.innerHTML=_th; _tl.style.display=_th?'':'none'; }
   var st=statOf(s);
   document.getElementById('dStats').innerHTML=
     '<div class="stat"><b>'+st.watched+'</b><span>已看</span></div>'+
@@ -1952,7 +2144,11 @@ function markNextEp(){
   /* v2.10.0：不再把「已看」写回 Bangumi（同步已移除），本地记录到此为止 */
   toast('第 '+next+' 集已标记已看');
 }
-function setStatus(f){ var s=bySid(curSid); if(s&&s.pv){ toast('预览模式：先「加入片单」再改状态'); return; } s.status=f; s.updAt=Date.now(); save(); renderDetail(); /* v2.10.0：不再写回 Bangumi */ }
+function setStatus(f){ var s=bySid(curSid); if(s&&s.pv){ toast('预览模式：先「加入片单」再改状态'); return; } s.status=f; s.updAt=Date.now();
+  /* v2.30.0：状态胶囊顺带记时间——「在看」补开始（没有才补），「看完」补完成；从看完改回其它状态时，本机记的完成时间撤掉（豆瓣给的不撤） */
+  if(f==='watching'||f==='done') stampStart(s);
+  if(f==='done') stampDone(s); else clearDoneStamp(s);
+  save(); renderDetail(); }
 /* 繁简/日文汉字归一化（番剧名高频字），搜索词与库名双方都过 norm 再匹配 */
 var TS_MAP={'賊':'贼','門':'门','東':'东','車':'车','馬':'马','鳥':'鸟','龍':'龙','戰':'战','國':'国','劍':'剑','傳':'传','記':'记','錄':'录','師':'师','銀':'银','戀':'恋','愛':'爱','萬':'万','無':'无','業':'业','煉':'炼','術':'术','衛':'卫','鐵':'铁','彈':'弹','藥':'药','種':'种','話':'话','學':'学','體':'体','點':'点','擊':'击','電':'电','機':'机','場':'场','雲':'云','樂':'乐','聖':'圣','護':'护','靈':'灵','獸':'兽','麗':'丽','夢':'梦','漢':'汉','語':'语','讀':'读','書':'书','畫':'画','飛':'飞','網':'网','練':'练','級':'级','約':'约','紅':'红','純':'纯','紙':'纸','細':'细','繼':'继','續':'续','與':'与','計':'计','讓':'让','變':'变','貝':'贝','貨':'货','貴':'贵','買':'买','費':'费','資':'资','質':'质','賭':'赌','軍':'军','輕':'轻','輸':'输','農':'农','進':'进','遊':'游','運':'运','過':'过','達':'达','遠':'远','適':'适','選':'选','遺':'遗','邊':'边','郵':'邮','鄉':'乡','醫':'医','釋':'释','鋼':'钢','錢':'钱','錦':'锦','鍵':'键','鎖':'锁','鏡':'镜','關':'关','際':'际','難':'难','雙':'双','靜':'静','韓':'韩','頭':'头','頻':'频','顆':'颗','題':'题','顏':'颜','願':'愿','類':'类','風':'风','飯':'饭','館':'馆','驅':'驱','魚':'鱼','鳴':'鸣','龜':'龟','戦':'战','悪':'恶','絵':'绘','桜':'樱','気':'气','園':'园','隊':'队','沢':'泽','宮':'宫','転':'转','亜':'亚','鈴':'铃','島':'岛','楓':'枫','瀬':'濑','麗':'丽','緋':'绯','彗':'彗','喰':'喰','瀧':'泷','嵐':'岚','榊':'榊','暁':'晓','薔':'蔷','薇':'薇','優':'优','億':'亿','兒':'儿','廳':'厅','強':'强','彈':'弹','徵':'征','恆':'恒','掛':'挂','擁':'拥','棄':'弃','歷':'历','歸':'归','毀':'毁','滅':'灭','營':'营','環':'环','發':'发','監':'监','瞭':'了','矚':'瞩','碼':'码','禍':'祸','稱':'称','窮':'穷','築':'筑','簡':'简','簽':'签','編':'编','總':'总','縮':'缩','織':'织','罰':'罚','聯':'联','臟':'脏','舍':'舍','藝':'艺','蝕':'蚀','製':'制','複':'复','覇':'霸','說':'说','調':'调','談':'谈','論':'论','賽':'赛','贏':'赢','蹤':'踪','身':'身','載':'载','輝':'辉','迥':'迥','透':'透','週':'周','運':'运','隨':'随','隱':'隐','雜':'杂','雞':'鸡','餘':'余','驚':'惊','鬥':'斗','魂':'魂','鮮':'鲜','鳳':'凤','鴉':'鸦','黑':'黑','鼓':'鼓','齊':'齐','帳':'帐','線':'线','賣':'卖','淨':'净','權':'权','歡':'欢','禮':'礼','穩':'稳','績':'绩','締':'缔','結':'结','絕':'绝','經':'经','維':'维','綱':'纲','義':'义','職':'职','肅':'肃','膽':'胆','臉':'脸','豐':'丰','財':'财','責':'责','躍':'跃','違':'违'};
 function norm(s){
@@ -3133,19 +3329,19 @@ function editSrc(epNum){
   if(!e){ toast('找不到该集'); return; }
   var inf=srcInfoOf(s,e);
   var old=document.getElementById('srcEditMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='srcEditMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='srcEditMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel';
   var opts=[['canon','漫改'],['filler','TV原创'],['semi','半原创'],['unknown','待核']];
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 '+e.s+' 集 · 来源标注</h3>'+
-    '<button onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<button onclick="__closeSrcEdit()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">当前：<b style="color:var(--ink)">'+esc(srcDisplayName(inf.src))+'</b> · 依据：'+esc(srcByText(inf.by))+(inf.note?(' · '+esc(inf.note)):'')+(inf.by==='ai'?' · <span style="color:var(--accent)">AI 导入</span>':(e.src?' · <span style="color:var(--accent)">人工标注</span>':''))+'</div>'+
     '<div class="srcopts" id="seOps">'+opts.map(function(o){
       var on=((e.src&&e.src===o[0])||(!e.src&&inf.src===o[0]&&o[0]!=='unknown')||(!e.src&&inf.src==='unknown'&&o[0]==='unknown'));
       return '<button class="srcopt'+(on?' on':'')+'" onclick="__pickSe(this,\''+o[0]+'\')">'+o[1]+'</button>';
     }).join('')+'</div>'+
     '<div class="rangeline">应用范围：<label><input type="radio" name="seSc" value="one" checked/> 仅此集</label>'+
-    '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="'+e.s+'"/> 至 <input id="seB" type="number" min="1" value="'+e.s+'"/> 集</label></div>'+
-    '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="'+esc(e.srcNote||'')+'"/>'+
+    '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="'+e.s+'" aria-label="起始集号"/> 至 <input id="seB" type="number" min="1" value="'+e.s+'" aria-label="结束集号"/> 集</label></div>'+
+    '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="'+esc(e.srcNote||'')+'" aria-label="来源备注"/>'+
     '<div class="msg" id="seMsg"></div>'+
     '<div class="row2"><button class="b2" onclick="__closeSrcEdit()">取消</button><button class="b1" id="seSave">保存标注</button></div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
@@ -3181,11 +3377,11 @@ function showSrcTools(){
   var s=bySid(curSid); if(!s) return;
   var st=statOf(s);
   var old=document.getElementById('srcToolsMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='srcToolsMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='srcToolsMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel';
   var epsN=(s.eps||[]).length||1;
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">来源标注工具</h3>'+
-    '<button onclick="__closeSrcTools()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<button onclick="__closeSrcTools()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div class="mini">《'+esc(s.title)+'》当前覆盖：<b style="color:var(--ink)">'+esc(srcCovLine(st.cov))+'</b></div>'+
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">① AI 结果导入</b>（v2.9.0）：自动库查不到的新番/冷门番，把 AI 的回答原文贴进来即可自动识别。优先级最高，覆盖自动查到的。</div>'+
@@ -3193,9 +3389,9 @@ function showSrcTools(){
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">② 批量套用标签</b>（适合整部忠实原作的番）：</div>'+
     '<div class="rangeline">范围：<label><input type="radio" name="stSc" value="unknown" checked/> 仅待核集</label><label><input type="radio" name="stSc" value="all"/> 整部</label>'+
-    '<label><input type="radio" name="stSc" value="range"/> 第 <input id="stA" type="number" min="1" value="1"/> 至 <input id="stB" type="number" min="1" value="'+epsN+'"/> 集</label></div>'+
+    '<label><input type="radio" name="stSc" value="range"/> 第 <input id="stA" type="number" min="1" value="1" aria-label="起始集号"/> 至 <input id="stB" type="number" min="1" value="'+epsN+'" aria-label="结束集号"/> 集</label></div>'+
     '<div class="srcopts" id="stOps">'+['canon','filler','semi'].map(function(k){ return '<button class="srcopt" onclick="__pickSt(this,\''+k+'\')">'+TYPE_NAME[k]+'</button>'; }).join('')+'</div>'+
-    '<label>备注（可选）</label><input id="stNote" placeholder="如：整部基本忠于原作"/>'+
+    '<label>备注（可选）</label><input id="stNote" placeholder="如：整部基本忠于原作" aria-label="来源备注"/>'+
     '<div class="msg" id="stMsg"></div>'+
     '<div class="divi"></div>'+
     '<div class="mini"><b style="color:var(--ink)">③ 联网查证</b>（公开分集资料，逐集核对后可手动标注）：</div>'+
@@ -3606,7 +3802,7 @@ function pickCover(){
       '<button type="button" class="sybtn" id="cvPick" style="flex:1">选择图片文件</button>' +
       '<button type="button" class="sybtn" id="cvClear" style="flex:0 0 auto">清除封面</button>' +
     '</div>' +
-    '<input type="file" id="cvFile" accept="image/*" style="display:none"/>' +
+    '<input type="file" id="cvFile" accept="image/*" style="display:none" aria-label="选择本机封面图片"/>' +
     '<div id="cvDrop" style="margin-top:12px;border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7">' +
       '把图片拖到这里，或按 Ctrl+V 粘贴<br><span style="color:var(--muted)">（截图、网页里另存的图都行）</span></div>' +
     '<div id="cvPrev" class="aiflow"></div>' +
@@ -3804,7 +4000,7 @@ function renderParts(){
   var parts=s.parts||[];
   if(parts.length<2){ box.innerHTML=''; return; }
   var cur=s.curPart||parts[0].key;
-  box.innerHTML='<div class="parthead"><span>季度切换</span><span style="display:flex;gap:8px;align-items:center"><button class="scrlbtn" id="pScrl" onclick="scrollParts(-1)" title="往前滑看更多季度">‹</button><button class="scrlbtn" id="pScrr" onclick="scrollParts(1)" title="往后滑看更多季度">›</button></span>'+
+  box.innerHTML='<div class="parthead"><span>季度切换</span><span style="display:flex;gap:8px;align-items:center"><button class="scrlbtn" id="pScrl" onclick="scrollParts(-1)" title="往前滑看更多季度" aria-label="往前滑看更多季度">‹</button><button class="scrlbtn" id="pScrr" onclick="scrollParts(1)" title="往后滑看更多季度" aria-label="往后滑看更多季度">›</button></span>'+
       '</div>'+
     '<div class="partrow" onscroll="updateScrollBtns()">'+parts.map(function(p){
       var on=String(p.key)===String(cur);
@@ -3881,93 +4077,498 @@ function openSrCtx(x, y, tvId, node){
 
 
 
-async function syncFromDouban(box){
-  var m=box?box.querySelector('#dbMsg'):null;
-  function note(t,ok){ if(m){ m.textContent=t; m.style.color=ok?'var(--ok)':'var(--danger)'; } else toast(t); }
-  var ckEl=box?box.querySelector('#syDbCookie'):null;
-  var cookie=ckEl?ckEl.value.trim():'';
-  var scope=(box&&box.querySelector('#syDbScope'))?box.querySelector('#syDbScope').value:'tv';
-  try{
-    var st={ok:false,logged:false};
-    try{ st=await fetch(GW+'/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }); }catch(e){ st={ok:false,logged:false}; }
-    if(cookie){
-      note('正在验证豆瓣 cookie…', true);
-      var c=await fetch(GW+'/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookie:cookie})}).then(function(r){ return r.json(); });
-      if(!c.ok){ note('连接失败：'+(c.msg||'未知错误'), false); return; }
-      if(ckEl) ckEl.value='';
-      note('豆瓣已连接（uid '+(c.uid||'')+'），正在拉取标记…', true);
-    } else if(!st.ok||!st.logged){
-      note('未检测到本机网关：请点「导入导出文件」用豆瓣导出数据离线导入（无需 cookie）', false);
-      if(ckEl) ckEl.focus();
-      return;
-    } else {
-      note('豆瓣已连接（uid '+(st.uid||'')+'），正在拉取标记…', true);
-    }
-    var u=GW+'/hub/api/db/pull?limit=300'+(scope!=='all'?'&type='+scope:'');
-    var j=await fetch(u,{cache:'no-store'}).then(function(r){ return r.json(); });
-    if(!j.ok){ note('拉取失败：'+(j.msg||'未知错误'), false); return; }
-    var items=j.items||[];
-    if(!items.length){ note('没抓到条目——cookie 可能过期了，请重新粘贴一次', false); return; }
-    var smap={do:'watching',collect:'done',wish:'want'};
-    var added=0,upd=0,dup=0;
-    items.forEach(function(d){
-      var title=(d.title||'').trim(); if(!title) return;
-      var stt=smap[d.status]||'watching';
-      var cur=shows.find(function(s){ return String(s.dbId||'')===String(d.subjectId); });
-      if(!cur) cur=shows.find(function(s){ return dbNormTitle(s.title)===dbNormTitle(title); });
-      if(cur){
-        if(!cur.dbId) cur.dbId=d.subjectId;
-        if(!cur.cover&&d.pic) cur.cover=d.pic;
-        if(!cur.year&&d.year) cur.year=d.year;
-        if(cur.status!==stt){ cur.status=stt; cur.updAt=Date.now(); upd++; } else dup++;
-        return;
-      }
-      shows.push({
-        sid:'db'+d.subjectId, title:title, nameJp:d.origTitle||'',
-        cover:d.pic||'', year:d.year||'', total:0, eps:[], statuses:{},
-        status:stt, rating:d.rating||0,
-        genres:d.genres||[], isAnime:!!d.isAnime, dbId:d.subjectId,
-        ep:d.ep||0,
-        source:'豆瓣'+(d.isAnime?'·动画':'·真人'),
-        addedAt:Date.now(), updAt:Date.now()
-      });
-      added++;
-    });
-    if(added||upd){ save(); renderList(); }
-    note('豆瓣同步完成：新增 '+added+' · 状态更新 '+upd+' · 无变化 '+dup+(j.truncated?'（条目多，只取了最近 300 条）':''), true);
-  }catch(e){ note('同步异常：'+(e.message||e), false); }
+/* ===== v2.30.0：豆瓣标记同步（勾选式自选导入） =====
+   通路：本机 :3000 网关（video-hub 的 server.js，豆瓣 Cookie 存在它那边、不存进追迹）
+   的 /hub/api/db/{status,cookie,pull}。网关 CORS 只放行 127.0.0.1:8089、localhost:8089、
+   :8766 与 venus521.github.io，所以电脑端（本地 8089 或 GitHub Pages）能直连。
+   手机独立 App 里的 127.0.0.1 是手机自己，打不到这台电脑 —— 那一档走「离线导入」。
+   与旧版的差别：旧版一拉就把整包条目 push 进片单；现在先给清单，勾了才入库。 */
+var DB_ST={do:'watching',collect:'done',wish:'want'};
+var DB_ST_NAME={do:'在看',collect:'看过',wish:'想看'};
+var dbnItems=[];
+/* 真豆瓣不是十条八条：本机实测一次拉到 500 条剧集（含电影 610 条）。
+   610 行的清单让人逐条找=没得选，所以先给一个片名过滤；过滤只影响「看得见哪些」，
+   已经勾上的藏在过滤后面也不算丢（一键钮按可见的那批走，所见即所操作）。 */
+var dbnQ='';
+var dbnFrom='';
+
+function dbTargetOf(d){
+  var i,t=null,real=/^\d+$/.test(String(d.subjectId||''));
+  if(real){ for(i=0;i<shows.length;i++){ if(String(shows[i].dbId||'')!==''&&String(shows[i].dbId)===String(d.subjectId)){ t=shows[i]; break; } } }
+  if(!t){ for(i=0;i<shows.length;i++){ if(dbNormTitle(shows[i].title||'')===dbNormTitle(d.title||'')){ t=shows[i]; break; } } }
+  return t;
 }
-/* 自包含：导入豆瓣导出文件（JSON 数组 或 CSV：标题,状态,年份,评分），无需网关/cookie */
-function importDoubanFile(box,ev){
-  var f=ev.target.files&&ev.target.files[0]; if(!f) return;
-  var m=box?box.querySelector('#dbMsg'):null;
-  function note(t,ok){ if(m){ m.textContent=t; m.style.color=ok?'var(--ok)':'var(--danger)'; } else toast(t); }
+/* 豆瓣给的时间只填空缺：手改过的（From=me）永不覆盖，豆瓣给的可以被下一次豆瓣更新。 */
+function dbStamp(s,field,ms){
+  if(!s||!ms) return false;
+  if(s[field]&&s[field+'From']==='me') return false;
+  if(s[field]===ms) return false;
+  s[field]=ms; s[field+'From']='db'; return true;
+}
+/* 豆瓣列表每条只给一个「标记日期」：看过=完成时间，在看=开始时间，想看都不落。
+   「看过」的开始时间留空，不编。 */
+function dbStampTimes(s,status,markedAt){
+  var ms=parseDay(markedAt); if(!ms||!s) return false;
+  if(status==='collect') return dbStamp(s,'tDone',ms);
+  if(status==='do') return dbStamp(s,'tStart',ms);
+  return false;
+}
+function dbApplyOne(d){
+  var stt=DB_ST[d.status]||'watching', cur=dbTargetOf(d), ch=false;
+  var real=/^\d+$/.test(String(d.subjectId||''));
+  if(!cur){
+    var ns={ sid:real?('db'+d.subjectId):('dbf'+normTxt(d.title).slice(0,20)+'_'+String(d.subjectId)),
+      title:String(d.title||'').trim(), nameJp:d.origTitle||'', cover:d.pic||'',
+      year:d.year||'', total:0, eps:[], statuses:{}, status:stt, rating:d.rating||0,
+      genres:d.genres||[], isAnime:!!d.isAnime, dbId:real?String(d.subjectId):'',
+      ep:d.ep||0, source:d.source||('豆瓣'+(d.isAnime?'·动画':'·真人')),
+      addedAt:Date.now(), updAt:Date.now() };
+    dbStampTimes(ns,d.status,d.markedAt);
+    shows.push(ns); return 'added';
+  }
+  if(!cur.dbId&&real){ cur.dbId=String(d.subjectId); ch=true; }
+  if(!cur.cover&&d.pic){ cur.cover=d.pic; ch=true; }
+  if(!cur.year&&d.year){ cur.year=d.year; ch=true; }
+  if(!cur.rating&&d.rating){ cur.rating=d.rating; ch=true; }
+  if(dbStampTimes(cur,d.status,d.markedAt)) ch=true;
+  if(d.ep&&Number(cur.ep||0)!==Number(d.ep)){ cur.ep=d.ep; ch=true; }
+  /* 状态以豆瓣为准：这轮是「只拉不推」，豆瓣是记账的那一方 */
+  if((cur.status||'watching')!==stt){ cur.status=stt; ch=true; }
+  if(ch){ cur.updAt=Date.now(); return 'upd'; }
+  return 'same';
+}
+function dbnNote(t,kind){
+  var m=document.getElementById('dbnMsg');
+  if(!m){ toast(t); return; }
+  m.textContent=t;
+  m.style.color=kind==='ok'?'var(--ok)':(kind==='bad'?'var(--danger)':'var(--muted)');
+}
+function dbnMatch(d){
+  if(!dbnQ) return true;
+  return (String(d.title||'')+' '+String(d.origTitle||'')).toLowerCase().indexOf(dbnQ) >= 0;
+}
+/* —— v2.31.0 推送（追迹 → 豆瓣）——
+   清单来源不变：还是 dbnItems，只是方向反过来。「拉」时条目是豆瓣给的，
+   「推」时以片单为准，豆瓣那边现有的标记写进 dbnBySid 做差异比对。
+   凡是豆瓣条目（subjectId 纯数字）且已在片单才有得推 —— 离线文件进来的没这个号，
+   推不了就明说，不能静默跳过。 */
+var dbnDir='pull';                 /* pull=豆瓣→追迹；push=追迹→豆瓣 */
+var dbnBySid={};                   /* subjectId → 豆瓣侧当前状态 */
+var dbnPushMsg=null;               /* 推送完成后要补回的提示（别被随后的重拉覆盖） */
+function dbnPushable(d){
+  var t=dbTargetOf(d);
+  return !!(t && /^\d+$/.test(String(d.subjectId||'')) && t.dbId);
+}
+/* 本机想去的状态 ← 片单条目 status；推的是状态，不是时间（豆瓣标记日期不可写） */
+function dbnWantStatus(d){
+  var t=dbTargetOf(d); if(!t) return '';
+  var back={watching:'do',done:'collect',want:'wish'};
+  return back[t.status||'watching']||'';
+}
+function dbnPushDiff(d){
+  var want=dbnWantStatus(d), now=(dbnBySid[String(d.subjectId||'')]||'');
+  return (want&&now&&want!==now)?((DB_ST_NAME[now]||now)+' → '+(DB_ST_NAME[want]||want)):'';
+}
+/* 方向不同，能做的事完全不同 —— 把话说清楚，别让用户拿「推」去期待「入库」的效果 */
+function dbnDirNote(cap){
+  var el=document.getElementById('dbnDirNote'); if(!el) return;
+  if(dbnDir!=='push'){
+    el.textContent='拉取＝把豆瓣标记收进片单，状态以豆瓣为准；没勾的一条都不动。';
+    return;
+  }
+  el.textContent='推送＝把片单里的状态写回豆瓣（想看/在看/看过）。只推真正带豆瓣号的条目；标记日期推不了，豆瓣那边的日期仍是它自己记的。';
+  /* 写通道探不通时把按钮直接置灰：让人在动手前就知道，而不是点了几十下才失败 */
+  var btn=document.getElementById('dbnGo');
+  if(btn){
+    if(cap&&cap.writable===false){
+      btn.disabled=true; btn.style.opacity=.5;
+      btn.textContent='豆瓣现在不让我们写回';
+      el.textContent+='（写回通道被豆瓣拦住了：'+((cap&&cap.reason)||'')+'。拉取照常可用。）';
+    } else {
+      btn.style.opacity='';
+      dbnFoot();
+    }
+  }
+}
+function dbnVisIdx(){ var a=[]; dbnItems.forEach(function(d,i){ if(dbnMatch(d)) a.push(i); }); return a; }
+function dbnRowHtml(d,i){
+  var tgt=dbTargetOf(d), stt=DB_ST[d.status]||'watching';
+  var same=!!tgt&&(tgt.status||'watching')===stt;
+  var bits=[DB_ST_NAME[d.status]||d.status];
+  if(d.year) bits.push(d.year);
+  if(d.ep) bits.push('看到第 '+d.ep+' 集');
+  if(d.markedAt) bits.push('标记 '+d.markedAt);
+  var mm=bits.join(' · ');
+  if(dbnDir==='push'){
+    /* 推送方向：这条要写回什么、豆瓣现在是什么、够不够格推 —— 一行说全 */
+    var df=dbnPushDiff(d), want=dbnPushable(d);
+    mm = want ? ('推成'+(DB_ST_NAME[dbnWantStatus(d)]||'—')+(df?('（豆瓣现在是 '+df+'）'):'（豆瓣已是这个状态）'))
+      : (tgt?'推不了：这条没有豆瓣号':'推不了：还没进片单');
+  } else if(tgt){
+    mm+=' · '+(same?'已在片单（一致）':('已在片单 → 改为'+(ST_NAME[stt]||stt)));
+  }
+  return '<button type="button" class="dbn-row'+(d.pick?' on':'')+(tgt?' has':'')+'" data-i="'+i+'" aria-pressed="'+(d.pick?'true':'false')+'">'+
+    '<span class="dbn-box">'+(d.pick?'✓':'')+'</span>'+
+    (d.pic?('<img src="'+esc(d.pic)+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="__coverFail(this)"/>'):'<span class="dbn-noimg"></span>')+
+    '<span class="dbn-tx"><span class="dbn-tt">'+esc(d.title||'')+'</span><span class="dbn-mm">'+esc(mm)+'</span></span>'+
+  '</button>';
+}
+function dbnRender(){
+  var body=document.getElementById('dbnBody'); if(!body) return;
+  if(!dbnItems.length){ body.innerHTML=''; dbnFoot(); return; }
+  if(dbnQ&&!dbnVisIdx().length){ body.innerHTML='<div class="dbn-note">片名「' + esc(dbnQ) + '」在拉回来的 ' + dbnItems.length + ' 条里一条都没命中 —— 清空过滤框看全部</div>'; dbnFoot(); return; }
+  var h='';
+  if(dbnFrom) h+='<div class="dbn-note">'+esc(dbnFrom)+'</div>';
+  h+='<div class="dbn-quick"><button type="button" class="dbn-q" id="dbnAll">全选</button>'+
+     '<button type="button" class="dbn-q" id="dbnNew">只选未入库</button>'+
+     '<button type="button" class="dbn-q" id="dbn0">清空</button></div>';
+  ['do','collect','wish'].forEach(function(k){
+    var rows=[];
+    dbnItems.forEach(function(d,i){ if(d.status===k&&dbnMatch(d)) rows.push(dbnRowHtml(d,i)); });
+    if(!rows.length) return;
+    h+='<div class="dbn-grp">'+(DB_ST_NAME[k]||k)+' '+rows.length+' 条</div>'+rows.join('');
+  });
+  body.innerHTML=h;
+  Array.prototype.forEach.call(body.querySelectorAll('.dbn-row'),function(el){
+    el.onclick=function(){
+      var i=+el.getAttribute('data-i'), on=!dbnItems[i].pick;
+      dbnItems[i].pick=on?1:0;
+      el.classList.toggle('on',!!on);
+      el.setAttribute('aria-pressed',on?'true':'false');
+      el.querySelector('.dbn-box').textContent=on?'✓':'';
+      dbnFoot();
+    };
+  });
+  var q=function(id,fn){ var b=document.getElementById(id); if(b) b.onclick=fn; };
+  var setPick=function(fn){ dbnVisIdx().forEach(function(i){ dbnItems[i].pick=fn(dbnItems[i])?1:0; }); dbnRender(); };
+  q('dbnAll',function(){ setPick(function(d){ return dbnDir==='push'?dbnPushable(d):true; }); });
+  q('dbnNew',function(){ setPick(function(d){ return dbnDir==='push'?dbnPushable(d):!dbTargetOf(d); }); });
+  q('dbn0',function(){ setPick(function(){ return false; }); });
+  dbnFoot();
+}
+function dbnFoot(){
+  var b=document.getElementById('dbnGo'), c=document.getElementById('dbnCnt'), k=0;
+  dbnItems.forEach(function(d){ if(d.pick) k++; });
+  if(b){
+    b.disabled=!k; b.style.opacity=k?1:.5;
+    b.textContent=k?(dbnDir==='push'?('把勾上的 '+k+' 部推到豆瓣'):('导入勾上的 '+k+' 部')):'还没勾条目';
+  }
+  if(!c) return;
+  var vis=dbnQ?dbnVisIdx().length:dbnItems.length;
+  c.textContent=dbnItems.length?('共 '+dbnItems.length+' 条'+(dbnQ&&vis!==dbnItems.length?(' · 过滤后 '+vis+' 条'):'')+' · 已勾 '+k):'';
+}
+function dbnImport(){
+  var sel=dbnItems.filter(function(d){ return d.pick; });
+  if(!sel.length){ dbnNote('一条都没勾 —— 先勾左边的框，再点导入','bad'); return; }
+  var a=0,u=0,same=0;
+  sel.forEach(function(d){ var r=dbApplyOne(d); if(r==='added')a++; else if(r==='upd')u++; else same++; });
+  save(); renderList();
+  dbnNote('豆瓣导入完成：新增 '+a+' · 更新 '+u+' · 无变化 '+same+'（没勾的一条都没动）','ok');
+  dbnItems=[]; dbnFrom=''; dbnRender();
+}
+/* 面板一开就自动拉：自动的是「拉」，自选的是「入库」 */
+/* 推送：一条一条来，不并发 —— 豆瓣对短时间密集写会风控，
+   而且每条写完都要回读核对，并发的话回读会读到别条还没落库的中间态。 */
+async function dbnPush(){
+  var sel=dbnItems.filter(function(d){ return d.pick; });
+  if(!sel.length){ dbnNote('一条都没勾 —— 先勾左边的框，再点推送','bad'); return; }
+  /* 写之前先问网关「现在写得进去吗」。被豆瓣反爬挡住时，别让用户对着一个必然失败的按钮点几十下。 */
+  var cap;
+  try{ cap=await fetch(GW+'/hub/api/db/cap',{cache:'no-store'}).then(function(r){ return r.json(); }); }
+  catch(e){ dbnNote('问不到本机豆瓣网关（:3000）—— 推送走不通','bad'); return; }
+  if(cap&&cap.writable===false){
+    dbnNote('推送现在走不通：'+((cap&&cap.reason)||'豆瓣拦了写入通道')+'。拉取不受影响，照常能用','bad');
+    return;
+  }
+  var bad=sel.filter(function(d){ return !dbnPushable(d); });
+  if(bad.length===sel.length){ dbnNote('勾的这些都推不了 —— 推送只认真正豆瓣条目（片单里有、且带豆瓣 id）；离线文件进来的条目没有豆瓣号','bad'); return; }
+  var btn=document.getElementById('dbnGo'); if(btn){ btn.disabled=true; btn.textContent='推送中…'; }
+  var done=0, changed=0, same=0, fail=0, noop=0, notes=[];
+  for(var i=0;i<sel.length;i++){
+    var d=sel[i];
+    dbnNote('正在推送 '+d.title+'（'+(i+1)+'/'+sel.length+'）…');
+    if(!dbnPushable(d)){ noop++; continue; }
+    try{
+      var r=await fetch(GW+'/hub/api/db/mark',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({subjectId:String(d.subjectId),status:dbnWantStatus(d)})}).then(function(x){ return x.json(); });
+      if(r&&r.ok){ if(r.changed)changed++; else same++; }
+      else{ fail++; notes.push(d.title+'：'+((r&&r.msg)||'失败')); }
+    }catch(e){ fail++; notes.push(d.title+'：'+((e&&e.message)||e)); }
+    done++;
+    /* 限速：豆瓣写操作密集会触发风控，700ms 一条是实测下来稳的节奏 */
+    if(i<sel.length-1) await new Promise(function(r){ setTimeout(r,700); });
+  }
+  if(noop) notes.push(noop+' 条没有豆瓣号、没推');
+  var summary='推送完成：改动 '+changed+' · 本来就是 '+same+' · 没推成 '+fail+(notes.length?(' —— '+notes.slice(0,3).join('；')+(notes.length>3?' 等':'')):'');
+  if(btn){ btn.disabled=false; dbnFoot(); }
+  /* 推完把豆瓣侧现状拉回来，让 dbnBySid 跟真实状态对齐（差异提示不能停在旧值上） */
+  var sc=document.querySelector('#dbnScope .dbn-q.on');
+  dbnPushMsg={t:summary,k:fail?'bad':'ok'};
+  await dbnPull(sc?sc.getAttribute('data-sc'):'tv', true);
+  dbnPushMsg=null;
+  dbnNote(summary, fail?'bad':'ok');
+}
+async function dbnPull(scope, keepMsg){
+  dbnItems=[]; dbnFrom=''; dbnBySid={}; dbnRender();
+  var au=document.getElementById('dbnAuth'), st, why='';
+  try{ st=await fetch(GW+'/hub/api/db/status',{cache:'no-store'}).then(function(r){ return r.json(); }); }
+  catch(e){ st={ok:false,logged:false}; why=String((e&&e.message)||e); }
+  if(!st.ok||!st.logged){
+    if(au) au.style.display='';
+    /* 两种「拉不到」要分开说：网关根本没连豆瓣，和请求被挡在门外（网关没起 / 这个端口的页面不在它的放行名单里）。
+       合成一句「还没登录」会把人带去重粘 Cookie，而真正的问题在别处。 */
+    dbnNote(why ? ('连不上本机豆瓣网关（:3000）—— 它没在跑，或这个页面的端口没被它放行；' + why)
+                : '这台电脑的豆瓣网关还没登录 —— 粘一次 Cookie 就能自动拉，不想给 Cookie 用下面的离线导入','bad');
+    return;
+  }
+  if(au) au.style.display='none';
+  var head = '豆瓣已连接（uid ' + (st.uid || '') + '），正在拉取' + (scope === 'all' ? '剧集和电影' : '剧集') + '标记…';
+  dbnNote(head);
+  /* 真实拉一次要半分钟（本机网关代抓豆瓣三种状态、逐页翻：实测 500 条 25.7 秒）。
+     光写「正在拉取」不报进度，用户分不清是没反应还是没拉完 —— 所以秒数当场走。 */
+  var t0 = Date.now(), tick = setInterval(function () {
+    var m = document.getElementById('dbnMsg'); if (!m) { clearInterval(tick); return; }
+    var el = Math.round((Date.now() - t0) / 1000);
+    m.textContent = head + ' 已经 ' + el + ' 秒' + (el >= 12 ? '（条目多时本来就要这么久，先别关窗口）' : '');
+  }, 1000);
+  var j;
+  try { j = await fetch(GW + '/hub/api/db/pull?limit=300' + (scope !== 'all' ? '&type=' + scope : ''), { cache: 'no-store' }).then(function (r) { return r.json(); }); }
+  catch (e) { clearInterval(tick); dbnNote('拉取异常：' + ((e && e.message) || e), 'bad'); return; }
+  clearInterval(tick);
+  if(!j||!j.ok){ dbnNote('拉取失败：'+((j&&j.msg)||'未知错误'),'bad'); if(j&&j.kind==='no-uid'){ var u2=document.getElementById('dbnUid'); if(u2) u2.style.display=''; } return; }
+  var items=j.items||[];
+  if(!items.length){ dbnNote('没抓到条目 —— Cookie 可能过期了，重新粘贴一次','bad'); if(au) au.style.display=''; return; }
+  dbnItems=items.map(function(d){
+    return { subjectId:d.subjectId, title:d.title, origTitle:d.origTitle, year:d.year, genres:d.genres||[],
+      isAnime:!!d.isAnime, rating:d.rating, markedAt:d.markedAt, pic:d.pic, status:d.status, ep:d.ep, pick:0 };
+  });
+  /* 记下豆瓣侧「现在是什么」，推送方向的差异提示全靠它 */
+  dbnItems.forEach(function(d){ if(d.subjectId) dbnBySid[String(d.subjectId)]=d.status; });
+  dbnFrom='豆瓣共 '+dbnItems.length+' 条'+(j.truncated?'（每种状态只取了最近 300 条）':'')
+    +' · 已在片单的默认不勾，勾了才会改';
+  dbnRender();
+  if(!keepMsg) dbnNote('拉到了 —— 勾选要入库的条目，不勾的一条都不动','ok');
+}
+/* 只活在内存，页面一关就没了 —— Cookie 不落localStorage、不进 packAll 的导出包 */
+var dbnLastCookie='', dbnLastUid='';
+async function dbnConnect(){
+  var ck=document.getElementById('dbnCookie'), v=ck?String(ck.value||'').trim():'';
+  if(!v){ dbnNote('还没粘贴 Cookie','bad'); if(ck) ck.focus(); return; }
+  dbnNote('正在验证 Cookie…');
+  var c;
+  try{ c=await fetch(GW+'/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookie:v})}).then(function(r){ return r.json(); }); }
+  catch(e){ dbnNote('连接异常：'+((e&&e.message)||e),'bad'); return; }
+  if(!c||!c.ok){
+    dbnNote('连接失败：'+((c&&c.msg)||'未知错误'),'bad');
+    /* uid 认出来了但收藏页打不开 = Cookie 过期，这个组合值得单独说，否则用户不知道该重粘 */
+    if(c&&c.uidSaved) dbnNote('uid 认出来了（'+c.uid+'），但豆瓣打不开它的收藏页 —— Cookie 过期了，重粘一次','bad');
+    return;
+  }
+  if(ck) dbnLastCookie=v; dbnLastUid=(c&&c.uid)||'';   /* 留一份在内存给「存到云端」用；页面一关即消失 */
+  if(ck) ck.value='';
+  /* 没认出 uid 才亮出兜底输入框；正常路径（Cookie 自带 dbcl2）一次就通，不该让用户看见多一步 */
+  if(c.uidUnknown||!c.uid){
+    var ui=document.getElementById('dbnUid'), ub=document.getElementById('dbnUidGo');
+    if(ui) ui.style.display=''; if(ub) ub.style.display='';
+    dbnNote('这份 Cookie 里没认出 uid —— 多半是少复制了 dbcl2 那段。可以重粘一次，或在下面手填','bad');
+    return;
+  }
+  /* 粘一次就够：Cookie 里的 dbcl2 自带 uid，网关直接认出来并顺手验了收藏页 */
+  dbnNote('豆瓣已连接（uid '+(c.uid||'')+'）'+(c.n?('，收藏页读到 '+c.n+' 条'):''),'ok');
+  /* 连上之后顺手问一句要不要存云端 —— 这样手机/平板换设备时不用再粘一遍 */
+  dbnOfferCred(c.uid);
+  var sc=document.querySelector('#dbnScope .dbn-q.on');
+  await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
+}
+/* ===== 豆瓣凭据跨设备（v2.32.0）=====
+   Cookie 存本机网关只够这一台设备用；手机上的 127.0.0.1 是手机自己，够不到 PC。
+   所以连上之后可以把 Cookie 加密存进你自己的 CloudBase 账号，换设备登录后自动取回。
+   加密密钥由账号密码派生（PBKDF2 → AES-GCM），所以只有本人能解。 */
+function dbnCredRow(){
+  var el=document.getElementById('dbnCredRow');
+  if(!el) return;
+  var C=window.AT_CRED;
+  if(!C){ el.innerHTML=''; return; }   /* 云同步脚本没就位（离线打开）→ 什么都不显示，不报错 */
+  C.exists().then(function(r){
+    if(!r) return;                                  /* 没登录追迹账号，不显示这一行 */
+    el.innerHTML = r.has
+      ? '<span class="dbn-note">云端已存一份凭据（'+String(r.at||'').slice(0,10)+'）</span>'+
+        '<button type="button" class="dbn-q" id="dbnTake">从云端取回</button>'+
+        '<button type="button" class="dbn-q" id="dbnForget">删掉云端那份</button>'
+      : '<span class="dbn-note">要在这台以外也能用豆瓣？把凭据加密存到你的追迹账号，换设备登录后自动取回</span>'+
+        '<button type="button" class="dbn-q" id="dbnPut">存到云端</button>';
+    var P=function(id,fn){ var b=document.getElementById(id); if(b) b.onclick=fn; };
+    P('dbnPut',function(){ dbnPutCred(); });
+    P('dbnTake',function(){ dbnTakeCred(); });
+    P('dbnForget',function(){
+      C.clear().then(function(){ dbnNote('云端那份已删','ok'); dbnCredRow(); });
+    });
+  });
+}
+function dbnAskPassword(why){
+  var v=prompt(why+'\n\n（密码只在这一刻用来派生加密密钥，不会被存下来）');
+  return v?String(v):'';
+}
+function dbnPutCred(){
+  var C=window.AT_CRED;
+  if(!C){ dbnNote('云同步模块没加载 —— 检查网络或换个入口打开','bad'); return; }
+  if(!dbnLastCookie){ dbnNote('这次没拿到 Cookie —— 先在上面粘一次','bad'); return; }
+  var pw=dbnAskPassword('存到云端需要你的追迹账号密码，用来加密 Cookie');
+  if(!pw) return;
+  C.stashDouban(dbnLastCookie, dbnLastUid, pw).then(function(){
+    dbnNote('已加密存到云端 —— 以后在这台以外登录同一账号，点「从云端取回」就行','ok');
+    dbnCredRow();
+  }).catch(function(e){ dbnNote('存云端失败：'+((e&&e.message)||e),'bad'); });
+}
+function dbnTakeCred(){
+  var C=window.AT_CRED;
+  if(!C){ dbnNote('云同步模块没加载 —— 检查网络或换个入口打开','bad'); return; }
+  var pw=dbnAskPassword('从云端取回需要同一密码来解密');
+  if(!pw) return;
+  dbnNote('正在解密…');
+  C.takeDouban(pw).then(async function(o){
+    if(!o||!o.cookie){ dbnNote('云端没有可用的凭据','bad'); return; }
+    var r=await fetch(GW+'/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cookie:o.cookie,uid:o.uid||''})}).then(function(x){ return x.json(); });
+    if(!r||!r.ok){ dbnNote('取回了但连不上豆瓣：'+((r&&r.msg)||'未知错误'),'bad'); return; }
+    dbnNote('已从云端恢复（uid '+(r.uid||'')+'），正在拉取…','ok');
+    var sc=document.querySelector('#dbnScope .dbn-q.on');
+    await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
+  }).catch(function(e){ dbnNote('取回失败：'+((e&&e.message)||e),'bad'); });
+}
+/* 面板每次打开都探一次云端那份在不在 */
+function dbnOfferCred(){
+  dbnCredRow();
+}
+/* 手填 uid：填完当场验一次收藏页通不通，填错当场说 */
+async function dbnSaveUid(){
+  var el=document.getElementById('dbnUid'), v=el?String(el.value||'').trim():'';
+  if(!v){ dbnNote('还没填 uid —— 个人页地址或纯 uid 都行','bad'); if(el) el.focus(); return; }
+  dbnNote('正在核对 uid…');
+  var r;
+  try{ r=await fetch(GW+'/hub/api/db/uid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:v})}).then(function(x){ return x.json(); }); }
+  catch(e){ dbnNote('连接异常：'+((e&&e.message)||e),'bad'); return; }
+  if(!r||!r.ok){ dbnNote('uid 填不了：'+((r&&r.msg)||'未知错误'),'bad'); return; }
+  if(el) el.value='';
+  /* 兜底用完就收起来，别让它一直杵在面板上提醒你「还得填 uid」 */
+  var ub=document.getElementById('dbnUidGo'); if(ub) ub.style.display='none';
+  dbnNote('uid 记下了（'+r.uid+'）'+(r.n?('，收藏页读到 '+r.n+' 条'):'')+' —— 开始拉取','ok');
+  var sc=document.querySelector('#dbnScope .dbn-q.on');
+  await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
+}
+function openDoubanSync(){
+  var old=document.getElementById('dbnMask'); if(old) old.remove();
+  var wrap=document.createElement('div'); wrap.id='dbnMask'; wrap.className='mask';
+  wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-label','豆瓣标记同步');
+  var box=document.createElement('div'); box.className='panel';
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">豆瓣标记</h3><button type="button" onclick="window.__closeDbn()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+    '<div class="msg" id="dbnMsg">正在确认豆瓣登录态…</div>'+
+    '<div id="dbnAuth" style="display:none">'+
+      '<div class="dbn-note">Cookie 只发给本机 :3000 网关、由它代为请求豆瓣；追迹不保存，拉取成功即清空输入框。</div>'+
+      '<input class="dbn-in" id="dbnCookie" type="text" placeholder="粘贴豆瓣 Cookie（连登录后的整条 dbcl2）" aria-label="豆瓣 Cookie" />'+
+      /* uid 一般不用填：Cookie 里的 dbcl2 自带「uid:token」，网关直接认出来。
+         这个框只在「复制到的 Cookie 里没有 dbcl2」时才亮出来（uidUnknown 时自动显示）。 */
+      '<input class="dbn-in" id="dbnUid" type="text" style="display:none" placeholder="上一步没认出 uid 时才需填：个人页地址或纯 uid" aria-label="豆瓣 uid" />'+
+      '<div class="dbn-foot"><button type="button" class="b2" id="dbnUidGo" style="display:none">填 uid</button><button type="button" class="b1" id="dbnConn">连接并拉取</button></div>'+
+    '</div>'+
+    '<div class="dbn-quick" id="dbnScope">'+
+      '<button type="button" class="dbn-q on" data-sc="tv">只看剧集</button>'+
+      '<button type="button" class="dbn-q" data-sc="all">含电影</button>'+
+    '</div>'+
+    '<div class="dbn-quick" id="dbnDir">'+
+      '<button type="button" class="dbn-q on" data-dir="pull">拉：豆瓣 → 追迹</button>'+
+      '<button type="button" class="dbn-q" data-dir="push">推：追迹 → 豆瓣</button>'+
+    '</div>'+
+    '<div class="dbn-note" id="dbnDirNote"></div>'+
+    /* 凭据跨设备：存云端 / 从云端取回 / 删云端。没登录追迹账号时这一行自动为空 */
+    '<div id="dbnCredRow" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'+
+    '<input class="dbn-in" id="dbnQ" type="text" inputmode="search" placeholder="按片名过滤（条目几百条时先筛再勾），空=看全部" aria-label="按片名过滤" />'+
+    '<div id="dbnBody"></div>'+
+    '<div class="dbn-foot">'+
+      '<button type="button" class="b1" id="dbnGo" disabled style="opacity:.5">还没勾条目</button>'+
+      '<label class="dbn-file">离线导入<input type="file" id="dbnFile" accept=".json,.csv,.txt" aria-label="豆瓣导出文件" /></label>'+
+      '<span class="cnt" id="dbnCnt"></span>'+
+    '</div>';
+  wrap.appendChild(box); document.body.appendChild(wrap);
+  function onKey(e){ if(e.key==='Escape') window.__closeDbn(); }
+  window.__closeDbn=function(){ document.removeEventListener('keydown',onKey); if(wrap.parentNode) wrap.remove(); };
+  document.addEventListener('keydown',onKey);
+  wrap.addEventListener('click',function(e){ if(e.target===wrap) window.__closeDbn(); });
+  Array.prototype.forEach.call(box.querySelectorAll('#dbnScope .dbn-q'),function(b){
+    b.onclick=function(){
+      Array.prototype.forEach.call(box.querySelectorAll('#dbnScope .dbn-q'),function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      dbnPull(b.getAttribute('data-sc'));
+    };
+  });
+  Array.prototype.forEach.call(box.querySelectorAll('#dbnDir .dbn-q'),function(b){
+    b.onclick=function(){
+      Array.prototype.forEach.call(box.querySelectorAll('#dbnDir .dbn-q'),function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      dbnDir=b.getAttribute('data-dir');
+      dbnItems.forEach(function(d){ d.pick=0; });
+      if(dbnDir==='push'){
+        dbnDirNote();
+        /* 探写通道：能写才让点，不能写当场说清，不让人白点 */
+        fetch(GW+'/hub/api/db/cap',{cache:'no-store'}).then(function(r){ return r.json(); })
+          .then(function(c){ dbnDirNote(c); })
+          .catch(function(){ dbnDirNote({writable:false,reason:'问不到本机豆瓣网关（:3000）'}); });
+      } else {
+        dbnDirNote();
+      }
+      dbnRender();
+    };
+  });
+  dbnDirNote();
+  dbnOfferCred();   /* 探云端凭据在不在（未登录追迹账号则这一行留空） */
+  box.querySelector('#dbnConn').onclick=dbnConnect;
+  box.querySelector('#dbnUidGo').onclick=dbnSaveUid;
+  box.querySelector('#dbnGo').onclick=function(){ if(dbnDir==='push') dbnPush(); else dbnImport(); };
+  box.querySelector('#dbnFile').onchange=function(){ importDoubanFile(null,this.files&&this.files[0]); };
+  dbnQ='';
+  box.querySelector('#dbnQ').oninput=function(){ dbnQ=String(this.value||'').trim().toLowerCase(); dbnRender(); };
+  dbnPull('tv');
+}
+/* 离线导入：豆瓣导出文件（JSON 数组，或 CSV 标题,年份,状态,评分[,标记日期]）。
+   解析出的条目进同一套勾选清单，不直接入库。 */
+function importDoubanFile(box,f){
+  f=f||(box&&box.files&&box.files[0]); if(!f) return;
   var rd2=new FileReader();
   rd2.onload=function(){
+    var rows=[];
     try{
-      var text=String(rd2.result||''); var rows=[];
-      var trimmed=text.trim();
+      var text=String(rd2.result||''), trimmed=text.trim();
       if(trimmed.charAt(0)==='['||trimmed.charAt(0)==='{'){
         var arr=JSON.parse(trimmed); if(!Array.isArray(arr)) arr=[arr];
-        arr.forEach(function(d){ if(d&&(d.title||d.name||d.书名||d.名称)) rows.push({title:String(d.title||d.name||d.书名||d.名称||''), year:String(d.year||d.年份||'').slice(0,4), status:String(d.status||d.状态||''), rating:parseFloat(d.rating||d.评分||0)||0}); });
+        arr.forEach(function(d,i){
+          if(!d) return;
+          var t=String(d.title||d.name||d['书名']||d['名称']||d['视频名']||'').trim(); if(!t) return;
+          rows.push({ title:t, year:String(d.year||d['年份']||'').slice(0,4),
+            status:String(d.status||d['状态']||''), rating:parseFloat(d.rating||d['评分']||0)||0,
+            markedAt:String(d.markedAt||d['标记时间']||d['时间']||d.date||'').slice(0,10),
+            subjectId:'f'+i });
+        });
       } else {
-        var lines=text.split(/\r?\n/);
-        for(var i=0;i<lines.length;i++){ var ln=lines[i].trim(); if(!ln) continue; var c=ln.split(','); rows.push({title:(c[0]||'').trim(), year:(c[1]||'').trim().slice(0,4), status:(c[2]||'').trim(), rating:parseFloat(c[3])||0}); }
+        var lines=trimmed.split(/\r?\n/);
+        for(var i=0;i<lines.length;i++){
+          var ln=String(lines[i]||'').trim(); if(!ln) continue;
+          var c=ln.split(',');
+          rows.push({ title:(c[0]||'').trim(), year:(c[1]||'').trim().slice(0,4), status:(c[2]||'').trim(),
+            rating:parseFloat(c[3])||0, markedAt:String(c[4]||'').trim().slice(0,10), subjectId:'f'+i });
+        }
       }
-      if(!rows.length){ note('文件里没解析出条目', false); return; }
-      var smap={wish:'want',do:'watching',collect:'done',想看:'want',在看:'watching',看过:'done'};
-      var added=0,upd=0,dup=0;
-      rows.forEach(function(d){
-        var title=d.title.trim(); if(!title) return;
-        var stt=smap[d.status]||'watching';
-        var cur=shows.find(function(s){ return dbNormTitle(s.title)===dbNormTitle(title); });
-        if(cur){ if(cur.status!==stt){ cur.status=stt; cur.updAt=Date.now(); upd++; } else dup++; return; }
-        shows.push({ sid:'db'+Date.now()+Math.floor(Math.random()*1e4), title:title, nameJp:'', cover:'', year:d.year, total:0, eps:[], statuses:{}, status:stt, rating:d.rating, genres:[], isAnime:false, addedAt:Date.now(), updAt:Date.now(), source:'豆瓣·导入' });
-        added++;
-      });
-      if(added||upd){ save(); renderList(); }
-      note('豆瓣文件导入完成：新增 '+added+' · 状态更新 '+upd+' · 无变化 '+dup, true);
-    }catch(e){ note('导入失败：'+(e.message||e), false); }
+    }catch(e){ dbnNote('解析失败：'+((e&&e.message)||e),'bad'); return; }
+    if(!rows.length){ dbnNote('文件里没解析出条目','bad'); return; }
+    var back={};
+    ['do','collect','wish'].forEach(function(k){ back[DB_ST_NAME[k]]=k; });
+    dbnItems=rows.map(function(d){
+      var k=DB_ST[d.status]?d.status:(back[d.status]||'do');
+      return { subjectId:d.subjectId, title:d.title, origTitle:'', year:d.year, genres:[], isAnime:false,
+        rating:d.rating, markedAt:d.markedAt, pic:'', status:k, ep:0, pick:0, source:'豆瓣·文件' };
+    });
+    dbnFrom='从文件「'+f.name+'」解析到 '+dbnItems.length+' 条 · 勾选才入库';
+    dbnRender();
+    dbnNote('文件读好了 —— 勾选要入库的条目','ok');
   };
   rd2.readAsText(f,'utf-8');
 }
@@ -3977,16 +4578,19 @@ function importDoubanFile(box,ev){
    底部一行「本地备份：导出 · 导入」 + 版本行。状态条/卡片套壳/完成按钮全删。 */
 async function openAccount(focus){
   var old=document.getElementById('syncMask'); if(old) old.remove();
-  var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask';
+  var wrap=document.createElement('div'); wrap.id='syncMask'; wrap.className='mask'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true');
   var box=document.createElement('div'); box.className='panel';
-  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">账号</h3><button onclick="window.__closeSync()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">账号</h3><button onclick="window.__closeSync()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div id="cbArea"><div class="mini" style="color:var(--muted)">…</div></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">本地备份</span>'+
       '<button type="button" class="lnk" id="syExport">导出</button><span class="sep">·</span>'+
       '<button type="button" class="lnk" id="syImport">导入</button></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">封面来源</span>'+
       '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥（可选）…</button></div>'+
-    '<input type="file" id="syFile" accept=".json" style="display:none"/>'+
+    '<div class="acctbk"><span class="mini" style="color:var(--muted)">豆瓣</span>'+
+      '<button type="button" class="lnk" id="dbSyncOpen">同步标记…</button>'+
+      '<span class="sep">·</span><span class="mini" style="color:var(--muted)">拉回来先给清单，勾了才入库</span></div>'+
+    '<input type="file" id="syFile" accept=".json" style="display:none" aria-label="选择要导入的备份文件"/>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   wrap.appendChild(box); document.body.appendChild(wrap);
   function escClose(e){ if(e.key==='Escape') window.__closeSync(); }
@@ -4064,6 +4668,7 @@ async function openAccount(focus){
   }
   box.querySelector('#syExport').onclick=function(){ downloadBackup(); };  box.querySelector('#syImport').onclick=function(){ box.querySelector('#syFile').click(); };
   box.querySelector('#cvSrcOpen').onclick=function(){ openCoverSrc(); };
+  box.querySelector('#dbSyncOpen').onclick=function(){ openDoubanSync(); };
 /* ===== 封面来源设置（v2.25.0 建；v2.29.1 起 TMDB 密钥为可选进阶，主文案=全自动免配置）===== */
 function openCoverSrc(){
   var old=document.getElementById('cvSrcMask'); if(old) old.remove();
@@ -4072,7 +4677,7 @@ function openCoverSrc(){
     '<button type="button" id="cvSrcX" aria-label="关闭" style="background:none;border:none;font-size:20px;line-height:1.2;color:var(--muted);padding:2px 4px">×</button></div>'+
     '<p class="aihint">封面抓取<b style="color:var(--ink)">全自动、无需任何密钥</b>：国产剧/中文剧由豆瓣云函数按剧名抓图（覆盖最全），海外剧与动画走 TVMaze / AniList / Wikidata（均免 key）。</p>'+
     '<label style="margin:0">TMDB API Key（可选进阶，只存本机；导出备份 / 云同步会自动剔除）</label>'+
-    '<input id="cvSrcKey" type="password" placeholder="不配也完全不影响使用" autocomplete="off" style="caret-color:var(--accent)"/>'+
+    '<input id="cvSrcKey" type="password" placeholder="不配也完全不影响使用" autocomplete="current-password" style="caret-color:var(--accent)" aria-label="云同步密钥"/>'+
     '<div class="msg" id="cvSrcMsg"></div>'+
     '<div class="row2" style="margin-top:2px"><button type="button" class="b1" id="cvSrcSave" style="flex:1">保存</button>'+
     '<button type="button" class="b2" id="cvSrcClear" style="flex:0 0 auto">清除</button></div>'+
@@ -4438,13 +5043,13 @@ setTimeout(function(){
     var old = $('at270AddMask'); if (old) old.remove();
     var wrap = makeEl(
       '<div id="at270AddMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">手动添加番剧</h3><button type="button" id="at270AddX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">手动添加番剧</h3><button type="button" id="at270AddX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">本地添加，无需网络。建议同时填写「原文名」；别名支持一行一条，可写「台译: 航海王」这样的类型前缀。</div>' +
-      '<label>中文名（必填）</label><input id="at270AddTitle" placeholder="如：海贼王" style="caret-color:var(--accent)"/>' +
-      '<label>原文名（可选）</label><input id="at270AddJp" placeholder="如：ONE PIECE / ワンピース" />' +
-      '<label>别名（可选，每行一条）</label><textarea id="at270AddAlias" rows="3" placeholder="台译: 航海王\n罗马字: ONE PIECE\n简称: 海贼"></textarea>' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label>年份（可选）</label><input id="at270AddYear" placeholder="1999"/></div>' +
-      '<div style="flex:1"><label>总集数（可留空，之后可改）</label><input id="at270AddTotal" inputmode="numeric" placeholder="1168"/></div></div>' +
+      '<label>中文名（必填）</label><input id="at270AddTitle" placeholder="如：海贼王" style="caret-color:var(--accent)" aria-label="标题"/>' +
+      '<label>原文名（可选）</label><input id="at270AddJp" placeholder="如：ONE PIECE / ワンピース"  aria-label="原文名"/>' +
+      '<label>别名（可选，每行一条）</label><textarea id="at270AddAlias" rows="3" placeholder="台译: 航海王\n罗马字: ONE PIECE\n简称: 海贼" aria-label="别名（每行一条）"></textarea>' +
+      '<div style="display:flex;gap:12px"><div style="flex:1"><label>年份（可选）</label><input id="at270AddYear" placeholder="1999" aria-label="年份"/></div>' +
+      '<div style="flex:1"><label>总集数（可留空，之后可改）</label><input id="at270AddTotal" inputmode="numeric" placeholder="1168" aria-label="总集数"/></div></div>' +
       '<div class="msg" id="at270AddMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" id="at270AddCancel">取消</button><button type="button" class="b1" id="at270AddSave">保存并加入片单</button></div>' +
       '</div></div>');
@@ -4525,19 +5130,19 @@ setTimeout(function(){
     var opts = [['canon', '漫改'], ['filler', 'TV原创'], ['semi', '半原创'], ['unknown', '待核']];
     box.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">第 ' + e.s + ' 集 · 编辑</h3>' +
-      '<button type="button" onclick="__closeSrcEdit()" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<button type="button" onclick="__closeSrcEdit()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">当前：<b style="color:var(--ink)">' + esc(srcDisplayName(inf.src)) + '</b> · 依据：' + esc(srcByText(inf.by)) + (inf.note ? (' · ' + esc(inf.note)) : '') + (inf.by === 'ai' ? ' · <span style="color:var(--accent)">AI 导入</span>' : (e.src ? ' · <span style="color:var(--accent)">人工标注</span>' : '')) + '</div>' +
       '<div class="srcopts" id="seOps">' + opts.map(function (o) {
         var on = ((e.src && e.src === o[0]) || (!e.src && inf.src === o[0] && o[0] !== 'unknown') || (!e.src && inf.src === 'unknown' && o[0] === 'unknown'));
         return '<button type="button" class="srcopt' + (on ? ' on' : '') + '" onclick="__pickSe(this,\'' + o[0] + '\')">' + o[1] + '</button>';
       }).join('') + '</div>' +
       '<div class="rangeline">应用范围：<label><input type="radio" name="seSc" value="one" checked/> 仅此集</label>' +
-      '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="' + e.s + '"/> 至 <input id="seB" type="number" min="1" value="' + e.s + '"/> 集</label></div>' +
-      '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="' + esc(e.srcNote || '') + '"/>' +
+      '<label><input type="radio" name="seSc" value="range"/> 第 <input id="seA" type="number" min="1" value="' + e.s + '" aria-label="起始集号"/> 至 <input id="seB" type="number" min="1" value="' + e.s + '" aria-label="结束集号"/> 集</label></div>' +
+      '<label>备注（可选）</label><input id="seNote" placeholder="如：对照原作第X话 / 官方标注" value="' + esc(e.srcNote || '') + '" aria-label="来源备注"/>' +
       '<div class="divi"></div>' +
       '<div class="mini"><b style="color:var(--ink)">集名（双语）</b>：左原文、右中文；只作用于本集，列表会同时显示两种写法。</div>' +
-      '<label>原文名</label><input id="seTO" placeholder="如：麦わらの一味！" value="' + esc(e.tOrig || '') + '"/>' +
-      '<label>中文名</label><input id="seTC" placeholder="如：草帽一伙！" value="' + esc(e.tCn || '') + '"/>' +
+      '<label>原文名</label><input id="seTO" aria-label="原文名" placeholder="如：麦わらの一味！" value="' + esc(e.tOrig || '') + '"/>' +
+      '<label>中文名</label><input id="seTC" aria-label="中文名" placeholder="如：草帽一伙！" value="' + esc(e.tCn || '') + '"/>' +
       '<div class="msg" id="seMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" onclick="__closeSrcEdit()">取消</button><button type="button" class="b1" id="seSave">保存</button></div>';
     wrap.appendChild(box); document.body.appendChild(wrap);
@@ -4780,12 +5385,12 @@ setTimeout(function(){
     if (s.pv) { toast('预览模式：先加入片单再编辑'); return; }
     closeM('at270ProfMask');
     var wrap = makeEl('<div id="at270ProfMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">编辑资料</h3><button type="button" id="at270ProfX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">编辑资料</h3><button type="button" id="at270ProfX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">剧名建议：中文名 + 原文名各一栏；别名一行一条，可写「台译: 航海王」「罗马字: ONE PIECE」。</div>' +
-      '<label>中文名</label><input id="at270ProfTitle" value="' + esc(s.title || '') + '"/>' +
-      '<label>原文名</label><input id="at270ProfJp" value="' + esc(s.nameJp || '') + '"/>' +
-      '<label>别名（每行一条）</label><textarea id="at270ProfAlias" rows="4">' + esc((s.aliases || []).join('\n')) + '</textarea>' +
-      '<label>年份</label><input id="at270ProfYear" value="' + esc(s.year || '') + '"/>' +
+      '<label>中文名</label><input id="at270ProfTitle" value="' + esc(s.title || '') + '" aria-label="标题"/>' +
+      '<label>原文名</label><input id="at270ProfJp" value="' + esc(s.nameJp || '') + '" aria-label="原文名"/>' +
+      '<label>别名（每行一条）</label><textarea id="at270ProfAlias" rows="4" aria-label="别名（每行一条）">' + esc((s.aliases || []).join('\n')) + '</textarea>' +
+      '<label>年份</label><input id="at270ProfYear" value="' + esc(s.year || '') + '" aria-label="年份"/>' +
       '<div class="msg" id="at270ProfMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" id="at270ProfCancel">取消</button><button type="button" class="b1" id="at270ProfSave">保存</button></div>' +
       '</div></div>');
@@ -4826,13 +5431,13 @@ setTimeout(function(){
     AT270._relPick = null;
     closeM('at270RelMask');
     var wrap = makeEl('<div id="at270RelMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">添加关联条目</h3><button type="button" id="at270RelX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">添加关联条目</h3><button type="button" id="at270RelX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">为《' + esc(s.title) + '》建立双向关联：原作 / 续作 / 同系列 / 联动。在输入框里从联想列表选择目标条目。</div>' +
       '<label>关联类型</label><div class="rangeline" id="at270RelTypes">' +
       ['原作', '续作', '同系列', '联动', '其他'].map(function (t, i) {
         return '<label><input type="radio" name="at270RelT" value="' + t + '"' + (i === 0 ? ' checked' : '') + '/> ' + t + '</label>';
       }).join('') + '</div>' +
-      '<label>目标条目（从联想中选择）</label><input id="at270RelKw" placeholder="输入名称，出现候选后点选" style="caret-color:var(--accent)"/>' +
+      '<label>目标条目（从联想中选择）</label><input id="at270RelKw" placeholder="输入名称，出现候选后点选" style="caret-color:var(--accent)" aria-label="关联条目名称搜索"/>' +
       '<div class="msg" id="at270RelMsg"></div>' +
       '<div class="row2"><button type="button" class="b2" id="at270RelCancel">取消</button><button type="button" class="b1" id="at270RelSave">建立关联</button></div>' +
       '</div></div>');
@@ -4929,7 +5534,7 @@ setTimeout(function(){
     var topUnknown = a.bySeries.slice().sort(function (x, y) { return (y.cov ? y.cov.unknown : 0) - (x.cov ? x.cov.unknown : 0); }).slice(0, 5);
     var topTrans = a.bySeries.slice().sort(function (x, y) { return (y.missingOrig + y.missingCn) - (x.missingOrig + x.missingCn); }).slice(0, 5);
     var wrap = makeEl('<div id="at270QualMask" class="mask"><div class="panel">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">数据质量</h3><button type="button" id="at270QX" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">数据质量</h3><button type="button" id="at270QX" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>' +
       '<div class="mini">片单 ' + a.series + ' 部 · 剧集 ' + a.eps + ' 条（含剧集数据 ' + a.withEps + ' 部）· Filler 数据版本 ' + SNAP + '</div>' +
       '<div class="statgrid" style="margin-top:12px">' +
       '<div class="stat"><b>' + a.cov.canon + '</b><span>漫改</span></div>' +
@@ -5281,7 +5886,7 @@ setTimeout(function(){
         '<button type="button" id="at270AiX" aria-label="关闭" style="background:none;border:none;font-size:20px;line-height:1.2;color:var(--muted);padding:2px 4px">×</button>' +
       '</div>' +
       '<p class="aihint">把 AI 对《' + esc(s.title) + '》原创集的回答<b style="color:var(--ink)">整段贴进来</b>，自动认集号，不用整理格式。</p>' +
-      '<textarea id="at270AiText" class="aibox" placeholder="例：1-10集漫改，11-15集TV原创，16集半原创" >' + esc(prev && prev.raw || '') + '</textarea>' +
+      '<textarea id="at270AiText" class="aibox" placeholder="例：1-10集漫改，11-15集TV原创，16集半原创"  aria-label="AI 分集描述原文">' + esc(prev && prev.raw || '') + '</textarea>' +
       '<div style="display:flex;gap:8px;margin-top:12px">' +
         '<button type="button" class="sybtn" id="at270AiHelp" style="flex:1">复制提问给 AI</button>' +
         (prev ? '<button type="button" class="sybtn" id="at270AiClear">清除已存结果</button>' : '') +
@@ -5849,7 +6454,7 @@ setTimeout(function(){
         '复制下面这段固定格式发给任意 AI，回答<b style="color:var(--ink)">整段贴回来</b>，' +
         '就能建成整条条目：分季、双语集名、来源角标一次到位。</p>') +
       (upd ? '' : '<label>剧名（只为了生成提问，可留空）</label>' +
-        '<input id="at270StdName" placeholder="如：老友记" style="caret-color:var(--accent)"/>') +
+        '<input id="at270StdName" placeholder="如：老友记" style="caret-color:var(--accent)" aria-label="番剧名称"/>') +
       /* v2.19.1：搜索一条都没有时直接把关键词带进来（用户指令「别让我再点一次进去」） */
       '<div style="display:flex;gap:8px;margin-top:12px">' +
         '<button type="button" class="sybtn" id="at270StdAsk" style="flex:1">复制提问给 AI</button>' +
@@ -5864,15 +6469,15 @@ setTimeout(function(){
         '<summary style="cursor:pointer;color:var(--muted)">⚙ 自动模式（可选）：填一次 API key，搜不到时自动问 AI</summary>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">' +
         '<label style="margin:0">服务商</label>' +
-        '<select id="at270AutoProv">' + AI_PROVIDERS.map(function (p) {
+        '<select id="at270AutoProv" aria-label="AI 服务商">' + AI_PROVIDERS.map(function (p) {
           return '<option value="' + p.id + '">' + esc(p.n) + '</option>';
         }).join('') + '</select>' +
         '<label style="margin:0">模型</label>' +
-        '<input id="at270AutoModel" placeholder="如 deepseek-chat" style="caret-color:var(--accent)"/>' +
+        '<input id="at270AutoModel" placeholder="如 deepseek-chat" style="caret-color:var(--accent)" aria-label="模型"/>' +
         '<label style="margin:0">接口地址（OpenAI 兼容 /chat/completions）</label>' +
-        '<input id="at270AutoBase" placeholder="https://api.deepseek.com/chat/completions" style="caret-color:var(--accent)"/>' +
+        '<input id="at270AutoBase" placeholder="https://api.deepseek.com/chat/completions" style="caret-color:var(--accent)" aria-label="接口地址"/>' +
         '<label style="margin:0">API Key（只存本机；导出备份 / 云同步会自动剔除）</label>' +
-        '<input id="at270AutoKey" type="password" placeholder="sk-…" autocomplete="off" style="caret-color:var(--accent)"/>' +
+        '<input id="at270AutoKey" type="password" placeholder="sk-…" autocomplete="current-password" style="caret-color:var(--accent)" aria-label="API 密钥"/>' +
         '<div class="msg" id="at270AutoMsg"></div>' +
         '<div class="row2" style="margin-top:2px">' +
         '<button type="button" class="b2" id="at270AutoSave" style="flex:1">保存</button>' +
@@ -5884,7 +6489,7 @@ setTimeout(function(){
         /* 触屏可点区 ≥38px（批次R 立的规矩：20~30px 的按钮拇指按不中就等于功能不存在） */
         '<button type="button" id="at270StdClr" style="background:none;border:none;font-size:12px;line-height:1;color:var(--muted);padding:12px 8px;min-height:38px;border-radius:8px">清空</button>' +
       '</div>' +
-      '<textarea id="at270StdText" class="aibox" placeholder="名称: 老友记&#10;原文: Friends&#10;产地: 美国&#10;年份: 1994&#10;类型: 真人剧&#10;总集数: 236&#10;S01E01 初来乍到 | The One Where Monica Gets a Roommate">' +
+      '<textarea id="at270StdText" class="aibox" placeholder="名称: 老友记&#10;原文: Friends&#10;产地: 美国&#10;年份: 1994&#10;类型: 真人剧&#10;总集数: 236&#10;S01E01 初来乍到 | The One Where Monica Gets a Roommate" aria-label="AI 标准格式原文">' +
         esc(drafts[dKey] || '') + '</textarea>' +
       '<div id="at270StdPrev" class="aiflow"></div>' +
       '<div class="msg" id="at270StdMsg"></div>' +

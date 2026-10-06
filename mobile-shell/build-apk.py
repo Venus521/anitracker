@@ -24,8 +24,13 @@ BUILD = r'D:\dev\at-shell-build'      # 纯 ASCII
 DIST = os.path.join(SRC, 'dist')
 
 MIN_API = '21'
-VERSION_CODE = '20'
-VERSION_NAME = '1.19'
+# 壳版本必须**单调递增**：发布到云端.py 靠它判断「有没有新壳」，
+# 而且它得跟着 APK 里真实的 versionCode 对得上。
+# 2026-10-06 实测踩到的坑：dist 里的 APK 实际是 code 23 / v1.22（aapt2 dump badging 读出），
+# 而这个文件还停在 20 / 1.19 —— 下次直接打包会把版本号**倒退**发出去，
+# 手机上装到的就是「降级」，用户完全看不出问题。所以这里必须跟着 APK 实际值走。
+VERSION_CODE = '25'
+VERSION_NAME = '1.24'
 
 # 打进 assets/web 的文件：index.html 引用的全部同源资源，缺一个就白屏/缺库
 WEB_FILES = [
@@ -68,7 +73,14 @@ def sync_assets():
 # d8/apksigner 是批处理脚本，进去还要再调 java —— 必须把 JAVA_HOME 递下去
 ENV = dict(os.environ)
 ENV['JAVA_HOME'] = JDK
-ENV['PATH'] = os.path.join(JDK, 'bin') + os.pathsep + ENV.get('PATH', '')
+# 本机（沙箱）PATH 里有 System32\Wbem、System32\OpenSSH 这些**子目录**，
+# 却缺 System32 本身，于是 cmd 批处理里的 chcp 找不到 → 凡走 .bat/.cmd 的工具
+# （d8.bat / apksigner.bat / tcb.cmd）一律报「'chcp' 不是内部或外部命令」并退出 1。
+# 把 System32 补到最前面即可，纯增量、不覆盖用户自己的设置。
+for _p in (r'C:\Windows\System32', r'C:\Windows', r'C:\Windows\System32\Wbem'):
+    if os.path.isdir(_p) and _p.lower() not in ENV.get('PATH', '').lower():
+        ENV['PATH'] = _p + os.pathsep + ENV.get('PATH', '')
+ENV['PATH'] = os.path.join(JDK, 'bin') + os.pathsep + ENV['PATH']
 
 
 def die(msg):
@@ -80,7 +92,11 @@ def sh(cmd, name):
     # d8/apksigner 是 .bat，CreateProcess 不能直接起批处理，必须过 cmd /c
     if cmd[0].lower().endswith('.bat'):
         cmd = ['cmd', '/c'] + cmd
-    p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
+    # 编码：cmd 的 bat 输出是 GBK/CP936，text=True 会默认按 UTF-8 解码 → UnicodeDecodeError
+    # 直接把子进程打断，于是「d8 失败」只表现为一句看不懂的栈，真正原因被吞掉。
+    # 这里用 errors='replace' 兜住：坏字节只影响日志可读性，不影响判断成败（看 returncode）。
+    p = subprocess.run(cmd, capture_output=True, text=True, env=ENV,
+                       encoding='gbk', errors='replace')
     out = ((p.stdout or '') + (p.stderr or '')).strip()
     if p.returncode != 0:
         print(out[-3000:])
@@ -155,7 +171,15 @@ def main():
     class_files = []
     for base, _, fs in os.walk(classes):
         class_files += [os.path.join(base, f) for f in fs if f.endswith('.class')]
-    sh([d8, '--min-api', MIN_API, '--lib', ANDROID_JAR, '--output', dexdir] + class_files, 'd8')
+    # 直接起java 跑 d8.jar，不走 d8.bat。
+    # 为什么：bat 必须过 cmd /c，而 cmd 启动时会执行 chcp —— 这台机器的 PATH 里没有 chcp
+    #（沙箱精简过），于是 d8.bat 一跑就报「'chcp' 不是内部或外部命令」并退出 1。
+    # d8 真正的活儿就是 com.android.tools.r8.D8，绕开 bat 结果完全一致，还少一层编码坑。
+    d8_jar = os.path.join(BT, 'lib', 'd8.jar')
+    java_exe = os.path.join(JDK, 'bin', 'java.exe')
+    d8_args = ['-cp', d8_jar, 'com.android.tools.r8.D8',
+               '--min-api', MIN_API, '--lib', ANDROID_JAR, '--output', dexdir] + class_files
+    sh([java_exe] + d8_args, 'd8')
     dex = os.path.join(dexdir, 'classes.dex')
     if not os.path.exists(dex):
         die('d8 没产出 classes.dex')
@@ -184,7 +208,11 @@ def main():
     if not os.path.exists(DIST):
         os.makedirs(DIST)
     apk = os.path.join(DIST, 'AniTracker.apk')
-    sh([apksigner, 'sign', '--ks', ks, '--ks-pass', 'pass:android',
+    # 同 d8：直接起 java 跑 apksigner.jar，绕开 apksigner.bat（bat 里的 chcp 在本机不存在）
+    apksigner_jar = os.path.join(BT, 'lib', 'apksigner.jar')
+    java_exe2 = os.path.join(JDK, 'bin', 'java.exe')
+    sh([java_exe2, '-cp', apksigner_jar, 'com.android.apksigner.ApkSignerTool',
+        'sign', '--ks', ks, '--ks-pass', 'pass:android',
         '--key-pass', 'pass:android', '--out', apk, aligned], 'apksigner sign')
 
     print('[8/8] 校验产物')
@@ -194,8 +222,11 @@ def main():
             die('assets 数量不对：%d / %d' % (len(names), len(WEB_FILES)))
         print('  内置网页资源 %d 个，合计 %.2f MB' % (
             len(names), sum(z.getinfo(n).file_size for n in names) / 1048576.0))
-    p = subprocess.run(['cmd', '/c', apksigner, 'verify', '--print-certs', apk],
-                       capture_output=True, text=True, env=ENV)
+    # 同上：verify 也直接起 java，别过 bat
+    p = subprocess.run([java_exe2, '-cp', apksigner_jar, 'com.android.apksigner.ApkSignerTool',
+                        'verify', '--print-certs', apk],
+                       capture_output=True, text=True, env=ENV,
+                       encoding='utf-8', errors='replace')
     print(((p.stdout or '') + (p.stderr or '')).strip()[:600])
     if p.returncode != 0:
         die('apksigner verify 失败')

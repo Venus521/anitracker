@@ -33,8 +33,37 @@
 只是不让「关浏览器」这件事有资格否决全部结果。
 
 **全量复跑**：凭据 10/10、`run-regression` 29/29、`douban-sync-e2e` 18/18、
-`douban-push-e2e` 23/23、`a11y` 7/7、`_syntax` 6 块 OK、
-双入口 SHA256 MATCH `8770f4b695a5b480`。
+`douban-push-e2e` 23/23、`a11y` 7/7、`csp-check` 12/12、`phone-look` 15 屏全过、
+`_syntax` 6 块 OK、双入口 SHA256 MATCH。
+
+**已发布（三条路都通）**
+- 壳 **v1.24（versionCode 25）** · 661.8KB · sha256 `5fca8d54…` · 手机走「账号 → 安装包 → 检查更新」
+- 内容包 **code 115**（10 个文件 / 1.92MB）· 10 个文件逐个从公网拉回、大小与校验全对上
+- 固定入口 `https://cloud1-d7gsn5t0w6407b963-1460816419.tcloudbaseapp.com/` → 解析到 code 115
+
+打包与发布踩到两个坑，都已修进脚本（不是绕过）：
+- **`sh()` 用 `text=True` 按 UTF-8 解码，而 cmd 的 .bat 输出是 GBK** → `UnicodeDecodeError`
+  打断子进程，真实错误被吞掉，症状只剩一句看不懂的栈。改为 `encoding='gbk', errors='replace'`。
+- **d8 / apksigner 一律绕开 .bat，直接起 java 跑 `lib/d8.jar`、`lib/apksigner.jar`**。
+  根因：本机 PATH 里有 `System32\Wbem`、`System32\OpenSSH` 这些**子目录**，却缺 `System32` 本身，
+  于是凡走批处理的工具内部调 `chcp` 都报「'chcp' 不是内部或外部命令」并退出 1。
+  `build-apk.py` 的 `ENV` 已补 System32。同一个坑在发布脚本侧也要补 PATH
+  （另需 `D:\npm-global` 找 `tcb`、系统 node `C:\Program Files\nodejs` 供 tcb 内部调用）。
+
+**挂账结清**
+- ~~`frame-ancestors` 未加~~ —— 这条是**误挂**，不是遗漏。`frame-ancestors` 只在 HTTP 响应头生效，
+  写在 meta 里等于空转（v2.29.2 审计项 2 的方案 A 已明确记录这一点，`csp-check` T05 也在守着
+  「meta 里不许出现 frame-ancestors」）。托管平台那边配不了响应头，
+  所以给**本地服务器**加了 `X-Frame-Options: SAMEORIGIN`（老但通用的等价防护，本机零成本、确实生效，
+  实测响应头已带且页面照常 200）。`csp-check` 12/12 确认没和 CSP 打架。
+- ~~审计项 1：`index.html` 单文件未拆分~~ —— 评估后**决定不拆**，依据量在
+  `docs/index-html-拆分评估.md`：数据集早在 v2.13.0 就外置了（`ani-tracker-lib.json`）；
+  剩下 437KB 是代码本身，其中块8/块9 有 **53 处跨块函数依赖**，拆成两个 `script src`
+  会把「文档内先后」变成「加载先后」，那是行为变更不是重构；且新文件要同时进
+  双入口同步、APK 的 `WEB_FILES`、内容包清单、`WebUpdater` 校验、SW 的 `PRECACHE` 五处，
+  漏一处就是手机上白屏。真正的体积大头是 `vendor/cloudbase.full.js`（839KB），
+  但它与账号云同步绑定、还为它让了 `wasm-eval` 那条 CSP，换 SDK 风险大于收益。
+  这条账按「已评估、刻意不做」结清。
 
 ## v2.31.0（2026-10-06）豆瓣同步加「推送」方向
 

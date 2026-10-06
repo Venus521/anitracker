@@ -162,6 +162,116 @@
 
   function docId(uid){ return 'u_' + uid; }
 
+  /* ===== v2.32.0 豆瓣凭据跨设备（凭据云）=====
+     问题：豆瓣 Cookie 现在只存在 PC 的网关里（:3000 的 douban-account.json），
+     手机上的 127.0.0.1 是手机自己，够不到 PC ⇒ 每次都得在手机上再粘一遍。
+     做法：Cookie 加密后单独存一份云文档，换设备登录同一账号后自动取回。
+
+     为什么单独一份文档、而不是塞进 packAll 的 payload：
+     packAll 是全量 localStorage 打包，片单/进度/设置都混在里面。凭据混进去的后果是
+     ①导出备份会把 Cookie 一起带出去；②任何一次云端读取都会碰到它。分开存，边界才清楚。
+
+     密钥从哪来：**从账号密码派生**（PBKDF2-SHA256，12万次迭代）。
+     这样密文只有本人能解 —— 就算云数据库被别人读到，拿到的也是一堆乱码。
+     代价：忘了密码就解不开 Cookie，只能重粘一次。这是刻意的取舍：
+     把凭据安全寄托在「只有你知道的那串字符」上，而不是「云存储本身可靠」上。*/
+  var CRED_COLL = 'tracker_creds';
+  function credDocId(uid){ return 'c_' + uid; }
+  var PBKDF2_ITERS = 120000;
+
+  function b64(buf){
+    var bytes = (buf instanceof Uint8Array) ? buf : new Uint8Array(buf);
+    var s = '', CH = 0x8000;
+    for (var i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return btoa(s);
+  }
+  function unb64(str){
+    var s = atob(str), out = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+
+  /* 从密码派生 AES-GCM 密钥。盐存在文档里 —— 盐不需要保密，它的用处是让同一密码
+     在不同文档下算出不同密钥，避免一份密文的模式泄露到另一份。 */
+  async function deriveKey(password, saltB64){
+    var enc = new TextEncoder();
+    var base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    var salt = unb64(saltB64);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: salt, iterations: PBKDF2_ITERS, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  async function encryptCred(password, obj){
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var key = await deriveKey(password, b64(salt));
+    var plain = new TextEncoder().encode(JSON.stringify(obj));
+    var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, plain);
+    return { v: 1, salt: b64(salt), iv: b64(iv), data: b64(ct), at: new Date().toISOString() };
+  }
+  async function decryptCred(password, box){
+    var key = await deriveKey(password, box.salt);
+    var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(box.iv) }, key, unb64(box.data));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+
+  async function saveCred(secretObj, password){
+    var u = await sess(); if (!u) throw new Error('未登录');
+    var uid = uidOf(u); if (!uid) throw new Error('登录态缺少 uid');
+    if (!password) throw new Error('需要账号密码来加密凭据');
+    var box = await encryptCred(password, secretObj);
+    var rec = { ownerId: uid, kind: 'douban', box: box, updatedAt: new Date().toISOString() };
+    try { await db.collection(CRED_COLL).add(Object.assign({ _id: credDocId(uid) }, rec)); }
+    catch (e1) {
+      var r = await db.collection(CRED_COLL).doc(credDocId(uid)).update(rec);
+      if (!(r && r.updated > 0)) throw new Error('凭据上传未生效');
+    }
+    try { localStorage.setItem('at_db_cred', JSON.stringify({ at: rec.updatedAt })); } catch (e) {}
+    return true;
+  }
+  async function loadCred(password){
+    var u = await sess(); if (!u) return null;
+    var uid = uidOf(u); if (!uid) return null;
+    var r;
+    try { r = await db.collection(CRED_COLL).doc(credDocId(uid)).get(); }
+    catch (e) { return null; }
+    var doc = r && r.data;
+    if (!doc || !doc.box) return null;
+    if (!password) throw new Error('需要账号密码来解密凭据');
+    try { return await decryptCred(password, doc.box); }
+    catch (e) { throw new Error('解密失败 —— 密码不对，或这份凭据是别的账号存的'); }
+  }
+  /* 存过没有：只查存在性，不需要密码。用于面板上如实告诉用户「云端有一份，要不要取」。 */
+  async function credExists(){
+    var u = await sess(); if (!u) return null;
+    var uid = uidOf(u); if (!uid) return null;
+    try {
+      var r = await db.collection(CRED_COLL).doc(credDocId(uid)).get();
+      var d = r && r.data;
+      return (d && d.box) ? { at: d.updatedAt, has: true } : { has: false };
+    } catch (e) { return { has: false }; }
+  }
+  async function clearCred(){
+    var u = await sess(); if (!u) return;
+    var uid = uidOf(u); if (!uid) return;
+    try { await db.collection(CRED_COLL).doc(credDocId(uid)).remove(); } catch (e) {}
+    try { localStorage.removeItem('at_db_cred'); } catch (e) {}
+  }
+
+  /* ===== 导出给页面用的门面 ===== */
+  window.AT_CRED = {
+    save: saveCred, load: loadCred, exists: credExists, clear: clearCred,
+    /* 页面用它把 Cookie 交上来加密。Cookie 只在这一刻出现在内存里，落盘落云的都是密文。 */
+    async stashDouban(cookie, uid, password){
+      return saveCred({ kind: 'douban', cookie: cookie, uid: uid, savedAt: Date.now() }, password);
+    },
+    async takeDouban(password){
+      var o = await loadCred(password);
+      if (!o || o.kind !== 'douban' || !o.cookie) return null;
+      return o;
+    }
+  };
+
   async function peek(){
     var u = await sess(); if (!u) return null;
     var uid = uidOf(u); if (!uid) return null;

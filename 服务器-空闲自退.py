@@ -45,6 +45,11 @@ class H(SimpleHTTPRequestHandler):
     def end_headers(self):
         # 本地开发服务器：内容常改，禁止浏览器启发式缓存（旧页面会让同步等功能"修不好"）
         self.send_header('Cache-Control', 'no-cache')
+        # 防点击劫持：X-Frame-Options 只认响应头（写在 meta 里等于空转，见 index.html 的
+        # v2.29.2 注释第2 条）。CSP 的 frame-ancestors 同样是响应头指令，托管平台那边配不了，
+        # 所以用这个老但通用的头兜住—— 本机服务器加它零成本，且确实生效。
+        # 同源页面自己套 iframe 不受影响（SAMEORIGIN 允许同源嵌套）。
+        self.send_header('X-Frame-Options', 'SAMEORIGIN')
         super().end_headers()
 
     # ---- v2.14.0j 同源中转：CloudBase 网关按来源白名单拦跨域（HTTP 网关「跨域设置」是付费能力）。

@@ -1,7 +1,7 @@
 {
   "app": "anitracker",
-  "version": "2.30.0",
-  "build": "20261005b",
-  "note": "v2.30.0 版本同步（发版.py 生成；正式说明请补写进 CHANGELOG 后重跑 --note）",
-  "ts": 1791160000000
+  "version": "2.32.0",
+  "build": "20261006a",
+  "note": "v2.32.0 豆瓣凭据跨设备（PBKDF2+AES-GCM 加密存 CloudBase，换设备取回）+ v2.31 推送方向与写通道探针 + v2.30 观看时间账",
+  "ts": 1791249023615
 }
