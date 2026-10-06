@@ -117,7 +117,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       /* v2.32.0 凭据跨设备：Cookie 加密存自己的 CloudBase 账号，换设备取回。 */
       'dbnPutCred', 'dbnTakeCred', 'dbnCredRow', 'dbnAskPassword',
       /* v2.35.0 漫改进度行 + 非 AI 刷名：这两块是新入口，一处语法错就整页哑掉。 */
-      'canonProgOf', 'canonBlockHtml', 'refreshNamesFor', 'refreshNamesNow'];
+      'canonProgOf', 'canonBlockHtml', 'refreshNamesFor', 'refreshNamesNow', 'refreshNamesAll'];
     const boot = await page.evaluate((names) => ({
       missing: names.filter(n => typeof window[n] !== 'function')
     }), BOOT_FN);
@@ -616,6 +616,24 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       /时长 <b>约 1 小时 12 分<\/b> \/ 约 1 小时 36 分/.test(cnp.noT) && !/最近 <b>/.test(cnp.noT) &&
       cnp.noCn,
       JSON.stringify(cnp).slice(0, 400));
+
+    /* T34 v2.38.0 整体刷新：一键按号刷全片单——找回中文名、无号跳过、CJK 现名不动 */
+    const bulk = await page.evaluate(async () => {
+      window.__raGap = 0;
+      const now = Date.now();
+      const a = { sid: 'tv900005', title: 'Mock Cn Show (Test)', year: '2016', total: 0, cover: '/tracker-icon-512.png', eps: [], statuses: {}, status: 'watching', addedAt: now, updAt: now };
+      const b = { sid: 'plain-x', title: '没有号的剧', year: '2020', total: 0, cover: '/tracker-icon-512.png', eps: [], statuses: {}, status: 'watching', addedAt: now, updAt: now };
+      const c = { sid: 'plain-c', tvId: '900005', title: '气泡公主（测试）', year: '2016', total: 0, cover: '/tracker-icon-512.png', eps: [], statuses: {}, status: 'watching', addedAt: now, updAt: now };
+      window.shows.push(a, b, c);
+      const r = await refreshNamesAll();
+      window.shows = window.shows.filter((x) => x !== a && x !== b && x !== c);
+      save();
+      return { r: r, ta: a.title, tb: b.title, tc: c.title };
+    });
+    check('34', 'v2.38.0 整体刷新：按号刷全片单（找回中文名/无号跳过/CJK现名不动）',
+      bulk.ta === '气泡公主（测试）' && bulk.tb === '没有号的剧' && bulk.tc === '气泡公主（测试）' &&
+      bulk.r && bulk.r.done >= 2 && bulk.r.renamed >= 1 && bulk.r.cn >= 1 && bulk.r.noTv >= 1,
+      JSON.stringify(bulk).slice(0, 300));
 
     // T18 无页面级 JS 错误
     check('18', '全程无页面级 JS 错误', pageErrors === 0, 'pageErrors=' + pageErrors);

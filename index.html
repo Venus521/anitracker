@@ -740,6 +740,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div id="dParts"></div>
     <div class="dtools" id="dTools">
       <button class="ty" onclick="refreshNamesNow()" id="btnRefreshNames" title="不通过 AI：按网上号取官方片名与官方集名（中文剧一律保中文名/找回中文名），内置库顺带补中文集名。只补空、只追加缺的集，你手改过的名字一律不动">⟳ 刷新片名与集名</button>
+      <button class="ty" onclick="refreshNamesAll()" title="对片单里所有带网上号的条目跑一遍同样的刷新：官方名校正、中文剧找回中文名、补集名、补缺集。手改过的名字不动，没号的跳过，每部约一秒多，跑完报账">⟳ 整体刷新</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
       <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / 豆瓣重新拉封面（免配置，拉不到会保留原来那张）">⟳ 重拉封面</button>
       <button class="ty" onclick="pickCover()" id="btnPickCover" title="全网库 / TMDB 都查不到的中文剧、国产剧：从本机选一张海报，或直接 Ctrl+V 粘贴图片">⇪ 本地封面</button>
@@ -1194,7 +1195,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.37.0', AT_BUILD='20261006a';
+var AT_VERSION='2.38.0', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4005,6 +4006,55 @@ function refreshNamesNow(sid){
 }
 window.refreshNamesNow = refreshNamesNow;
 window.refreshNamesFor = refreshNamesFor;
+/* ===== v2.38.0（用户令「整体刷新也要」）===== 一键把片单里所有带网上号的条目
+   跑一遍 refreshNamesFor：官方名校正、中文剧找回中文名、补集名、补缺集、封面查漏。
+   规矩与单部完全同一条路（只补空/手改让路/按号取名），另外三条批量自保：
+   ① 无号条目跳过并计数——绝不按名字猜（v2.14.0g 教训）；
+   ② 每部之间留节奏（默认 1.2s，约 3 个请求/部，压在 TVMaze 免费 20 次/10s 之下；
+      测试用 window.__raGap=0 归零）；
+   ③ 防重入 + 离线检查 + 每部落盘（中断不丢已刷的），跑完一条回执说人话。 */
+var _raBusy=false;
+async function refreshNamesAll(){
+  if(_raBusy){ toast('整体刷新正在跑，等它说完'); return; }
+  if(!navigator.onLine){ toast('网络不通，连上再整体刷新'); return; }
+  var targets=shows.filter(function(s){ return !s.pv && tvIdOf(s); });
+  var noTv=shows.filter(function(s){ return !s.pv && !tvIdOf(s); }).length;
+  if(!targets.length){ toast('片单里没有带网上号的条目，无从刷起'); return; }
+  _raBusy=true;
+  toast('整体刷新开始：共 '+targets.length+' 部（无号跳过 '+noTv+'）…');
+  var gap=Number(window.__raGap); if(isNaN(gap)) gap=1200;
+  var agg={renamed:0,cn:0,named:0,added:0,cnMiss:0,done:0,noTv:noTv};
+  try{
+    for(var i=0;i<targets.length;i++){
+      try{
+        var r=await refreshNamesFor(targets[i],{save:false});
+        agg.done++;
+        if(r.renamed){ agg.renamed++; if(r.from==='中文名') agg.cn++; }
+        if(r.cnMiss) agg.cnMiss++;
+        agg.named+=r.named; agg.added+=r.added;
+        try{ statInvalidate(targets[i].sid); }catch(e){}
+        save();
+      }catch(e){}
+      if(i<targets.length-1) await new Promise(function(res){ setTimeout(res,gap); });
+      toast('整体刷新 '+(i+1)+'/'+targets.length+'…');
+    }
+  }finally{
+    _raBusy=false;
+    save(); renderList();
+    var _vd=document.getElementById('vDetail'); if(_vd&&_vd.style.display!=='none') renderDetail();
+    var bits=['整体刷新完成 '+agg.done+'/'+targets.length+' 部'];
+    if(agg.cn) bits.push('找回中文名 '+agg.cn);
+    else if(agg.renamed) bits.push('换官方名 '+agg.renamed);
+    if(agg.named) bits.push('补集名 '+agg.named);
+    if(agg.added) bits.push('补缺集 '+agg.added);
+    if(agg.cnMiss) bits.push('中文剧没查到中文名 '+agg.cnMiss);
+    if(agg.noTv) bits.push('无号跳过 '+agg.noTv);
+    toast(bits.join(' · '));
+    try{ logAdd('整体刷新 '+agg.done+' 部','片名/集名/缺集批量刷新'+(agg.cn?('（找回中文名 '+agg.cn+'）'):''),true); }catch(e){}
+  }
+  return agg;
+}
+window.refreshNamesAll = refreshNamesAll;
 /* 封面还原：只动「被洗掉/重拉失败」的那张，别的一律不碰。 */
 var _cvRestored=false;
 function _cvRestore(s){
