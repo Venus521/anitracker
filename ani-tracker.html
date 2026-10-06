@@ -466,6 +466,17 @@ body.panel-open #toast{bottom:96px}
 .cbfoot a{display:inline-flex;align-items:center;justify-content:center;min-width:56px;min-height:36px;
   padding:0 12px;color:var(--accent);font-weight:600;text-decoration:none}
 .cbfoot .cbdot{color:var(--line);padding:0 2px}
+/* ===== v2.42.0 记住登录 =====
+   上面 .cbpane label 是「字段说明」的样子（灰、小、块级），而「记住登录」是一条
+   **可点的开关**——照抄那条规则会得到一个灰色的、看起来不像能点的标签。
+   所以整条覆写：字色回到正文色、改成行内、勾子本身要压回 16px（否则会被
+   input{width:100%;min-height:44px} 拉成一条横贯全屏的怪东西）。 */
+/* 整条 label 就是点击区，高度按手机可点区门禁（≥34px）给到 36，别做成一条细缝 */
+.cbpane label.cbrem{display:flex;align-items:center;gap:8px;margin:14px 0 4px;padding:2px 0;
+  font-size:var(--fs-body);color:var(--ink);cursor:pointer;min-height:36px}
+.cbpane label.cbrem input[type=checkbox]{width:16px;height:16px;min-height:0;flex:none;margin:0;
+  padding:0;accent-color:var(--accent);cursor:pointer}
+.cbnote{margin:-2px 0 10px;line-height:1.55}
 /* ===== v2.12.0：右键 / 长按菜单 =====
    设计要点：不用原生右键（原生会把「另存为图片」等系统菜单也带出来），
    自绘一个轻量菜单；移动端用长按（500ms）触发，同一套逻辑。 */
@@ -1238,7 +1249,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.41.0', AT_BUILD='20261007b';
+var AT_VERSION='2.42.0', AT_BUILD='20261007c';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
