@@ -1195,7 +1195,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.38.0', AT_BUILD='20261006a';
+var AT_VERSION='2.39.0', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1327,7 +1327,10 @@ var shows=rd(LS.shows,[]);
 })();
 
 
-var curFilter='all', curSid=null, dType='all', dQ='';
+/* v2.39.0（用户令「默认页面要在看」）：打开应用默认落在「在看」分类——
+   追记的主路径就是「打开→标记→关」，先看到正在追的，而不是全部/看完的堆里。
+   仍可随时点筛选条切「全部/看完/想看」，不持久化：每次打开都从「在看」开始。 */
+var curFilter='watching', curSid=null, dType='all', dQ='';
 var listQ=''; /* v2.14.0b 片内搜索关键词（小写），只过滤标题，不落 localStorage */
 /* 一次性清理：移除早期预置的演示海贼王条目 */
 (function(){
