@@ -117,7 +117,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       /* v2.32.0 凭据跨设备：Cookie 加密存自己的 CloudBase 账号，换设备取回。 */
       'dbnPutCred', 'dbnTakeCred', 'dbnCredRow', 'dbnAskPassword',
       /* v2.35.0 漫改进度行 + 非 AI 刷名：这两块是新入口，一处语法错就整页哑掉。 */
-      'canonProgOf', 'canonProgHtml', 'refreshNamesFor', 'refreshNamesNow'];
+      'canonProgOf', 'canonBlockHtml', 'refreshNamesFor', 'refreshNamesNow'];
     const boot = await page.evaluate((names) => ({
       missing: names.filter(n => typeof window[n] !== 'function')
     }), BOOT_FN);
@@ -593,7 +593,8 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     check('32', 'v2.36.0 单集时间戳：单标与批量标记都记 epT，取消即清',
       ept.stamped && ept.bulkN >= 4 && ept.cleared, JSON.stringify(ept));
 
-    /* T33 v2.36.0/1 漫改行：集数+两档日期时间 + 时长进度（真时长不带约、估的带约、看完无还剩） */
+    /* T33 v2.37.0 漫改块：全部/漫改两条平行行——全部行=时长+日期+改时间；
+       漫改行=集数+时长+日期（有 epT 才出，无 epT 不混排全剧）；无漫改轴整块为空 */
     const cnp = await page.evaluate(() => {
       const mk = (withT, durOn) => {
         const eps = []; for (let i = 1; i <= 4; i++) eps.push({ s: i, t: '第' + i + '集', src: i <= 3 ? 'canon' : 'filler', dur: durOn ? 24 : 0 });
@@ -602,15 +603,19 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
         s.tStart = Date.now() - 9 * 86400000; s.tDone = Date.now();
         return s;
       };
-      const withT = canonProgHtml(mk(true, true)), noT = canonProgHtml(mk(false, false));
-      const noCn = canonProgHtml({ sid: 'cnp-n', title: 'x', kind: '动画', eps: [{ s: 1, t: 'e1', src: 'filler' }], statuses: { 1: 'watched' } });
-      return { withT: withT, noT: noT, noCn: noCn === '' };
+      const withT = canonBlockHtml(mk(true, true)), noT = canonBlockHtml(mk(false, false));
+      const noCn = canonBlockHtml({ sid: 'cnp-n', title: 'x', kind: '动画', eps: [{ s: 1, t: 'e1', src: 'filler' }], statuses: { 1: 'watched' } });
+      const lines = (h) => (h.match(/class="cnpline"/g) || []).length;
+      return { withT: withT, noT: noT, noCn: noCn === '', nT: lines(withT) };
     });
-    check('33', 'v2.36.1 漫改行：集数+时长进度（真值不带约/估的带约/看完无还剩）+ 两档日期账 + 无漫整行为空',
-      /漫改 <b>3<\/b> \/ 3 集/.test(cnp.withT) && /时长 <b>1 小时 12 分<\/b> \/ 1 小时 12 分/.test(cnp.withT) && !/还剩/.test(cnp.withT) &&
-      /时长 <b>约 1 小时 12 分<\/b> \/ 约 1 小时 12 分/.test(cnp.noT) &&
-      /全剧开始/.test(cnp.noT) && !/漫改开始/.test(cnp.noT) && cnp.noCn,
-      JSON.stringify(cnp).slice(0, 320));
+    check('33', 'v2.37.0 漫改块两平行行：全部行=时长+日期+改时间；漫改行=集数+时长+日期；无 epT 不混排全剧；无漫改轴整块为空',
+      cnp.nT === 2 &&
+      /cnp-tag">全部<\/span>/.test(cnp.withT) && /时长 <b>1 小时 12 分<\/b> \/ 1 小时 36 分/.test(cnp.withT) && /还剩 24 分钟/.test(cnp.withT) && /✎ 改时间/.test(cnp.withT) && /看完 <b>/.test(cnp.withT) &&
+      /cnp-tag">漫改<\/span>/.test(cnp.withT) && /已看 <b>3<\/b> \/ 3 集/.test(cnp.withT) && /时长 <b>1 小时 12 分<\/b> \/ 1 小时 12 分/.test(cnp.withT) && /~ /.test(cnp.withT) && /用时 <b>4<\/b> 天/.test(cnp.withT) &&
+      !/全剧/.test(cnp.withT) &&
+      /时长 <b>约 1 小时 12 分<\/b> \/ 约 1 小时 36 分/.test(cnp.noT) && !/最近 <b>/.test(cnp.noT) &&
+      cnp.noCn,
+      JSON.stringify(cnp).slice(0, 400));
 
     // T18 无页面级 JS 错误
     check('18', '全程无页面级 JS 错误', pageErrors === 0, 'pageErrors=' + pageErrors);

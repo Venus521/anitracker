@@ -223,6 +223,11 @@ button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .cnpline b{color:var(--ink);font-weight:600;font-family:var(--serif);font-size:var(--fs-body)}
 .cnpline .ds{opacity:.45}
 .cnpline .cnp-time{opacity:.72}
+/* v2.37.0：漫改块（#dCanonProg）在「全部/漫改」两条平行行模式下的容器样式；
+   内部每行仍是 .cnpline（继承小字/间距），外面套 .cnpblock 关掉自身的 flex */
+.cnpblock{display:block;margin:0 0 8px;padding:0 2px}
+.cnpblock>.cnpline{margin:0 0 2px}
+.cnpline .cnp-tag{color:var(--ink);font-weight:700;opacity:.82;margin-right:2px}
 @media(hover:none){
   /* 手机上这一行与上面时间行视觉权重再压一点，别把首屏挤下去 */
   .cnpline{margin:0 0 6px;font-size:calc(var(--fs-meta) - 1px)}
@@ -558,6 +563,7 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   #vDetail>.strow{order:2}
   #vDetail>.timline{order:2}
   #vDetail>.cnpline{order:2}
+  #vDetail>.cnpblock{order:2}
   #vDetail>#dParts{order:3}
   #vDetail>.quickrow{order:4}
   #vDetail>.dtools{order:5}
@@ -1188,7 +1194,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.36.1', AT_BUILD='20261006a';
+var AT_VERSION='2.37.0', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -2194,23 +2200,25 @@ function renderDetail(){
   document.getElementById('dStatus').innerHTML=FIL.slice(1).map(function(f){
     return '<button class="st'+((s.status||'watching')===f?' on':'')+'" onclick="setStatus(\''+f+'\')">'+ST_NAME[f]+'</button>';
   }).join('');
-  /* v2.30.0：观看时间行（一条都没记时整行不出现在界面上） */
+  /* v2.37.0（用户令「漫改和全部的都要，排版分行不要累赘」）：有漫改轴的条目，
+     时间行+时长行+漫改行三处并成「全部/漫改」两条平行行（canonBlockHtml），
+     ✎改时间挪进全部行；没有漫改轴的（真人剧/未标注）维持 v2.30/v2.19 的两行原样。 */
   var _tl=document.getElementById('dTime');
-  if(_tl){ var _th=timeLineHtml(s); _tl.innerHTML=_th; _tl.style.display=_th?'':'none'; }
-  /* v2.35.0：漫改进度行（用户令「除了整部进度，有漫改的还要显示漫改进度和时间」）。
-     整部进度在上面的 dStats 四格里，这是第二笔账，单独一行；有漫改标注才出现，
-     真人剧（没有「漫改/TV原创」之分）与无漫改的条目整行不占位。 */
+  var _dl=document.getElementById('dDur');
   var _cp=document.getElementById('dCanonProg');
-  if(_cp&&window.canonProgHtml){ var _cph=window.canonProgHtml(s); _cp.innerHTML=_cph; _cp.style.display=_cph?'':'none'; }
+  var _cb=(_cp&&window.canonBlockHtml)?canonBlockHtml(s):'';
+  if(_cp){ _cp.innerHTML=_cb; _cp.className=_cb?'cnpblock':'cnpline'; _cp.style.display=_cb?'':'none'; }
+  if(_tl){ var _th=timeLineHtml(s); _tl.innerHTML=_th; _tl.style.display=(_th&&!_cb)?'':'none'; }
   var st=statOf(s);
   document.getElementById('dStats').innerHTML=
     '<div class="stat"><b>'+st.watched+'</b><span>已看</span></div>'+
     '<div class="stat"><b>'+st.rewatch+'</b><span>回看</span></div>'+
     '<div class="stat"><b>'+st.unwatched+'</b><span>未看</span></div>'+
     '<div class="stat"><b>'+st.pct+'%</b><span>进度</span></div>';
-  /* v2.19.1：一行时长账（单集 / 本季 / 全剧 / 已看 / 还剩），估算值带「约」 */
+  /* v2.19.1：一行时长账（单集 / 本季 / 全剧 / 已看 / 还剩），估算值带「约」。
+     v2.37.0：有漫改轴的条目这行被「全部」行并走，整行隐藏（_cb 控制） */
   var _dl=document.getElementById('dDur');
-  if(_dl){ var _dlh=durLineHtml(s); _dl.innerHTML=_dlh; _dl.style.display=_dlh?'':'none'; }
+  if(_dl){ var _dlh=durLineHtml(s); _dl.innerHTML=_dlh; _dl.style.display=(_dlh&&!_cb)?'':'none'; }
   /* v2.19.1：电影条目另开「看到哪了」部分进度条（集级状态只有 0/100，装不下看到一半） */
   try{ renderFilmPos(); }catch(e){}
   /* v2.5.1 来源覆盖行/补齐入口/来源标注入口已按需求删除；本条仅保留「已隐藏集」提示与恢复 */
@@ -5983,17 +5991,14 @@ setTimeout(function(){
      覆盖报告、补封面、数据质量）整体退役，主列表只留片单本身。
      底层函数（coverHealAll 启动自愈、单卡「重拉封面」）保留不动。
      ===================================================================== */
-  /* v2.35.0（用户令「除了整部进度，有漫改的还要显示漫改进度和时间」）：
-     漫改进度从类型筛选按钮行里挪出来，独立成一行（#dCanonProg）。
-     挪的原因：那行是「点一下筛集」的按钮，塞一个只读数字进去既不像按钮也不像数据，
-     用户看不出它是进度还是筛选项。独立行才读得出「整部进度」与「漫改进度」是两笔账。
-     时间口径（v2.36.1 起三段，用户令「漫改是要显示集数进度，漫改所有所需用时的进度」）：
-       ① 集数进度：已看 / 共 N 集 + 百分比（只算已看，不含回看，有回看另注）。
-       ② 时长进度：漫改集所需总时长 vs 已看掉的（口径同 durOf：watched/rewatch 都算
-          已看；无单集时长按类型估并带「约」——与全剧时长账同一约定）。
-       ③ 日期账（v2.36.0 单集时间戳 s.epT）：看完了给「漫改 开始 ~ 看完 · 用时 N 天」，
-          没看完给「漫改开始 · 最近标记」；老数据没有 epT 退回「全剧」并字面写明。
-       · 只对动画这条轴成立的条目显示（真人剧没有「漫改/TV原创」之分，硬算就是编造）。 */
+  /* 漫改这条轴的账，v2.37.0 定稿为「全部/漫改」两条平行行（用户令「漫改和全部的都要，
+     排版分行不要累赘」；v2.35.0 独立成行 → v2.36.0 单集时间戳 → v2.36.1 时长进度）：
+       「全部」行＝整部时长账 + 整部日期账 + ✎改时间（接替时间行/时长行，避免三处重复）。
+       「漫改」行＝canon 集数进度（只算已看不含回看，有回看另注）+ canon 时长
+         （口径同 durOf：无单集时长按类型估并带「约」）+ canon 日期（v2.36.0 的 s.epT；
+         老数据没有 epT 就不出日期段，不冒充——日期看「全部」行）。
+     只对动画这条轴成立的条目显示（真人剧没有「漫改/TV原创」之分，硬算就是编造）；
+     无漫改轴的条目整块返回空，走原来的时间行+时长行。 */
   function canonProgOf(s){
     if(!s || !fillerAxisApplies(s)) return null;
     var cn=0, cw=0, cr=0, tMin=0, tMax=0, tN=0;
@@ -6015,38 +6020,46 @@ setTimeout(function(){
     var pct=Math.round((cw/cn)*100);
     return { total:cn, watched:cw, rewatch:cr, pct:pct, tMin:tMin, tMax:tMax, tN:tN, done:(cw+cr>=cn), dur:du };
   }
-  function canonProgHtml(s){
+  function canonBlockHtml(s){
     var c=canonProgOf(s);
     if(!c) return '';
-    var bits=['漫改 <b>'+c.watched+'</b> / '+c.total+' 集','<b>'+c.pct+'%</b>'];
-    if(c.rewatch) bits.push('回看 '+c.rewatch);
-    /* v2.36.1：时长进度——漫改集所需总时长 vs 已看掉的（估的带「约」） */
+    var out=[];
+    /* 「全部」行：整部时长账（口径同 durLineHtml，估的带约）+ 整部日期账 + ✎改时间 */
+    var a=[];
+    var d=durOf(s);
+    if(d.total){
+      var est=d.known?'':'约 ';
+      a.push('时长 <b>'+est+fmtDur(d.watched)+'</b> / '+(d.known?'':'约 ')+fmtDur(d.total));
+      if(d.remain>0) a.push('还剩 '+(d.known?'':'约 ')+fmtDur(d.remain));
+    }
+    if(s.tStart) a.push('开始 <b>'+fmtDay(s.tStart)+'</b>'+(s.tStartFrom==='db'?'<span class="src">豆瓣</span>':''));
+    if(s.tDone) a.push('看完 <b>'+fmtDay(s.tDone)+'</b>'+(s.tDoneFrom==='db'?'<span class="src">豆瓣</span>':''));
+    var dd=(s.tStart&&s.tDone&&s.tDone>=s.tStart)?dayDiff(s.tStart,s.tDone):0;
+    if(dd>0) a.push('用时 <b>'+dd+'</b> 天');
+    var sidE=esc(String(s.sid)).replace(/'/g,"\\'");
+    a.push('<button type="button" class="lnk" onclick="editWatchTime(\''+sidE+'\')">✎ 改时间</button>');
+    out.push('<div class="cnpline"><span class="cnp-tag">全部</span><span class="cnp-main">'+a.join('<span class="ds">·</span>')+'</span></div>');
+    /* 「漫改」行：canon 集数/百分比/回看 + canon 时长 + canon 日期（epT） */
+    var b=['已看 <b>'+c.watched+'</b> / '+c.total+' 集','<b>'+c.pct+'%</b>'];
+    if(c.rewatch) b.push('回看 '+c.rewatch);
     if(c.dur&&c.dur.total>0){
-      var est=c.dur.known?'':'约 ';
-      bits.push('时长 <b>'+est+fmtDur(c.dur.watched)+'</b> / '+(c.dur.known?'':'约 ')+fmtDur(c.dur.total));
-      if(c.dur.remain>0) bits.push('还剩 '+(c.dur.known?'':'约 ')+fmtDur(c.dur.remain));
+      var e2=c.dur.known?'':'约 ';
+      b.push('时长 <b>'+e2+fmtDur(c.dur.watched)+'</b> / '+(c.dur.known?'':'约 ')+fmtDur(c.dur.total));
+      if(c.dur.remain>0) b.push('还剩 '+(c.dur.known?'':'约 ')+fmtDur(c.dur.remain));
     }
-    var t=[];
     if(c.tN){
-      /* v2.36.0：有单集标记时间 → 漫改自己的时间账（展示到天） */
       if(c.done){
-        bits.push('漫改 <b>'+fmtDay(c.tMin)+'</b> ~ <b>'+fmtDay(c.tMax)+'</b>');
-        var d=dayDiff(c.tMin,c.tMax);
-        if(d>0) bits.push('漫改用时 <b>'+d+'</b> 天');
+        b.push('<b>'+fmtDay(c.tMin)+'</b> ~ <b>'+fmtDay(c.tMax)+'</b>');
+        var dd2=dayDiff(c.tMin,c.tMax);
+        if(dd2>0) b.push('用时 <b>'+dd2+'</b> 天');
       }else{
-        bits.push('漫改开始 <b>'+fmtDay(c.tMin)+'</b> · 最近标记 <b>'+fmtDay(c.tMax)+'</b>');
+        b.push('开始 <b>'+fmtDay(c.tMin)+'</b> · 最近 <b>'+fmtDay(c.tMax)+'</b>');
       }
-    }else{
-      /* 老数据没有单集时间戳：退回全剧口径，字面写明，不冒充漫改的时间 */
-      if(s.tStart) t.push('全剧开始 '+fmtDay(s.tStart));
-      if(s.tDone) t.push('全剧看完 '+fmtDay(s.tDone));
-      var days=(s.tStart&&s.tDone&&s.tDone>=s.tStart)?dayDiff(s.tStart,s.tDone):0;
-      if(days>0) t.push('全剧用时 '+days+' 天');
     }
-    return '<span class="cnp-main">'+bits.join('<span class="ds">·</span>')+'</span>'+
-      (t.length?('<span class="cnp-time">'+t.join('<span class="ds">·</span>')+'</span>'):'');
+    out.push('<div class="cnpline"><span class="cnp-tag">漫改</span><span class="cnp-main">'+b.join('<span class="ds">·</span>')+'</span></div>');
+    return out.join('');
   }
-  window.canonProgHtml = canonProgHtml;
+  window.canonBlockHtml = canonBlockHtml;
   window.canonProgOf = canonProgOf;
 
   window._at270TyHtml = function () {

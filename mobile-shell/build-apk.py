@@ -29,8 +29,8 @@ MIN_API = '21'
 # 2026-10-06 实测踩到的坑：dist 里的 APK 实际是 code 23 / v1.22（aapt2 dump badging 读出），
 # 而这个文件还停在 20 / 1.19 —— 下次直接打包会把版本号**倒退**发出去，
 # 手机上装到的就是「降级」，用户完全看不出问题。所以这里必须跟着 APK 实际值走。
-VERSION_CODE = '30'
-VERSION_NAME = '1.29'
+VERSION_CODE = '31'
+VERSION_NAME = '1.30'
 
 # 打进 assets/web 的文件：index.html 引用的全部同源资源，缺一个就白屏/缺库
 WEB_FILES = [
