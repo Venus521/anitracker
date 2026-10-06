@@ -5,12 +5,15 @@
      GET /search/shows?q=KW&limit=20   → [{score,show},…]
      GET /shows/:id                    → show
      GET /shows/:id/episodes           → [episode,…]
+     GET /shows/:id/akas               → [{name,country},…]（v2.36.0：刷名找中文名用）
      GET /cover/:id.jpg                → 1x1 JPEG（封面自愈用例要能真的解码）
    控制端点：GET /__state · POST /__ctl {mode,target,reset}
    故障模式：ok | http500 | http404 | hang（hang=不回包，用来验 4 秒超时）
    条目：900001 双季动画（2×12 集）· 900002 无分集（未开播）·
         900003 Friends 真人剧（3 季 ×5 集，中文「老友记」要靠别名表命中）·
-        900004 单季动画（12 集，用来验证「单季不出季度条」） */
+        900004 单季动画（12 集，用来验证「单季不出季度条」）·
+        900005 中文剧（language=Chinese，name 是外文名、真名在 akas 的 CN 条目——
+        复刻 TVMaze 对《刁蛮公主》的真实形态，v2.36.0 刷名铁律用例专用） */
 const http = require('http');
 const PORT = 8093;
 const STATE = { mode: 'ok', target: 'all' };
@@ -37,13 +40,23 @@ const SHOWS = {
   '900001': { id: 900001, name: 'Mock Anime (Test)', type: 'Anime', language: 'Japanese', genres: ['Animation', 'Comedy'], status: 'Running', runtime: 24, premiered: '2026-01-01', image: { medium: COVER_URL('900001'), original: COVER_URL('900001') }, url: 'https://www.tvmaze.com/shows/900001/mock-anime' },
   '900002': { id: 900002, name: 'Empty Show (Test)', type: 'Scripted', language: 'English', genres: ['Drama'], status: 'To Be Determined', runtime: 30, premiered: '2027-01-01', image: { medium: '', original: '' }, url: 'https://www.tvmaze.com/shows/900002/empty-show' },
   '900003': { id: 900003, name: 'Friends', type: 'Scripted', language: 'English', genres: ['Comedy', 'Romance'], status: 'Ended', runtime: 30, premiered: '1994-09-22', image: { medium: COVER_URL('900003'), original: COVER_URL('900003') }, url: 'https://www.tvmaze.com/shows/900003/friends' },
-  '900004': { id: 900004, name: 'Single Season Show (Test)', type: 'Anime', language: 'Japanese', genres: ['Animation'], status: 'Ended', runtime: 24, premiered: '2026-04-01', image: { medium: COVER_URL('900004'), original: COVER_URL('900004') }, url: 'https://www.tvmaze.com/shows/900004/single' }
+  '900004': { id: 900004, name: 'Single Season Show (Test)', type: 'Anime', language: 'Japanese', genres: ['Animation'], status: 'Ended', runtime: 24, premiered: '2026-04-01', image: { medium: COVER_URL('900004'), original: COVER_URL('900004') }, url: 'https://www.tvmaze.com/shows/900004/single' },
+  '900005': { id: 900005, name: 'Mock Cn Show (Test)', type: 'Scripted', language: 'Chinese', genres: ['Drama', 'Comedy'], status: 'Ended', runtime: 45, premiered: '2016-03-01', image: { medium: COVER_URL('900005'), original: COVER_URL('900005') }, url: 'https://www.tvmaze.com/shows/900005/mock-cn-show' }
 };
 const EPS = {
   '900001': mkEps(900001, 2, 12),
   '900002': [],
   '900003': mkEps(900003, 3, 5),
-  '900004': mkEps(900004, 1, 12)
+  '900004': mkEps(900004, 1, 12),
+  '900005': mkEps(900005, 1, 10)
+};
+/* v2.36.0：别名表。拼音条目故意排在前——刷名必须认「国家=CN 且名含 CJK」，
+   把拼音（Diao Man Gong Zhu 这类）当中文名算事故 */
+const AKAS = {
+  '900005': [
+    { name: 'Mock Pinyin Show', country: { name: 'China', code: 'CN', timezone: 'Asia/Shanghai' } },
+    { name: '气泡公主（测试）', country: { name: 'China', code: 'CN', timezone: 'Asia/Shanghai' } }
+  ]
 };
 /* 关键词 → 条目 id：故意让中文词命不中，逼着页面走别名表（真实 TVMaze 就这样） */
 const BY_KEYWORD = {
@@ -97,6 +110,8 @@ const server = http.createServer(async (req, res) => {
   }
   let m = p.match(/^\/shows\/(\d+)\/episodes$/);
   if (m) return send(res, 200, EPS[m[1]] || []);
+  m = p.match(/^\/shows\/(\d+)\/akas$/);
+  if (m) return send(res, 200, AKAS[m[1]] || []);
   m = p.match(/^\/shows\/(\d+)$/);
   if (m) return SHOWS[m[1]] ? send(res, 200, SHOWS[m[1]]) : send(res, 404, { error: 'no show' });
   return send(res, 404, { error: 'not found', path: p });

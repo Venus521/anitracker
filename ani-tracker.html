@@ -733,7 +733,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
     <div class="cnpline" id="dCanonProg" style="display:none"></div>
     <div id="dParts"></div>
     <div class="dtools" id="dTools">
-      <button class="ty" onclick="refreshNamesNow()" id="btnRefreshNames" title="不通过 AI：按网上号取官方片名与官方集名，内置库顺带补中文集名。只补空、只追加缺的集，你手改过的名字一律不动">⟳ 刷新片名与集名</button>
+      <button class="ty" onclick="refreshNamesNow()" id="btnRefreshNames" title="不通过 AI：按网上号取官方片名与官方集名（中文剧一律保中文名/找回中文名），内置库顺带补中文集名。只补空、只追加缺的集，你手改过的名字一律不动">⟳ 刷新片名与集名</button>
       <button class="ty" onclick="aiPasteImport()" id="btnAiPaste" title="自动查不到的新番/冷门番：把 AI 的回答原文贴进来，自动识别 TV原创/半原创/漫改">✧ AI 结果导入</button>
       <button class="ty" onclick="healThisCover()" title="按剧名到全网库 / 豆瓣重新拉封面（免配置，拉不到会保留原来那张）">⟳ 重拉封面</button>
       <button class="ty" onclick="pickCover()" id="btnPickCover" title="全网库 / TMDB 都查不到的中文剧、国产剧：从本机选一张海报，或直接 Ctrl+V 粘贴图片">⇪ 本地封面</button>
@@ -1188,7 +1188,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.35.0', AT_BUILD='20261006b';
+var AT_VERSION='2.36.0', AT_BUILD='20261006a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1332,13 +1332,19 @@ var listQ=''; /* v2.14.0b 片内搜索关键词（小写），只过滤标题，
 function save(){ wr(LS.shows,shows.filter(function(s){ return !s.pv; })); try{ if(window.CBSync) CBSync.autosync(); }catch(e){ atErr('autosync触发失败',e); } } /* v2.5.0：预览条目不落盘 */
 function bySid(sid){ return shows.find(function(s){ return String(s.sid)===String(sid); }); }
 function epStat(s,n){ var v=(s.statuses||{})[n]; return v===undefined?null:v; }
+/* v2.36.0：单集标记时间戳（s.epT[集号]=毫秒）。v2.35.0 漫改进度行的时间只能给「全剧」，
+   就是因为单集时间没记。老数据没有 epT 的集自动退回全剧口径，不编造；
+   一集只留最后一次标记的时间，展示用 fmtDay 取到天。 */
+function stampEpT(s,n){ try{ if(!s.epT) s.epT={}; s.epT[n]=Date.now(); }catch(e){} }
+function clearEpT(s,n){ try{ if(s.epT) delete s.epT[n]; }catch(e){} }
 function setEpStat(s,n,st){
   /* 防御：statuses 可能缺（历史/半写入的数据、外部导入的残缺记录）。
      epStat 用 (s.statuses||{}) 读是安全的，写这里也必须先补齐，
      否则第一集标记就会 TypeError 崩掉（v2.12.0 右键菜单走到这条路时暴露）。 */
   if(!s.statuses) s.statuses={};
   if(st===null) delete s.statuses[n]; else s.statuses[n]=st;
-  if(st==='watched'||st==='rewatch') stampStart(s);
+  if(st==='watched'||st==='rewatch'){ stampEpT(s,n); stampStart(s); }
+  else if(st===null||st==='') clearEpT(s,n);
   s.updAt=Date.now();
 }
 function cntWatched(s){ var o=s.statuses||{}, n=0; for(var k in o){ if(o[k]==='watched') n++; } return n; }
@@ -1526,14 +1532,14 @@ function setFilmPos(p){
   if(s.pv){ toast('预览模式：先点上方「＋ 加入片单」即可标记进度'); return; }
   p=Math.round(Number(p)||0); p=p<0?0:p>100?100:p;
   if(!s.statuses) s.statuses={};
-  if(p>=100){ s.statuses[1]='watched'; delete s.pos;
+  if(p>=100){ s.statuses[1]='watched'; stampEpT(s,1); delete s.pos;
     if((s.status||'watching')==='want') s.status='watching';
     statInvalidate(s.sid); s.updAt=Date.now(); save(); renderDetail();
     toast('《'+s.title+'》标记看完'); return; }
-  if(p<=0){ delete s.pos; if(s.statuses[1]) delete s.statuses[1];
+  if(p<=0){ delete s.pos; if(s.statuses[1]){ delete s.statuses[1]; clearEpT(s,1); }
     statInvalidate(s.sid); s.updAt=Date.now(); save(); renderDetail();
     toast('已清除《'+s.title+'》的进度'); return; }
-  if(s.statuses[1]) delete s.statuses[1];   /* 半途进度与「第 1 集已看」互斥 */
+  if(s.statuses[1]){ delete s.statuses[1]; clearEpT(s,1); }   /* 半途进度与「第 1 集已看」互斥 */
   s.pos=p;
   if((s.status||'watching')==='want') s.status='watching';
   statInvalidate(s.sid); s.updAt=Date.now(); save(); renderDetail();
@@ -2395,7 +2401,7 @@ function toggleEpGrid(){ try{ localStorage.setItem('at_epmode', epGridMode()?'ro
 function bulkWatchRange(s,a,b){
   if(!s.statuses) s.statuses={};
   var cnt=0;
-  visEps(s).forEach(function(e){ if(e.s>=a&&e.s<=b&&epStat(s,e.s)===null){ s.statuses[e.s]='watched'; cnt++; } });
+  visEps(s).forEach(function(e){ if(e.s>=a&&e.s<=b&&epStat(s,e.s)===null){ s.statuses[e.s]='watched'; stampEpT(s,e.s); cnt++; } });
   return cnt;
 }
 function epClick(ev,n){
@@ -2417,7 +2423,7 @@ function epClick(ev,n){
     _lastEpN=null; _lastEpT=0;
     if(!s.statuses) s.statuses={};
     var c2=bulkWatchRange(s,1,n);
-    if(s.statuses[n]&&s.statuses[n]!=='watched'){ s.statuses[n]='watched'; c2++; }
+    if(s.statuses[n]&&s.statuses[n]!=='watched'){ s.statuses[n]='watched'; stampEpT(s,n); c2++; }
     if((s.status||'watching')==='want') s.status='watching';
     s.updAt=Date.now(); statInvalidate(s.sid); save(); renderDetail();
     toast(c2?('已看到第 '+n+' 集（补标 '+c2+' 集）'):'第 1–'+n+' 集都已标记');
@@ -3593,7 +3599,7 @@ function rebaseEps(s,newTotal){ /* 编辑集数：重建 eps 保留已有标记 
     eps.push(e2);
   }
   s.eps=eps; if(!s.bgmTotal) s.bgmTotal=s.total; s.total=newTotal;
-  Object.keys(oldSt).forEach(function(n){ if(+n>newTotal) delete s.statuses[n]; });
+  Object.keys(oldSt).forEach(function(n){ if(+n>newTotal){ delete s.statuses[n]; clearEpT(s,n); } });
   s.updAt=Date.now(); statInvalidate(s.sid);
 }
 /* v2.10.0 移除：观看进度双向同步整套 ——
@@ -3866,18 +3872,59 @@ function canonEpList(s){ /* 官方集表按「季-集内号」建索引，sn/en 
     return byS[ex.s]||null;
   };
 }
+/* v2.36.0：中文剧找中文名（刷名/加片共用）。顺序：
+   ① TVMaze /shows/{id}/akas 里国家=CN 且名字本身含 CJK 的别名（拼音 Diao Man Gong Zhu 不算）；
+   ② 豆瓣 suggest（经云函数）按现名/日文名查，返回的 title 就是豆瓣标准中文名；
+     有 TVMaze 首播年就先对年份，对不上取第一条 CJK。取不到返回空——宁可保留原名，不硬塞。 */
+async function cnTitleFor(s,tv,d,nm){
+  try{
+    var ak=await _wget(WAPI+'/shows/'+tv+'/akas');
+    var hit=(ak||[]).filter(function(a){ return a&&a.country&&a.country.code==='CN'&&/[\u4e00-\u9fff]/.test(String(a.name||'')); })[0];
+    if(hit) return String(hit.name).trim();
+  }catch(e){}
+  var yr=(d&&d.premiered)?String(d.premiered).slice(0,4):'';
+  var kws=[];
+  if(s.title) kws.push(String(s.title));
+  if(s.nameJp) kws.push(String(s.nameJp));
+  if(nm&&kws.indexOf(nm)<0) kws.push(nm);
+  for(var i=0;i<kws.length;i++){
+    var its=await doubanSuggest(kws[i]);
+    var cn=(its||[]).filter(function(x){ return x&&/[\u4e00-\u9fff]/.test(String(x.title||'')); });
+    if(!cn.length) continue;
+    var pick=(yr?cn.filter(function(x){ return String(x.year||'')===yr; })[0]:null)||cn[0];
+    return String(pick.title).trim();
+  }
+  return '';
+}
+window.cnTitleFor = cnTitleFor;
 async function refreshNamesFor(s,opts){
   opts=opts||{};
-  var out={renamed:0,named:0,added:0,from:'',coverOk:false};
+  var out={renamed:0,named:0,added:0,from:'',coverOk:false,cnMiss:false};
   if(!s||s.pv) return out;
   var tv=tvIdOf(s);
 
-  /* ---- 片名：TVMaze 官方名（按号） ---- */
+  /* ---- 片名：TVMaze 官方名（按号）+ 剧名铁律（v2.33.0 用户令，v2.36.0 补进刷名）----
+     v2.35.0 的写法是「有号就换 TVMaze 官方名」——TVMaze 的 name 本来就是外文原名，
+     中文剧《刁蛮公主》(tv 31951) 一刷新就被换成 "My Bratty Princess"。
+     现在按剧名铁律分档：
+       ① 现名含 CJK（中文名/豆瓣双语名/日文名）→ 一律不动，外文官方名没资格覆盖；
+       ② 中文剧（TVMaze language=Chinese 或国家=CN）而现名纯外文 → 找中文名
+         （TVMaze akas 的 CN 条目 → 豆瓣 suggest 兜底），找不到宁可保留原名；
+       ③ 其余（外语剧且现名纯外文）→ 维持官方名校准。 */
   if(tv && String(s.titleFrom)!=='me'){
     try{
       var d=null; try{ d=await _wget(WAPI+'/shows/'+tv); }catch(e){ d=null; }
       var nm=d?String(d.name||'').trim():'';
-      if(nm&&normTxt(nm)!==normTxt(String(s.title||''))){ s.title=nm; out.renamed++; out.from='TVMaze'; }
+      var cur=String(s.title||'').trim();
+      var curCjk=/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(cur);
+      var isCn=!!(d&&(String(d.language||'')==='Chinese'
+        ||(d.network&&d.network.country&&d.network.country.code==='CN')
+        ||(d.webChannel&&d.webChannel.country&&d.webChannel.country.code==='CN')));
+      if(!curCjk&&isCn){
+        var cnNm=await cnTitleFor(s,tv,d,nm);
+        if(cnNm){ if(normTxt(cnNm)!==normTxt(cur)){ s.title=cnNm; out.renamed++; out.from='中文名'; } }
+        else out.cnMiss=true;
+      }else if(!curCjk&&nm&&normTxt(nm)!==normTxt(cur)){ s.title=nm; out.renamed++; out.from='TVMaze'; }
     }catch(e){}
   }
 
@@ -3937,7 +3984,8 @@ function refreshNamesNow(sid){
     try{ statInvalidate(s.sid); }catch(e){}
     renderDetail(); renderList();
     var bits=[];
-    if(r.renamed) bits.push('片名按'+r.from+'官方名改了');
+    if(r.renamed) bits.push(r.from==='中文名'?'片名换成了中文名（'+(s.title||'')+'）':'片名按'+r.from+'官方名改了');
+    if(r.cnMiss) bits.push('是中文剧但没查到中文名，先保留原名');
     if(r.named) bits.push('补了 '+r.named+' 集的官方名');
     if(r.added) bits.push('新增 '+r.added+' 集');
     if(r.coverOk) bits.push('封面也补上了');
@@ -5939,24 +5987,25 @@ setTimeout(function(){
      漫改进度从类型筛选按钮行里挪出来，独立成一行（#dCanonProg）。
      挪的原因：那行是「点一下筛集」的按钮，塞一个只读数字进去既不像按钮也不像数据，
      用户看不出它是进度还是筛选项。独立行才读得出「整部进度」与「漫改进度」是两笔账。
-     口径诚实说明：
-       · 进度是「已看 / 共 N 集」+ 百分比，百分比只算已看，不含回看。
-       · 时间只能给到条目级（开始看 / 看完 / 用时）——单集时间戳自 v2.14 起就不记录，
-         漫改子集没有自己的开始/看完日期。这里给的是整部的时间，字面写明「全剧」，
-         不让用户误以为是漫改那几集单独的时间账。
+     时间口径（v2.36.0 起分两档，用户令「要显示漫改的详细进度时间」）：
+       · 有单集标记时间（s.epT，v2.36.0 起随每次标记记录）→ 给漫改自己的账：
+         看完了给「漫改 开始 ~ 看完 · 用时 N 天」，没看完给「漫改开始 · 最近标记」。
+       · 老数据没有 epT 的集 → 退回条目级账，字面写明「全剧」——不编造漫改子集的日期。
        · 只对动画这条轴成立的条目显示（真人剧没有「漫改/TV原创」之分，硬算就是编造）。 */
   function canonProgOf(s){
     if(!s || !fillerAxisApplies(s)) return null;
-    var cn=0, cw=0, cr=0;
+    var cn=0, cw=0, cr=0, tMin=0, tMax=0, tN=0;
     (s.eps||[]).forEach(function(e){
       if(srcInfoOf(s,e).src!=='canon') return;
       cn++;
       var v=(s.statuses||{})[e.s];
       if(v==='watched') cw++; else if(v==='rewatch') cr++;
+      var t=+((s.epT||{})[e.s]||0);
+      if(t){ tN++; if(!tMin||t<tMin) tMin=t; if(t>tMax) tMax=t; }
     });
     if(!cn) return null;
     var pct=Math.round((cw/cn)*100);
-    return { total:cn, watched:cw, rewatch:cr, pct:pct };
+    return { total:cn, watched:cw, rewatch:cr, pct:pct, tMin:tMin, tMax:tMax, tN:tN, done:(cw+cr>=cn) };
   }
   function canonProgHtml(s){
     var c=canonProgOf(s);
@@ -5964,10 +6013,22 @@ setTimeout(function(){
     var bits=['漫改 <b>'+c.watched+'</b> / '+c.total+' 集','<b>'+c.pct+'%</b>'];
     if(c.rewatch) bits.push('回看 '+c.rewatch);
     var t=[];
-    if(s.tStart) t.push('全剧开始 '+fmtDay(s.tStart));
-    if(s.tDone) t.push('全剧看完 '+fmtDay(s.tDone));
-    var days=(s.tStart&&s.tDone&&s.tDone>=s.tStart)?dayDiff(s.tStart,s.tDone):0;
-    if(days>0) t.push('全剧用时 '+days+' 天');
+    if(c.tN){
+      /* v2.36.0：有单集标记时间 → 漫改自己的时间账（展示到天） */
+      if(c.done){
+        bits.push('漫改 <b>'+fmtDay(c.tMin)+'</b> ~ <b>'+fmtDay(c.tMax)+'</b>');
+        var d=dayDiff(c.tMin,c.tMax);
+        if(d>0) bits.push('漫改用时 <b>'+d+'</b> 天');
+      }else{
+        bits.push('漫改开始 <b>'+fmtDay(c.tMin)+'</b> · 最近标记 <b>'+fmtDay(c.tMax)+'</b>');
+      }
+    }else{
+      /* 老数据没有单集时间戳：退回全剧口径，字面写明，不冒充漫改的时间 */
+      if(s.tStart) t.push('全剧开始 '+fmtDay(s.tStart));
+      if(s.tDone) t.push('全剧看完 '+fmtDay(s.tDone));
+      var days=(s.tStart&&s.tDone&&s.tDone>=s.tStart)?dayDiff(s.tStart,s.tDone):0;
+      if(days>0) t.push('全剧用时 '+days+' 天');
+    }
     return '<span class="cnp-main">'+bits.join('<span class="ds">·</span>')+'</span>'+
       (t.length?('<span class="cnp-time">'+t.join('<span class="ds">·</span>')+'</span>'):'');
   }

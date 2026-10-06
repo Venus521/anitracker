@@ -79,9 +79,18 @@ const METRICS = () => {
   const over = [];
   document.querySelectorAll('body *').forEach((el) => {
     const r = el.getBoundingClientRect();
-    if (r.width > 0 && (r.right > iw + 1 || r.left < -1)) {
-      over.push((el.id ? '#' + el.id : el.className || el.tagName) + ' →' + Math.round(r.right) + '/' + Math.round(r.left));
+    if (!(r.width > 0) || !(r.right > iw + 1 || r.left < -1)) return;
+    /* v2.36.0：横滚容器（overflow-x:auto/scroll）里的内容本来就设计为可滚出视口——
+       v2.35.0 详情页类型行改单行横滚是用户令，「待核」chip 右缘超 3px 被误报出界。
+       页面级横向溢出另有 scrollWidth 断言管，这里只揪不在滚动容器里的真出界。 */
+    let sp = el.parentElement, inScroll = false;
+    while (sp && sp !== document.body) {
+      const cs = getComputedStyle(sp);
+      if (/(auto|scroll)/.test(cs.overflowX)) { inScroll = true; break; }
+      sp = sp.parentElement;
     }
+    if (inScroll) return;
+    over.push((el.id ? '#' + el.id : el.className || el.tagName) + ' →' + Math.round(r.right) + '/' + Math.round(r.left));
   });
   const small = [];
   document.querySelectorAll('button,a,.lnk,.chip,[onclick]').forEach((el) => {

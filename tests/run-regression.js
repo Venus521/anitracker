@@ -560,6 +560,56 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       calib.tried === 1 && calib.clockKept && webReqs === 0,
       JSON.stringify(calib).slice(0, 220) + ' webReqs=' + webReqs);
 
+    /* T31 v2.36.0 刷名剧名铁律：中文剧（language=Chinese）现名纯外文 → 按 akas 的
+       CN+CJK 别名找回中文名（拼音不算）；现名含 CJK 一律不动（v2.33.0 用户令）。 */
+    const iron = await page.evaluate(async () => {
+      const now = Date.now();
+      const a = { sid: 'tv900005', title: 'Mock Cn Show (Test)', year: '2016', total: 0, cover: '/tracker-icon-512.png', eps: [], statuses: {}, status: 'watching', addedAt: now, updAt: now };
+      window.shows.push(a);
+      const r1 = await refreshNamesFor(a, { save: false });
+      const b = { sid: 'tv900005b', title: '气泡公主（测试）', year: '2016', total: 0, cover: '/tracker-icon-512.png', eps: [], statuses: {}, status: 'watching', addedAt: now, updAt: now };
+      const before = b.title;
+      const r2 = await refreshNamesFor(b, { save: false });
+      window.shows = window.shows.filter((x) => x !== a && x !== b);
+      return { t1: a.title, ren1: r1.renamed, from1: r1.from, t2: b.title, before2: before, ren2: r2.renamed };
+    });
+    check('31', 'v2.36.0 刷名剧名铁律：中文剧英文名按 akas 找回中文名（拼音不认）；CJK 现名永不覆盖',
+      iron.t1 === '气泡公主（测试）' && iron.ren1 === 1 && iron.from1 === '中文名' && iron.t2 === iron.before2 && iron.ren2 === 0,
+      JSON.stringify(iron));
+
+    /* T32 v2.36.0 单集标记时间戳：单标/批量都记 epT，取消/清除即删 */
+    const ept = await page.evaluate(() => {
+      const s = { sid: 'ept-t', title: 'x', statuses: {}, eps: [] };
+      for (let i = 1; i <= 5; i++) s.eps.push({ s: i, sn: 1, en: i, t: '第' + i + '集' });
+      const t0 = Date.now();
+      setEpStat(s, 3, 'watched');
+      const t3 = (s.epT || {})[3] || 0;
+      bulkWatchRange(s, 1, 5);
+      const bulkN = Object.keys(s.epT || {}).length;
+      setEpStat(s, 3, null);
+      const cleared = (s.epT || {})[3] === undefined;
+      return { stamped: t3 > 0 && Math.abs(t3 - t0) < 60000, bulkN: bulkN, cleared: cleared };
+    });
+    check('32', 'v2.36.0 单集时间戳：单标与批量标记都记 epT，取消即清',
+      ept.stamped && ept.bulkN >= 4 && ept.cleared, JSON.stringify(ept));
+
+    /* T33 v2.36.0 漫改行两档时间：有 epT → 漫改自己的开始~看完+用时；老数据无 epT → 退回全剧口径；无漫改集整行为空 */
+    const cnp = await page.evaluate(() => {
+      const mk = (withT) => {
+        const eps = []; for (let i = 1; i <= 4; i++) eps.push({ s: i, t: '第' + i + '集', src: i <= 3 ? 'canon' : 'filler' });
+        const s = { sid: 'cnp-t', title: 'x', kind: '动画', eps: eps, statuses: { 1: 'watched', 2: 'watched', 3: 'watched' } };
+        if (withT) { s.epT = { 1: Date.now() - 4 * 86400000, 2: Date.now() - 2 * 86400000, 3: Date.now() }; }
+        s.tStart = Date.now() - 9 * 86400000; s.tDone = Date.now();
+        return s;
+      };
+      const withT = canonProgHtml(mk(true)), noT = canonProgHtml(mk(false));
+      const noCn = canonProgHtml({ sid: 'cnp-n', title: 'x', kind: '动画', eps: [{ s: 1, t: 'e1', src: 'filler' }], statuses: { 1: 'watched' } });
+      return { withT: withT, noT: noT, noCn: noCn === '' };
+    });
+    check('33', 'v2.36.0 漫改行时间两档：有 epT 给漫改账（看完含用时）；老数据退回全剧口径；无漫改整行为空',
+      /漫改 <b>3<\/b> \/ 3 集/.test(cnp.withT) && /漫改用时/.test(cnp.withT) && /全剧开始/.test(cnp.noT) && !/漫改开始/.test(cnp.noT) && cnp.noCn,
+      JSON.stringify(cnp).slice(0, 300));
+
     // T18 无页面级 JS 错误
     check('18', '全程无页面级 JS 错误', pageErrors === 0, 'pageErrors=' + pageErrors);
   } catch (e) {
