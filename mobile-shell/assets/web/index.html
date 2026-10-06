@@ -418,6 +418,11 @@ body.panel-open #toast{bottom:96px}
 .srcchip{background:var(--card);border:1px solid var(--line);border-radius:var(--r-3);padding:4px 12px;font-size:var(--fs-meta);color:var(--muted);min-height:30px}
 .srcchip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
 .srcchip.tool{border-style:dashed}
+/* v2.41.0：按钮上那枚「还差几部」的计数。做成小徽标而不是并排文字——
+   按钮已经是虚线边框（工具感），再挂一串字会显得吵；数字用小号衬线压在边上即可。 */
+.srn{display:inline-block;margin-left:6px;padding:0 6px;min-width:18px;height:18px;line-height:18px;border-radius:9px;
+  background:var(--accent-soft);color:var(--accent-ink);font-family:var(--serif);font-size:11px;font-weight:600;
+  font-variant-numeric:tabular-nums;text-align:center;vertical-align:1px}
 .srchint{font-size:10px;color:var(--muted);letter-spacing:.5px}
 .eprow .ty{cursor:pointer}
 .eprow .ty.ty-filler{color:var(--danger);border-color:#e8c8b0}
@@ -461,6 +466,17 @@ body.panel-open #toast{bottom:96px}
 .cbfoot a{display:inline-flex;align-items:center;justify-content:center;min-width:56px;min-height:36px;
   padding:0 12px;color:var(--accent);font-weight:600;text-decoration:none}
 .cbfoot .cbdot{color:var(--line);padding:0 2px}
+/* ===== v2.42.0 记住登录 =====
+   上面 .cbpane label 是「字段说明」的样子（灰、小、块级），而「记住登录」是一条
+   **可点的开关**——照抄那条规则会得到一个灰色的、看起来不像能点的标签。
+   所以整条覆写：字色回到正文色、改成行内、勾子本身要压回 16px（否则会被
+   input{width:100%;min-height:44px} 拉成一条横贯全屏的怪东西）。 */
+/* 整条 label 就是点击区，高度按手机可点区门禁（≥34px）给到 36，别做成一条细缝 */
+.cbpane label.cbrem{display:flex;align-items:center;gap:8px;margin:14px 0 4px;padding:2px 0;
+  font-size:var(--fs-body);color:var(--ink);cursor:pointer;min-height:36px}
+.cbpane label.cbrem input[type=checkbox]{width:16px;height:16px;min-height:0;flex:none;margin:0;
+  padding:0;accent-color:var(--accent);cursor:pointer}
+.cbnote{margin:-2px 0 10px;line-height:1.55}
 /* ===== v2.12.0：右键 / 长按菜单 =====
    设计要点：不用原生右键（原生会把「另存为图片」等系统菜单也带出来），
    自绘一个轻量菜单；移动端用长按（500ms）触发，同一套逻辑。 */
@@ -1032,6 +1048,60 @@ function dedupeByTitle(list,tomb,stats){
   });
   return out;
 }
+/* ===== v2.43.0 合并重复（用户令「豆瓣和追迹都有的要合并」）=====
+   v2.19.1 那次同名去重是**只跑一次**的存量清理（at_dedup_v2191 标志位守门）。
+   之后长出来的重复它一条都收不掉：豆瓣导入一次涨一批、双设备各加各的再涨一批、
+   搜索结果里同一个作品不同叫法各加一次又涨一批。于是片单越用越重，
+   同一部剧横着两条，进度还各记一半——「已看 26 集」和「已看 25 集」并排躺着。
+   这里补一个能随时点的入口；按钮只在**真的检出重复**时才出现，平时不占位。 */
+var _dupCache={ at:0, groups:null };
+function findDupGroups(){
+  try{
+    var now=Date.now();
+    /* 4 秒缓存：renderList 每次都会问一次「有没有重复」，几百部两两比是几万次，
+       虽然只要几毫秒，但渲染是高频路径，没必要每次真算。 */
+    if(_dupCache.groups&&(now-_dupCache.at)<4000) return _dupCache.groups;
+    var arr=(window.shows||[]).filter(function(s){ return s&&s.sid!=null&&!s.pv; });
+    var groups=[], used={};
+    for(var i=0;i<arr.length;i++){
+      if(used[i]) continue;
+      var g=[arr[i]];
+      for(var j=i+1;j<arr.length;j++){
+        if(used[j]) continue;
+        if(sameShowPair(arr[i],arr[j])){ g.push(arr[j]); used[j]=1; }
+      }
+      if(g.length>1) groups.push(g);
+    }
+    _dupCache={ at:now, groups:groups };
+    return groups;
+  }catch(e){ return []; }
+}
+function dupExtraCount(){ var n=0; findDupGroups().forEach(function(g){ n+=g.length-1; }); return n; }
+function doMergeDups(silent){
+  var n0=(shows||[]).length;
+  var tomb={}; try{ tomb=JSON.parse(localStorage.getItem('at_tomb')||'{}'); }catch(e){ tomb={}; }
+  var st={deduped:0};
+  shows=dedupeByTitle(shows||[],tomb,st);
+  _dupCache={ at:0, groups:null };
+  if(!st.deduped) return 0;
+  try{ localStorage.setItem('at_tomb',JSON.stringify(tomb)); }catch(e){}
+  save(); renderList();
+  try{ logAdd('合并重复 '+st.deduped+' 条','片单整理：'+n0+' → '+shows.length+' 条，进度取并集', true); }catch(e){}
+  if(!silent) toast('已合并：'+n0+' 条 → '+shows.length+' 条（并掉 '+st.deduped+' 条，两边已看的集都留着）');
+  return st.deduped;
+}
+function mergeDupsNow(){
+  var groups=findDupGroups();
+  if(!groups.length){ toast('片单里没有重复的条目（同名、且集数对得上才算重复）'); return; }
+  var extra=dupExtraCount();
+  var names=groups.slice(0,10).map(function(g){ return '《'+((g[0]&&g[0].title)||'')+'》×'+g.length; }).join('\n');
+  uiConfirm('片单里有 '+groups.length+' 组重复，合并后少 '+extra+' 条：\n'+names+
+    (groups.length>10?('\n…以及另外 '+(groups.length-10)+' 组'):'')+
+    '\n\n怎么合：两边已看的集做并集，一条都不丢；信息取更全的那条（集表多的、有封面的、有评分的）；'+
+    '被合掉那条立墓碑，免得下次云合并又从云端爬回来。',
+    function(){ doMergeDups(false); },
+    { title:'合并重复条目', okText:'合并这 '+extra+' 条', cancelText:'先不' });
+}
 function mergeShowArrays(loc,cld,tL,tC){
   loc=Array.isArray(loc)?loc:[]; cld=Array.isArray(cld)?cld:[];
   var idx=function(a){ var m={}; a.forEach(function(s){ if(s&&s.sid!=null) m[String(s.sid)]=s; }); return m; };
@@ -1233,7 +1303,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.40.0', AT_BUILD='20261007a';
+var AT_VERSION='2.43.0', AT_BUILD='20261007d';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1693,7 +1763,9 @@ function renderSrcBar(){
     '<button class="srcchip'+(on1?' on':'')+'" onclick="toggleHide(\'filler\')" title="隐藏所有 TV原创 剧集（再次点击恢复）">'+(on1?'✓ ':'')+'隐藏 TV原创</button>'+
     '<button class="srcchip'+(on2?' on':'')+'" onclick="toggleHide(\'semi\')" title="隐藏所有 半原创 剧集（再次点击恢复）">'+(on2?'✓ ':'')+'隐藏 半原创</button>'+
     ((on1||on2)?'<button class="srcchip" onclick="clearHide()">恢复全部显示</button><span class="srchint">统计与「下一集」按可见集计算</span>':'')+
-    '<button class="srcchip tool" onclick="coverHealAll(true)" title="为所有缺失/失效封面的条目从全网库补齐封面并转存到本地">⟳ 补封面</button>';
+    /* v2.41.0：文案改成「一键拉封面」——它现在先体检全部已有封面（挂掉的重新拉），
+       再为所有缺封面的条目依次问 内置库 / AniList / 全网库 / TMDB / Wikidata / 豆瓣。 */
+    '<button class="srcchip tool" onclick="coverHealAll(true)" title="一键：先体检所有已有封面（失效的重新拉），再为缺封面的条目依次问 内置库 / AniList / 全网库 / TMDB / Wikidata / 豆瓣，拉到就转存本机">⟳ 一键拉封面</button>';
 }
 /* ===== v2.34.0：手机端「⋯ 更多工具」抽屉 =====
    判据只有输入能力这一条（触屏 = 手机档），桌面永远拿不到这个抽屉。 */
@@ -1899,7 +1971,10 @@ function showInternalDetail(id){
   curSid='int:'+id;
   document.getElementById('vList').style.display='none';
   document.getElementById('vDetail').style.display='';
-  var _dc2=document.getElementById('dCover'); _dc2.onerror=function(){ __coverFail(this); }; _dc2.style.opacity=1; _dc2.src=s.cover||coverPH();
+  /* v2.41.0：详情页海报也挂上 data-ph（裂图换占位时才知道该写哪个字）*/
+  var _dc2=document.getElementById('dCover'); _dc2.onerror=function(){ __coverFail(this); }; _dc2.style.opacity=1;
+  try{ _dc2.setAttribute('data-ph',String(s.title||'')); _dc2.removeAttribute('data-sid'); }catch(e){}
+  _dc2.src=s.cover||coverPHChar(s.title);
   document.getElementById('dTitle').textContent=s.title;
   document.getElementById('dJp').textContent=s.nameJp||'';
   document.getElementById('dMeta').textContent=(s.year||'')+' · 共 '+s.total+' 集'+(s.status?' · '+s.status:'')+(s.rating?' · ★'+s.rating:'');
@@ -2055,11 +2130,15 @@ function renderList(){
     var _cn=(function(){ try{ return webCnName(s)||''; }catch(e){ return ''; } })();
     var _sidE=esc(String(s.sid)).replace(/'/g,"\\'");
     var _num=(_fp>0&&_fp<100)?(p+'%'):w;
+    /* v2.41.0：没封面的直接用「首字票券」占位当 src（原来是空 src 触发 onerror 再换，
+       中间会闪一下空白）；data-ph 带上片名，裂图换占位时才知道该写哪个字。 */
+    var _ph=coverPHChar(s.title);
+    var _phAttr=' data-ph="'+esc(String(s.title||''))+'" data-fade="1"';
     if(_grid){
       /* 整张卡（海报＋片名）就是一颗大按钮：拇指落在哪儿都开得出详情，⋮ 那颗自己收起 */
       return '<div class="show" data-sid="'+esc(String(s.sid))+'" onclick="openDetail(\''+_sidE+'\')">'+
         '<div class="gp">'+
-          '<img src="'+esc(s.cover||'')+'" onerror="__coverFail(this)" referrerpolicy="no-referrer" alt=""/>'+
+          '<img src="'+esc(s.cover||_ph)+'"'+_phAttr+' onerror="__coverFail(this)" referrerpolicy="no-referrer" alt=""/>'+
           '<div class="gprog"><i style="width:'+p+'%"></i></div>'+
           '<button class="gmore" onclick="event.stopPropagation();showCardMenu(this,\''+_sidE+'\')" aria-label="更多操作" title="更多操作">'+_ic.more+'</button>'+
         '</div>'+
@@ -2067,7 +2146,7 @@ function renderList(){
       '</div>';
     }
     return '<div class="show" data-sid="'+esc(String(s.sid))+'">'+
-      '<img src="'+esc(s.cover||'')+'" onerror="__coverFail(this)" referrerpolicy="no-referrer" onclick="openDetail(\''+_sidE+'\')"/>'+
+      '<img src="'+esc(s.cover||_ph)+'"'+_phAttr+' onerror="__coverFail(this)" referrerpolicy="no-referrer" onclick="openDetail(\''+_sidE+'\')"/>'+
       '<div class="info" onclick="openDetail(\''+_sidE+'\')">'+
         '<div class="t">'+esc(s.title)+'</div>'+fCnt(s)+(s.parts&&s.parts.length>1?'<span class="type-tag unknown" style="background:var(--accent-soft);color:var(--accent);border-color:var(--accent)">共 '+s.parts.length+' 季</span>':'')+
         '<div class="s">'+(_doneD?_doneD+' 看完':(ST_NAME[s.status||'watching']||s.status))+' · '+s.total+' 集'+(_cn?(' · '+_cn):'')+(s.year?' · '+s.year:'')+(st.hidden>0?' · 隐 '+st.hidden:'')+_fpTxt+(_lt?(' · '+_lt):'')+'</div>'+
@@ -2084,6 +2163,18 @@ function renderList(){
   Array.prototype.forEach.call(el.querySelectorAll('.show[data-sid]'), function(node){
     var sid = node.getAttribute('data-sid');
     if (sid) bindCtx(node, function(x, y){ openShowCtx(x, y, sid); });
+  });
+  /* v2.41.0：封面淡入。只处理「还没加载完」的图，已缓存的直接置为可见。
+     刻意不把 opacity:0 写进 CSS 默认态——万一这段没跑到，后果会是整屏封面全空；
+     反过来最坏只是少 220ms 渐显。安全方向必须选后者。 */
+  Array.prototype.forEach.call(el.querySelectorAll('.show img[data-fade]'), function(im){
+    try{
+      if(im.complete&&im.naturalWidth){ im.style.opacity=1; return; }
+      im.style.opacity=0;
+      im.style.transition='opacity .22s ease';
+      im.addEventListener('load', function(){ im.style.opacity=1; });
+      im.addEventListener('error', function(){ im.style.opacity=1; });
+    }catch(e){ try{ im.style.opacity=1; }catch(e2){} }
   });
 }
 /* 片单卡的右键菜单 */
@@ -2211,9 +2302,50 @@ function openDetail(sid){
 }
 /* 封面加载失败不再变灰：v2.5.4 暖色占位 → v2.6.0 深色适配 → v2.14.0b 文案指向真实入口 →
    v2.21.0 灰阶骨架（图形语汇、零文字）：补封面的入口本来就是详情页「⟳ 重拉封面」，不必把路径写在海报上 */
-var COVER_PH_L="data:image/svg+xml;charset=utf-8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="220" height="300" viewBox="0 0 220 300"><rect width="220" height="300" fill="#ece2ce"/><g transform="translate(66,106) scale(3.6667)" fill="none" stroke="#c3ae87" stroke-width="1.1" stroke-linejoin="round"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><path d="M8.5 13.5 11 16.5l3.5-4.5 4.5 6H5z"/></g></svg>');
-var COVER_PH_D="data:image/svg+xml;charset=utf-8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="220" height="300" viewBox="0 0 220 300"><rect width="220" height="300" fill="#211c15"/><g transform="translate(66,106) scale(3.6667)" fill="none" stroke="#4a4130" stroke-width="1.1" stroke-linejoin="round"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><path d="M8.5 13.5 11 16.5l3.5-4.5 4.5 6H5z"/></g></svg>');
-function coverPH(){ return document.documentElement.getAttribute('data-theme')==='dark'?COVER_PH_D:COVER_PH_L; }
+/* v2.41.0（用户令「封面全都要」+ 精美化）：占位从「灰阶图形骨架」升级成**印刷感首字票券**
+   ——暖纸底 + 黄铜双细线框（与新图标同一套语汇）+ 衬线首字 + 底部一条发丝线。
+   好处不只是好看：缺封面的卡片一眼能认出是哪一部，不再是一排一模一样的灰方块。
+   没有名字可取（搜索结果等）时退回原来的图形骨架，不硬造一个字。 */
+var _PH_CACHE={};
+function _phEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+function _phBuild(ch,dark){
+  var bg=dark?'#221d16':'#f4eee3', f1=dark?'#3f382b':'#dccdab', f2=dark?'#2c271d':'#e9dec6',
+      ink=dark?'#6f6047':'#b09a6d';
+  var body = ch
+    ? '<text x="110" y="176" text-anchor="middle" font-family="Georgia,\'Songti SC\',\'SimSun\',\'Noto Serif CJK SC\',serif" font-size="96" fill="'+ink+'">'+_phEsc(ch)+'</text>'
+    : '<g transform="translate(66,106) scale(3.6667)" fill="none" stroke="'+ink+'" stroke-width="1.1" stroke-linejoin="round"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><path d="M8.5 13.5 11 16.5l3.5-4.5 4.5 6H5z"/></g>';
+  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="220" height="300" viewBox="0 0 220 300">'+
+    '<rect width="220" height="300" fill="'+bg+'"/>'+
+    '<rect x="9" y="9" width="202" height="282" rx="7" fill="none" stroke="'+f1+'" stroke-width="1"/>'+
+    '<rect x="14.5" y="14.5" width="191" height="271" rx="4" fill="none" stroke="'+f2+'" stroke-width="1"/>'+
+    body+
+    '<path d="M92 236h36" stroke="'+f1+'" stroke-width="1" stroke-linecap="round"/>'+
+  '</svg>';
+  return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+}
+function phCharOf(title){
+  var t=String(title||'').trim()
+    .replace(/^【[^】]*】/,'')
+    .replace(/^[《「『(\[<]+/,'')
+    .replace(/[《》「」『』()（）\[\]【】]/g,'');
+  if(!t) return '';
+  var ch=t.charAt(0);
+  /* 拉丁字母统一大写，看着更像印在票面上的字 */
+  if(/[a-z]/.test(ch)) ch=ch.toUpperCase();
+  return ch;
+}
+function coverPHChar(title){
+  var dark=document.documentElement.getAttribute('data-theme')==='dark';
+  var ch=phCharOf(title);
+  var k=(dark?'d':'l')+'|'+ch;
+  if(!_PH_CACHE[k]) _PH_CACHE[k]=_phBuild(ch,dark);
+  return _PH_CACHE[k];
+}
+/* 兼容：v2.13 起就有代码与门禁按这两个名字取「无字占位」（run-regression T99 直接比对
+   coverPH()===COVER_PH_L）。值改由 _phBuild 现算，名字与语义都不动，别删这两个入口。 */
+var COVER_PH_L=_phBuild('',false);
+var COVER_PH_D=_phBuild('',true);
+function coverPH(){ return coverPHChar(''); }
 /* ===== v2.6.0 主题（影院深色默认 / 可切浅色）；v2.14.0b 按钮图标 emoji→纯 SVG ===== */
 var IC_SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"/></svg>';
 var IC_MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.5A8.5 8.5 0 1 1 10.5 4 6.8 6.8 0 0 0 20 13.5Z"/></svg>';
@@ -2230,10 +2362,31 @@ function cycleTheme(){
   try{ renderList(); var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none') renderDetail(); }catch(e){}
   toast(cur==='dark'?'已切换深色影院主题':'已切换浅色主题');
 }
-function __coverFail(img){ img.onerror=null; img.style.opacity=1; img.src=coverPH(); }
+/* v2.41.0：裂图不再只是「换张占位图」——先按 sid 记账（markCoverDead），
+   这条目才会重新进入补封面池；再换上带首字的印刷感占位（见 coverPHChar）。
+   sid 有两个来源：img 自己带 data-sid，或外层卡片 .show[data-sid] 带。
+   搜索结果/内置库列表那些没有 sid 的图，记账静默跳过（它们本来就不在片单里）。 */
+function __coverFail(img){
+  try{
+    img.onerror=null;
+    var sid=img.getAttribute&&img.getAttribute('data-sid');
+    if(!sid&&img.closest){ var host=img.closest('[data-sid]'); if(host) sid=host.getAttribute('data-sid'); }
+    if(sid) markCoverDead(sid);
+  }catch(e){ try{ img.onerror=null; }catch(e2){} }
+  img.style.opacity=1;
+  img.src=coverPHOf(img);
+}
+/* 占位图上带的片名：渲染时写进 data-ph，裂图换占位时直接读，省一次反查 */
+function coverPHOf(img){
+  try{ var t=img&&img.getAttribute&&img.getAttribute('data-ph'); if(t) return coverPHChar(t); }catch(e){}
+  return coverPHChar('');
+}
 function renderDetail(){
   var s=bySid(curSid); if(!s) return;
-  var _dc=document.getElementById('dCover'); _dc.onerror=function(){ __coverFail(this); }; _dc.style.opacity=1; _dc.src=s.cover||coverPH();
+  /* v2.41.0：data-sid 让裂图能记到本部剧头上（进补封面池），data-ph 让占位写上首字 */
+  var _dc=document.getElementById('dCover'); _dc.onerror=function(){ __coverFail(this); }; _dc.style.opacity=1;
+  try{ _dc.setAttribute('data-sid',String(s.sid||'')); _dc.setAttribute('data-ph',String(s.title||'')); }catch(e){}
+  _dc.src=s.cover||coverPHChar(s.title);
   document.getElementById('dTitle').textContent=s.title;
   document.getElementById('dJp').textContent=s.nameJp||'';
   var diff=(s.bgmTotal&&s.bgmTotal!==s.total)?' · 原记 '+s.bgmTotal+' 集':'';
@@ -3714,10 +3867,32 @@ function upHttps(u){ return String(u||'').replace(/^http:\/\/(?!127\.0\.0\.1|loc
 function coverNeedsHeal(s){ if(!s||s.pv) return false; var c=String(s.cover||'');
   if(!c) return true;
   if(String(s.coverBy)==='user') return false;        /* v2.24.0：用户自己选的封面，任何自愈都不许动 */
+  /* v2.41.0（用户令「封面全都要」）：这张图**真的裂过**（onerror 打上的 coverDead），
+     就不再享受任何豁免——远程图床防盗链/改版/被墙之后，条目会一直顶着灰阶占位，
+     而 coverBy='net' 那行豁免让它连「⟳ 补封面」都进不去。裂过 = 必须重拉。 */
+  if(s.coverDead) return true;
   if(String(s.coverBy)==='net') return false;         /* v2.25.0：TVMaze/TMDB 远程海报（CORS 不让转 dataURL），不再反复自愈 */
   if(c.indexOf('data:image')===0) return false;
   if(/^https:\/\//i.test(c)&&/\.tcloudbaseapp\.com\//i.test(c)) return false;
   return true; }
+/* v2.41.0：裂图记账。__coverFail 见到图片真的加载不出来时调它——
+   以前只是把 src 换成占位图就完事，条目自己不知道「我的封面死了」，
+   下一次补封面照样跳过它，于是「在看」里一批卡片永远灰着。
+   记账同时清掉退避表里的条目，让它**当场**就能被重拉，不必等 24 小时。 */
+var _deadSaveT=null;
+function markCoverDead(sid){
+  try{
+    var s=bySid(sid); if(!s||s.pv) return;
+    var now=Date.now();
+    /* 10 分钟内同一条只记一次：列表反复渲染会连续触发，别把存档写抖 */
+    if(Number(s.coverDead||0)&&(now-Number(s.coverDead))<10*60*1000) return;
+    s.coverDead=now;
+    try{ var m=_cTry(); if(m[String(sid)]){ delete m[String(sid)]; _cTrySet(m); } }catch(e){}
+    if(_deadSaveT) clearTimeout(_deadSaveT);
+    _deadSaveT=setTimeout(function(){ _deadSaveT=null; try{ save(); }catch(e){} },1200);
+  }catch(e){}
+}
+function clearCoverDead(s){ try{ if(s) delete s.coverDead; }catch(e){} }
 function _cTry(){ try{ return JSON.parse(localStorage.getItem('at_cover_try')||'{}'); }catch(e){ return {}; } }
 function _cTrySet(m){ try{ localStorage.setItem('at_cover_try',JSON.stringify(m)); }catch(e){} }
 function coverCanAuto(s){
@@ -3831,12 +4006,68 @@ async function doubanSuggest(kw){
     return (j&&j.items)||[];
   }catch(e){ return []; }
 }
+/* ===== v2.41.0（用户令「封面全都要」）：给补封面补上两条真正对口的源 =====
+   原来那条源链是：TVMaze（按 tvId，或严格同名）→ TMDB（要 key）→ Wikidata（免 key 但
+   几乎只有英文条目有 P18 海报）→ 豆瓣中转。中间两条对动画基本是死的（TMDB 没配 key 直接
+   return null，实测 Wikidata 对中文动画命中率接近 0），于是「在看」里一批动画永远停在占位。
+   补这两条：
+     ① 内置库：302 部里 278 部带自家 CDN 封面，**离线、零延迟、人工校对过**——最该先问的一条。
+     ② AniList：动画封面覆盖最全、CORS 全开、免 key，还能用中文名直接搜（v2.20.0 已验证）。
+   两条都沿用 v2.14.0g 那条铁律：**只认归一化后完全相等的名字**。
+   错封面比没封面糟得多（《海贼王》被换成水墨错图那次），宁可空着手回来。 */
+function coverFromLib(s){
+  try{
+    var lib=window.INTERNAL_SHOWS||window.ANITRACKER_LIB||[];
+    if(!lib||!lib.length) return '';
+    var want=[];
+    [s.title,s.nameJp].concat(s.aliases||[]).forEach(function(x){
+      var k=normTxt(x); if(k&&want.indexOf(k)<0) want.push(k);
+    });
+    if(!want.length) return '';
+    for(var i=0;i<lib.length;i++){
+      var it=lib[i]; if(!it||!it.cover) continue;
+      var cand=[normTxt(it.title),normTxt(it.nameJp)];
+      (it.aliases||[]).forEach(function(a){ cand.push(normTxt(a)); });
+      for(var j=0;j<want.length;j++) if(cand.indexOf(want[j])>=0) return String(it.cover);
+    }
+  }catch(e){}
+  return '';
+}
+/* AniList 只收动画，真人剧查不到（Media:null）——那部分自然落到后面的豆瓣中转。
+   消歧比 anilistSearch 的默认行为更严：AniList 会为模糊词返回「最像的一条」，
+   直接拿来当封面正是误配的入口，所以命中后还要拿它的全部归一化键跟本条目对一次。 */
+async function coverFromAniList(s){
+  try{
+    if(typeof navigator!=='undefined'&&navigator.onLine===false) return '';
+    var mine=[];
+    [s.title,s.nameJp].concat(s.aliases||[]).forEach(function(x){
+      var k=normTxt(x); if(k&&mine.indexOf(k)<0) mine.push(k);
+    });
+    if(!mine.length) return '';
+    var tries=[];
+    [s.title,s.nameJp].concat(s.aliases||[]).forEach(function(k){
+      k=String(k||'').trim(); if(k&&tries.indexOf(k)<0) tries.push(k);
+    });
+    for(var i=0;i<tries.length&&i<2;i++){
+      var r=await anilistSearch(tries[i]);
+      var m=(r&&r.list&&r.list[0])||null;
+      if(!m||!m.cover) continue;
+      var ks=alKeys(m), ok=false;
+      for(var j=0;j<mine.length;j++){ if(ks[mine[j]]){ ok=true; break; } }
+      if(ok) return String(m.cover);
+    }
+  }catch(e){}
+  return '';
+}
 async function healCoverFor(s,opts){
   opts=opts||{};
   if(!s) return false;
   try{
     var url='';
     if(s.tvId){ try{ url=webCoverOf(await _wget(WAPI+'/shows/'+s.tvId))||''; }catch(e){} }
+    /* v2.41.0：内置库（离线、人工校对）→ AniList（动画最全）→ 再回到原来的严格同名 TVMaze */
+    if(!url){ url=coverFromLib(s); }
+    if(!url){ url=await coverFromAniList(s); }
     if(!url){ var sh=await webMatchShow(s); if(sh) url=webCoverOf(sh); }
     /* v2.25.0：TVMaze 没有（中文剧/国产剧常这样）就走 TMDB 按中文名补海报 */
     if(!url){ url=await tmdbCoverFor(s); }
@@ -3847,7 +4078,7 @@ async function healCoverFor(s,opts){
        开机自动小批量补封面仍不主动打豆瓣（见 coverHealAll），避免触发豆瓣风控。 */
     if(!url && opts.relay){
       var dr=await doubanRelayCover(s.title||s.name||'');
-      if(dr){ s.cover=dr; try{ delete s._cvOld; delete s.coverBy; }catch(e){} s.updAt=Date.now(); if(opts.save!==false) save(); return true; }
+      if(dr){ s.cover=dr; try{ delete s._cvOld; delete s.coverBy; }catch(e){} clearCoverDead(s); s.updAt=Date.now(); if(opts.save!==false) save(); return true; }
     }
     /* v2.24.0：拉不到不许留白——把手写在 _cvOld 里的旧封面还回去（见 ANITRACKER_LIB_PROMISE 那条注释） */
     if(!url){ _cvRestore(s); return false; }
@@ -3855,10 +4086,13 @@ async function healCoverFor(s,opts){
     try{ du=await cacheCover(url); }catch(e){ du=null; }
     if(du&&String(du).indexOf('data:image')===0){
       s.cover=du; try{ delete s._cvOld; delete s.coverBy; }catch(e){}
+      clearCoverDead(s);
     } else {
       /* 远程海报：CORS 不允许转 dataURL（image.tmdb.org 通常如此），保留远程地址，离线会裂但能自动命中国产剧；
          打 coverBy='net' 让 coverNeedsHeal 跳过，避免反复自愈；能转就转成本机 dataURL（与旧版 TVMaze 同待遇） */
       s.cover=url; try{ delete s._cvOld; }catch(e){} s.coverBy='net';
+      /* 拉到新图就撤销「裂过」的账：下次列表渲染时这张要是又裂，会重新记上 */
+      clearCoverDead(s);
     }
     s.updAt=Date.now();
     if(opts.save!==false) save();
@@ -3951,6 +4185,15 @@ async function refreshNamesFor(s,opts){
   opts=opts||{};
   var out={renamed:0,named:0,added:0,from:'',coverOk:false,cnMiss:false};
   if(!s||s.pv) return out;
+  /* v2.41.0：批量补封面只想要封面。原来每一部都要顺带拉一次 TVMaze 集表
+     （/shows/{id}/episodes，长篇几百集、最坏几秒），20 部就是 20 次大请求——
+     「一键拉取」慢得像卡死，其实绝大部分时间花在根本用不上的集表上。
+     封面模式直接跳过片名与集表，只跑 healCoverFor。 */
+  if(opts.coverOnly){
+    if(coverNeedsHeal(s)||opts.relay){ try{ out.coverOk=await healCoverFor(s,{save:false,relay:opts.relay}); }catch(e){ out.coverOk=false; } }
+    if(opts.save!==false) save();
+    return out;
+  }
   var tv=tvIdOf(s);
 
   /* ---- 片名：TVMaze 官方名（按号）+ 剧名铁律（v2.33.0 用户令，v2.36.0 补进刷名）----
@@ -4108,30 +4351,92 @@ function _cvRestore(s){
    教训：本段曾被上面那次「按 bgm* 边界删除」连带切掉——删除区间的结束标记
    （healThisCover）恰好位于 coverHealAll 之后，所以它被划进了删除范围。
    这类「区间删除」必须同时检查被删区间内是否有非目标函数。 */
+/* ===== v2.41.0（用户令「封面全都要」）：一键拉取前的死图体检 =====
+   远程封面（image.tmdb.org / s4.anilist.co / static.tvmaze.com / lain.bgm.tv…）会因为
+   防盗链、改版、被墙随时变裂，而条目自己不知道——界面上就是一片灰占位，肉眼根本报不出
+   「这张其实挂了」。所以一键拉取前先把已有封面探一遍：挂掉的直接打 coverDead 进池重拉。
+   并发 6、单张 5s 上限、最多 150 张：正常的图一秒内就 onload，真正慢的才是要抓的死图。 */
+function coverProbeOne(s,tmo){
+  return new Promise(function(res){
+    var im=new Image(), done=false;
+    var t=setTimeout(function(){ if(done) return; done=true; try{ im.src=''; }catch(e){} res(s); },tmo||5000);
+    im.onload=function(){ if(done) return; done=true; clearTimeout(t); res(null); };
+    im.onerror=function(){ if(done) return; done=true; clearTimeout(t); res(s); };
+    try{ im.referrerPolicy='no-referrer'; }catch(e){}
+    im.src=String(s.cover||'');
+  });
+}
+async function coverScanDead(list,limit,onTick){
+  var q=(list||[]).filter(function(s){
+    if(!s||s.pv) return false;
+    var c=String(s.cover||'');
+    return !!c && c.indexOf('data:image')!==0 && String(s.coverBy)!=='user';
+  });
+  if(limit&&q.length>limit) q=q.slice(0,limit);
+  var dead=[], i=0, N=6, run=0, doneN=0;
+  return new Promise(function(resolve){
+    function kick(){
+      while(run<N&&i<q.length){
+        var s=q[i++]; run++;
+        coverProbeOne(s).then(function(bad){
+          run--; doneN++; if(bad) dead.push(bad);
+          if(onTick&&(doneN%10===0||doneN===q.length)) onTick(doneN,q.length,dead.length);
+          if(i>=q.length&&run===0) resolve(dead); else kick();
+        });
+      }
+      if(i>=q.length&&run===0) resolve(dead);
+    }
+    kick();
+  });
+}
 var _coverHealRunning=false;
 async function coverHealAll(manual,limit){
   if(_coverHealRunning){ if(manual) toast('封面补齐正在进行…'); return; }
+  var deadN=0;
+  if(manual){
+    try{
+      toast('正在体检已有封面…');
+      var dead=await coverScanDead(shows,150,function(dn,tot,dn2){
+        if(dn<tot) toast('体检封面 '+dn+'/'+tot+'（已发现 '+dn2+' 张失效）…');
+      });
+      deadN=dead.length;
+      dead.forEach(function(s){
+        s.coverDead=Date.now();
+        /* 同时清掉退避表，让它当场就能重拉，不必等 24 小时 */
+        try{ var m=_cTry(); if(m[String(s.sid)]){ delete m[String(s.sid)]; _cTrySet(m); } }catch(e){}
+      });
+      if(deadN) try{ save(); }catch(e){}
+    }catch(e){}
+  }
   var pool=shows.filter(function(s){ return coverNeedsHeal(s)&&(manual||coverCanAuto(s)); });
   if(limit&&pool.length>limit) pool=pool.slice(0,limit);
-  if(!pool.length){ if(manual) toast('没有需要补封面的条目'); return; }
+  if(!pool.length){
+    if(manual) toast(deadN?('体检了 '+deadN+' 张失效封面，但都已补齐'):'每部都有封面了，没有需要补的');
+    return;
+  }
   _coverHealRunning=true;
-  var okN=0,failN=0,skipN=0,dbFail=0;
-  if(manual) toast('开始补封面：共 '+pool.length+' 部…');
+  var okN=0,failN=0,skipN=0,dbFail=0,miss=[];
+  if(manual) toast('开始补封面：共 '+pool.length+' 部'+(deadN?('（含 '+deadN+' 张已失效）'):'')+'…');
   try{
     for(var i=0;i<pool.length;i++){
       if(!navigator.onLine){ skipN=pool.length-i; break; }
       var ok=false;
       /* v2.27.0：豆瓣中转已上云，手动批量补封面时任何模式都能打豆瓣（不再只看 isLocalServer）
-         v2.28.0：熔断——连着 3 部全源失败就停用豆瓣（大概率撞上限流），本轮剩余只走其余源，
-         免得把豆瓣本来就紧的额度烧光；批量时每部间隔放宽到 1.2s，降低风控触发。 */
-      var relay=!!manual&&dbFail<3;
-      /* v2.35.0：批量补封面顺带按号校准片名与集名（refreshNamesFor 一并做这些），
-         但判据仍只看封面 —— 名字刷新不该让还缺封面的条目逃掉退避重试。 */
-      try{ var _r=await refreshNamesFor(pool[i],{save:false, relay:relay}); ok=_r.coverOk; }catch(e){ ok=false; }
+         v2.28.0：熔断——连着多部全源失败就停用豆瓣（大概率撞上限流），本轮剩余只走其余源，
+         免得把豆瓣本来就紧的额度烧光；批量时每部间隔放宽到 1.1s，降低风控触发。
+         v2.41.0：阈值 3→6。原来连着 3 部没中就整轮停用豆瓣，而豆瓣恰恰是国剧覆盖最全的一条，
+         前几部恰好是冷门番（最容易不中）时，剩下的全都白跑——这正是「补了还是一片灰」的原因之一。 */
+      var relay=!!manual&&dbFail<6;
+      /* v2.41.0：coverOnly——批量补封面只要封面，不再顺带拉集表（每部一次大请求）。 */
+      try{ var _r=await refreshNamesFor(pool[i],{save:false, relay:relay, coverOnly:true}); ok=_r.coverOk; }catch(e){ ok=false; }
       if(manual&&!ok&&relay) dbFail++;
       coverMark(pool[i].sid,ok);
-      if(ok) okN++; else failN++;
-      if(manual) toast('补封面 '+(i+1)+'/'+pool.length+'（成功 '+okN+'）…'+(dbFail>=3?'（豆瓣已熔断，剩余走其他源）':''));
+      if(ok) okN++; else { failN++; miss.push(pool[i]); }
+      if(manual) toast('补封面 '+(i+1)+'/'+pool.length+'（成功 '+okN+'）…'+(dbFail>=6?'（豆瓣已熔断，剩余走其他源）':''));
+      /* 间隔不要往下调：run-regression 的 T15 靠「500ms 内没有新请求」判后台是否已安静，
+         间隔一旦压到 500ms 以下，两部之间的缝会小过那个判定窗，量具就把「还在跑」误读成
+         「已安静」，随后窗口里冒出的下一部请求被算到「标记已看」头上（实测 2/2 红）。
+         v2.41.0 曾压到 320ms，已改回。提速靠 coverOnly 省下的集表请求，不靠压缩间隔。 */
       await new Promise(function(r){ setTimeout(r, relay?1200:420); });
     }
   }finally{
@@ -4142,9 +4447,19 @@ async function coverHealAll(manual,limit){
     if(okN){
       save(); renderList();
       var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none') renderDetail();
-      try{ logAdd('补封面 '+okN+' 部','批量封面补齐'+(failN?('（失败 '+failN+'）'):''),true); }catch(e){}
+      try{ logAdd('补封面 '+okN+' 部','批量封面补齐'+(failN?('（仍缺 '+failN+'）'):''),true); }catch(e){}
     }
-    if(manual) toast('封面补齐完成：成功 '+okN+' 部'+(failN?('，失败 '+failN+' 部（可稍后重试）'):'')+(skipN?('，离线跳过 '+skipN+' 部'):''));
+    if(manual){
+      var tail='封面补齐完成：成功 '+okN+' 部'+(failN?('，仍缺 '+failN+' 部'):'')+(skipN?('，离线跳过 '+skipN+' 部'):'');
+      toast(tail);
+      /* 报账把「还缺哪几部」摊开说：以前只报一个数字，用户看着一片灰却不知道剩的是谁 */
+      if(failN){
+        var names=miss.slice(0,14).map(function(s){ return '《'+((s&&s.title)||'')+'》'; }).join('\n');
+        uiConfirm(tail+'\n\n还缺封面的这几部：\n'+names+(miss.length>14?('\n…以及另外 '+(miss.length-14)+' 部'):'')+
+          '\n\n可以打开详情点「⟳ 重拉封面」单独再试，或用「⇪ 本地封面」从本机选一张（一定能成）。',
+          function(){}, {title:'仍缺封面 '+failN+' 部', okText:'知道了', cancelText:'关闭'});
+      }
+    }
     else if(okN) toast('已自动补齐 '+okN+' 部封面','bg');
   }
 }
@@ -4539,14 +4854,40 @@ function dbSnapGet(){
 }
 /* 快照是「别处拉来的外部数据」，只读展示用；任何一条都不许混进 shows（那是用户自己的账本）。 */
 function dbSnapItems(){ var o=dbSnapGet(); return o?o.items:[]; }
+/* v2.43.0（用户令「豆瓣和追迹都有的要合并」）：豆瓣一行的全部叫法。
+   老逻辑只拿「豆瓣中文段」比「片单正名」，于是这几种最常见的组合全都判不出「已经在片单」：
+     · 片单存的是英文原名（Cowboy Bebop），豆瓣行给的是中文名（星际牛仔）
+     · 片单存的是中文名，豆瓣行给的是双语（星际牛仔 Cowboy Bebop）
+     · 片单条目的名字挂在别名里（al1 添加的条目）
+   结果就是导入后多出一条同作品的重复——两条同名、各记一半进度，正是用户抱怨的那种。
+   这里把两边所有叫法都摊开比：豆瓣侧出「整名/中文段/原名段」，片单侧出「正名/原名/别名」，
+   仍是**归一化全等才算**，不放宽成模糊匹配（《欢乐颂》配到交响曲那类误伤绝不重演）。 */
+function dbKeysOf(d){
+  var out={};
+  var put=function(x){ var k=dbNormTitle(x); if(k) out[k]=1; };
+  put(d.title); put(d.cnTitle); put(d.origTitle);
+  /* 双语名「海贼王 One Piece」里把中文段单独切出来：网关有时不给 cnTitle，
+     而片单里的旧条目恰恰多是纯中文名，没有这一刀就永远对不上。 */
+  var t=String(d.title||'');
+  var cjk=(t.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+/g)||[]).join('');
+  if(cjk) put(cjk);
+  var lat=(t.match(/[A-Za-z0-9][A-Za-z0-9'!?.\-]*(?:\s+[A-Za-z0-9'!?.\-]+)*/g)||[]).join(' ').trim();
+  if(lat) put(lat);
+  return out;
+}
+function showHasKey(s,keys){
+  if(!s||!keys) return false;
+  var cands=[s.title,s.nameJp].concat(s.aliases||[]);
+  for(var i=0;i<cands.length;i++){ var k=dbNormTitle(cands[i]); if(k&&keys[k]) return true; }
+  return false;
+}
 function dbTargetOf(d){
   var i,t=null,real=/^\d+$/.test(String(d.subjectId||''));
   if(real){ for(i=0;i<shows.length;i++){ if(String(shows[i].dbId||'')!==''&&String(shows[i].dbId)===String(d.subjectId)){ t=shows[i]; break; } } }
-  /* 片名匹配认两个名：双语名(d.title)和中文段(cnTitle)。豆瓣行按剧名铁律拼成双语后，
-     和片单里纯中文的旧条目对不上字面，靠中文段才判得出「已在片单」（v2.33.0）。 */
-  if(!t){ var n1=dbNormTitle(d.title||''), n2=dbNormTitle(d.cnTitle||'');
-    for(i=0;i<shows.length;i++){ var ns=dbNormTitle(shows[i].title||'');
-      if((n1&&ns===n1)||(n2&&ns===n2)){ t=shows[i]; break; } } }
+  if(!t){
+    var keys=dbKeysOf(d);
+    for(i=0;i<shows.length;i++){ if(showHasKey(shows[i],keys)){ t=shows[i]; break; } }
+  }
   return t;
 }
 /* 豆瓣给的时间只填空缺：手改过的（From=me）永不覆盖，豆瓣给的可以被下一次豆瓣更新。 */
@@ -4718,8 +5059,15 @@ function dbnImport(){
   if(!sel.length){ dbnNote('一条都没勾 —— 先勾左边的框，再点导入','bad'); return; }
   var a=0,u=0,same=0;
   sel.forEach(function(d){ var r=dbApplyOne(d); if(r==='added')a++; else if(r==='upd')u++; else same++; });
-  save(); renderList();
-  dbnNote('豆瓣导入完成：新增 '+a+' · 更新 '+u+' · 无变化 '+same+'（没勾的一条都没动）','ok');
+  save();
+  /* v2.43.0（用户令「豆瓣和追迹都有的要合并」）：导入完顺手把重复并掉。
+     就算上面匹配全中，片单里**早先**就存在的同名条目（另一台设备加的、搜索时按另一个
+     叫法加的）仍会跟新导入的这条撞车。导一次涨一批重复，用户根本不会察觉。
+     静默合并：并掉了才在回执里带一句，没并掉就当没发生。 */
+  var merged=0;
+  try{ merged=doMergeDups(true)||0; }catch(e){ merged=0; }
+  renderList();
+  dbnNote('豆瓣导入完成：新增 '+a+' · 更新 '+u+' · 无变化 '+same+'（没勾的一条都没动）'+(merged?(' · 顺带合并了 '+merged+' 条重复'):''),'ok');
   dbnItems=[]; dbnFrom=''; dbnRender();
 }
 /* 面板一开就自动拉：自动的是「拉」，自选的是「入库」 */
@@ -5217,7 +5565,11 @@ applyTheme((function(){ try{ return localStorage.getItem('at_theme')==='dark'?'d
   }catch(e){}
 })();
 renderList();
-/* v2.6.0：启动后小批量静默补封面（每会话最多 6 部；离线自动跳过；失败 24h 退避） */
+/* v2.6.0：启动后小批量静默补封面（离线自动跳过；失败 24h 退避）
+   v2.41.0 试过加到 10 部：立刻把 run-regression 的 T13（切季零网络）与 T15（标记已看零请求）
+   一起撞红——那两条靠「测量窗口内无请求」判功能，开机后台这条尾巴一长就伸进窗口里，
+   量具读到的就成了「切季/标记在发请求」。部数维持 6：静默补齐只做润色，
+   「封面全都要」交给用户点的那枚「⟳ 一键拉封面」（全量、带进度、有体检）。 */
 setTimeout(function(){
   try{ if(!navigator.onLine) return; coverHealAll(false,6); }catch(e){}
 },4000);
@@ -6160,8 +6512,26 @@ setTimeout(function(){
       return '<button class="ty' + (dType === t ? ' on' : '') + '" onclick="setType(\'' + t + '\')">' + (t === 'all' ? '全部类型' : TYPE_NAME[t]) + '</button>';
     }).join('');
   };
+  /* v2.41.0：这一行在上一轮的界面简化里被整个清空并隐藏，连带把「补封面」入口也带走了
+     ——底层 coverHealAll 一直都在，界面上却没有任何地方能点它，用户只能等开机那 10 部的
+     自动补齐，于是「在看」里缺封面的永远缺着。
+     现在这一行只留一枚（被退役的筛选 chips 不回来）：先体检所有已有封面，再补齐缺的。 */
   window.renderSrcBar = function () {
-    try { var b0 = document.getElementById('srcBar'); if (b0) { b0.innerHTML = ''; b0.style.display = 'none'; } } catch (e) {}
+    try {
+      var b0 = document.getElementById('srcBar'); if (!b0) return;
+      /* 按钮上直接写「还差几部」：缺封面这件事以前只能靠肉眼在一片灰里数，
+         现在数给它看，顺带把入口本身的存在感提上来。 */
+      var n = 0;
+      try { n = (window.shows || []).filter(function (x) { return window.coverNeedsHeal(x); }).length; } catch (e) { n = 0; }
+      /* v2.43.0：「合并重复」只在真检出重复时才冒出来——
+         它几个月也用不上一次，常驻就是一枚永远灰着的按钮，白占一行。 */
+      var nd = 0;
+      try { nd = window.dupExtraCount ? window.dupExtraCount() : 0; } catch (e) { nd = 0; }
+      b0.innerHTML = '<button class="srcchip tool" onclick="coverHealAll(true)" title="一键：先体检所有已有封面（失效的重新拉），再为缺封面的条目依次问 内置库 / AniList / 全网库 / TMDB / Wikidata / 豆瓣，拉到就转存本机">⟳ 一键拉封面' +
+        (n ? '<span class="srn">' + n + '</span>' : '') + '</button>' +
+        (nd ? '<button class="srcchip tool" onclick="mergeDupsNow()" title="片单里有同一部剧的两条（豆瓣导入 / 双设备 / 不同叫法各加一次都会长出来）。合并：进度取并集，信息取更全的那条">⇄ 合并重复<span class="srn">' + nd + '</span></button>' : '');
+      b0.style.display = '';
+    } catch (e) {}
   };
 
   /* =====================================================================

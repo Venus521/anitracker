@@ -1048,6 +1048,60 @@ function dedupeByTitle(list,tomb,stats){
   });
   return out;
 }
+/* ===== v2.43.0 合并重复（用户令「豆瓣和追迹都有的要合并」）=====
+   v2.19.1 那次同名去重是**只跑一次**的存量清理（at_dedup_v2191 标志位守门）。
+   之后长出来的重复它一条都收不掉：豆瓣导入一次涨一批、双设备各加各的再涨一批、
+   搜索结果里同一个作品不同叫法各加一次又涨一批。于是片单越用越重，
+   同一部剧横着两条，进度还各记一半——「已看 26 集」和「已看 25 集」并排躺着。
+   这里补一个能随时点的入口；按钮只在**真的检出重复**时才出现，平时不占位。 */
+var _dupCache={ at:0, groups:null };
+function findDupGroups(){
+  try{
+    var now=Date.now();
+    /* 4 秒缓存：renderList 每次都会问一次「有没有重复」，几百部两两比是几万次，
+       虽然只要几毫秒，但渲染是高频路径，没必要每次真算。 */
+    if(_dupCache.groups&&(now-_dupCache.at)<4000) return _dupCache.groups;
+    var arr=(window.shows||[]).filter(function(s){ return s&&s.sid!=null&&!s.pv; });
+    var groups=[], used={};
+    for(var i=0;i<arr.length;i++){
+      if(used[i]) continue;
+      var g=[arr[i]];
+      for(var j=i+1;j<arr.length;j++){
+        if(used[j]) continue;
+        if(sameShowPair(arr[i],arr[j])){ g.push(arr[j]); used[j]=1; }
+      }
+      if(g.length>1) groups.push(g);
+    }
+    _dupCache={ at:now, groups:groups };
+    return groups;
+  }catch(e){ return []; }
+}
+function dupExtraCount(){ var n=0; findDupGroups().forEach(function(g){ n+=g.length-1; }); return n; }
+function doMergeDups(silent){
+  var n0=(shows||[]).length;
+  var tomb={}; try{ tomb=JSON.parse(localStorage.getItem('at_tomb')||'{}'); }catch(e){ tomb={}; }
+  var st={deduped:0};
+  shows=dedupeByTitle(shows||[],tomb,st);
+  _dupCache={ at:0, groups:null };
+  if(!st.deduped) return 0;
+  try{ localStorage.setItem('at_tomb',JSON.stringify(tomb)); }catch(e){}
+  save(); renderList();
+  try{ logAdd('合并重复 '+st.deduped+' 条','片单整理：'+n0+' → '+shows.length+' 条，进度取并集', true); }catch(e){}
+  if(!silent) toast('已合并：'+n0+' 条 → '+shows.length+' 条（并掉 '+st.deduped+' 条，两边已看的集都留着）');
+  return st.deduped;
+}
+function mergeDupsNow(){
+  var groups=findDupGroups();
+  if(!groups.length){ toast('片单里没有重复的条目（同名、且集数对得上才算重复）'); return; }
+  var extra=dupExtraCount();
+  var names=groups.slice(0,10).map(function(g){ return '《'+((g[0]&&g[0].title)||'')+'》×'+g.length; }).join('\n');
+  uiConfirm('片单里有 '+groups.length+' 组重复，合并后少 '+extra+' 条：\n'+names+
+    (groups.length>10?('\n…以及另外 '+(groups.length-10)+' 组'):'')+
+    '\n\n怎么合：两边已看的集做并集，一条都不丢；信息取更全的那条（集表多的、有封面的、有评分的）；'+
+    '被合掉那条立墓碑，免得下次云合并又从云端爬回来。',
+    function(){ doMergeDups(false); },
+    { title:'合并重复条目', okText:'合并这 '+extra+' 条', cancelText:'先不' });
+}
 function mergeShowArrays(loc,cld,tL,tC){
   loc=Array.isArray(loc)?loc:[]; cld=Array.isArray(cld)?cld:[];
   var idx=function(a){ var m={}; a.forEach(function(s){ if(s&&s.sid!=null) m[String(s.sid)]=s; }); return m; };
@@ -1249,7 +1303,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.42.0', AT_BUILD='20261007c';
+var AT_VERSION='2.43.0', AT_BUILD='20261007d';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4800,14 +4854,40 @@ function dbSnapGet(){
 }
 /* 快照是「别处拉来的外部数据」，只读展示用；任何一条都不许混进 shows（那是用户自己的账本）。 */
 function dbSnapItems(){ var o=dbSnapGet(); return o?o.items:[]; }
+/* v2.43.0（用户令「豆瓣和追迹都有的要合并」）：豆瓣一行的全部叫法。
+   老逻辑只拿「豆瓣中文段」比「片单正名」，于是这几种最常见的组合全都判不出「已经在片单」：
+     · 片单存的是英文原名（Cowboy Bebop），豆瓣行给的是中文名（星际牛仔）
+     · 片单存的是中文名，豆瓣行给的是双语（星际牛仔 Cowboy Bebop）
+     · 片单条目的名字挂在别名里（al1 添加的条目）
+   结果就是导入后多出一条同作品的重复——两条同名、各记一半进度，正是用户抱怨的那种。
+   这里把两边所有叫法都摊开比：豆瓣侧出「整名/中文段/原名段」，片单侧出「正名/原名/别名」，
+   仍是**归一化全等才算**，不放宽成模糊匹配（《欢乐颂》配到交响曲那类误伤绝不重演）。 */
+function dbKeysOf(d){
+  var out={};
+  var put=function(x){ var k=dbNormTitle(x); if(k) out[k]=1; };
+  put(d.title); put(d.cnTitle); put(d.origTitle);
+  /* 双语名「海贼王 One Piece」里把中文段单独切出来：网关有时不给 cnTitle，
+     而片单里的旧条目恰恰多是纯中文名，没有这一刀就永远对不上。 */
+  var t=String(d.title||'');
+  var cjk=(t.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+/g)||[]).join('');
+  if(cjk) put(cjk);
+  var lat=(t.match(/[A-Za-z0-9][A-Za-z0-9'!?.\-]*(?:\s+[A-Za-z0-9'!?.\-]+)*/g)||[]).join(' ').trim();
+  if(lat) put(lat);
+  return out;
+}
+function showHasKey(s,keys){
+  if(!s||!keys) return false;
+  var cands=[s.title,s.nameJp].concat(s.aliases||[]);
+  for(var i=0;i<cands.length;i++){ var k=dbNormTitle(cands[i]); if(k&&keys[k]) return true; }
+  return false;
+}
 function dbTargetOf(d){
   var i,t=null,real=/^\d+$/.test(String(d.subjectId||''));
   if(real){ for(i=0;i<shows.length;i++){ if(String(shows[i].dbId||'')!==''&&String(shows[i].dbId)===String(d.subjectId)){ t=shows[i]; break; } } }
-  /* 片名匹配认两个名：双语名(d.title)和中文段(cnTitle)。豆瓣行按剧名铁律拼成双语后，
-     和片单里纯中文的旧条目对不上字面，靠中文段才判得出「已在片单」（v2.33.0）。 */
-  if(!t){ var n1=dbNormTitle(d.title||''), n2=dbNormTitle(d.cnTitle||'');
-    for(i=0;i<shows.length;i++){ var ns=dbNormTitle(shows[i].title||'');
-      if((n1&&ns===n1)||(n2&&ns===n2)){ t=shows[i]; break; } } }
+  if(!t){
+    var keys=dbKeysOf(d);
+    for(i=0;i<shows.length;i++){ if(showHasKey(shows[i],keys)){ t=shows[i]; break; } }
+  }
   return t;
 }
 /* 豆瓣给的时间只填空缺：手改过的（From=me）永不覆盖，豆瓣给的可以被下一次豆瓣更新。 */
@@ -4979,8 +5059,15 @@ function dbnImport(){
   if(!sel.length){ dbnNote('一条都没勾 —— 先勾左边的框，再点导入','bad'); return; }
   var a=0,u=0,same=0;
   sel.forEach(function(d){ var r=dbApplyOne(d); if(r==='added')a++; else if(r==='upd')u++; else same++; });
-  save(); renderList();
-  dbnNote('豆瓣导入完成：新增 '+a+' · 更新 '+u+' · 无变化 '+same+'（没勾的一条都没动）','ok');
+  save();
+  /* v2.43.0（用户令「豆瓣和追迹都有的要合并」）：导入完顺手把重复并掉。
+     就算上面匹配全中，片单里**早先**就存在的同名条目（另一台设备加的、搜索时按另一个
+     叫法加的）仍会跟新导入的这条撞车。导一次涨一批重复，用户根本不会察觉。
+     静默合并：并掉了才在回执里带一句，没并掉就当没发生。 */
+  var merged=0;
+  try{ merged=doMergeDups(true)||0; }catch(e){ merged=0; }
+  renderList();
+  dbnNote('豆瓣导入完成：新增 '+a+' · 更新 '+u+' · 无变化 '+same+'（没勾的一条都没动）'+(merged?(' · 顺带合并了 '+merged+' 条重复'):''),'ok');
   dbnItems=[]; dbnFrom=''; dbnRender();
 }
 /* 面板一开就自动拉：自动的是「拉」，自选的是「入库」 */
@@ -6436,8 +6523,13 @@ setTimeout(function(){
          现在数给它看，顺带把入口本身的存在感提上来。 */
       var n = 0;
       try { n = (window.shows || []).filter(function (x) { return window.coverNeedsHeal(x); }).length; } catch (e) { n = 0; }
+      /* v2.43.0：「合并重复」只在真检出重复时才冒出来——
+         它几个月也用不上一次，常驻就是一枚永远灰着的按钮，白占一行。 */
+      var nd = 0;
+      try { nd = window.dupExtraCount ? window.dupExtraCount() : 0; } catch (e) { nd = 0; }
       b0.innerHTML = '<button class="srcchip tool" onclick="coverHealAll(true)" title="一键：先体检所有已有封面（失效的重新拉），再为缺封面的条目依次问 内置库 / AniList / 全网库 / TMDB / Wikidata / 豆瓣，拉到就转存本机">⟳ 一键拉封面' +
-        (n ? '<span class="srn">' + n + '</span>' : '') + '</button>';
+        (n ? '<span class="srn">' + n + '</span>' : '') + '</button>' +
+        (nd ? '<button class="srcchip tool" onclick="mergeDupsNow()" title="片单里有同一部剧的两条（豆瓣导入 / 双设备 / 不同叫法各加一次都会长出来）。合并：进度取并集，信息取更全的那条">⇄ 合并重复<span class="srn">' + nd + '</span></button>' : '');
       b0.style.display = '';
     } catch (e) {}
   };

@@ -31,10 +31,107 @@
     if (app) return true;
     if (!window.cloudbase) return false;
     try {
-      app = cloudbase.init({ env: ENV, region: REGION, accessKey: KEY, auth: { detectSessionInUrl: true } });
+      /* v2.42.0：persistence 显式写成 'local'。
+         它是 CloudBase 的默认值，但「默认」这件事不该由 SDK 决定——
+         一旦哪天默认改成 session，用户就会变成「关掉浏览器就要重登」，
+         而这个 bug 从代码上完全看不出来。写死它，等于把「记住登录态」钉住。 */
+      app = cloudbase.init({ env: ENV, region: REGION, accessKey: KEY, persistence: 'local', auth: { detectSessionInUrl: true } });
       auth = app.auth; db = app.database();
     } catch (e) { app = null; return false; }
     return true;
+  }
+
+  /* ===== v2.42.0 记住登录（用户令「登录之后记住登录状态和密码」）=====
+     两件事得分开看，混在一起就会做错：
+       ① **登录态**（token）：CloudBase 自己持久化（上面 persistence:'local'），
+          但 token 有有效期，过期后 sess() 照样返回 null——这才是「隔一阵打开又要登录」
+          的真正原因，跟有没有记住密码无关。
+       ② **账号与密码**：只有本机记着，才能在 token 过期时**静默重新登录**，用户不被拦。
+
+     密码怎么存：AES-GCM 加密，密钥是本机随机生成的 32 字节，跟密文一起放在
+     `credentials_` 前缀下。这个前缀在 index.html 的 SECRET_KEY_RE 里被**导出与云同步
+     双双剔除**——也就是说它不会进备份包、也不会被同步到云端，换设备拿不到。
+     剩下的风险只有本机：能翻这台电脑 localStorage 的人可以解出密码。
+     这与浏览器自带的「记住密码」防护级别相同，界面上如实写明，不夸大。
+
+     退出登录 = 清除记住的凭据。否则「退出」只是把界面换成登录框，一刷新又自己登回去，
+     那颗按钮就成了假的。 */
+  var LS_REM = 'credentials_at_login';       /* { v, id, box:{salt,iv,data}, at } */
+  var LS_REMK = 'credentials_at_login_key';  /* 本机设备密钥（同样被导出剔除） */
+
+  function _remKeyBytes(){
+    try {
+      var s = localStorage.getItem(LS_REMK);
+      if (s) { var a = unb64(s); if (a && a.length === 32) return a; }
+      var k = crypto.getRandomValues(new Uint8Array(32));
+      localStorage.setItem(LS_REMK, b64(k));
+      return k;
+    } catch (e) { return null; }
+  }
+  async function _remKey(){
+    var raw = _remKeyBytes(); if (!raw) throw new Error('本机不支持安全存储');
+    return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  }
+  async function rememberSave(id, pass){
+    try {
+      if (!id || !pass) return false;
+      var key = await _remKey();
+      var iv = crypto.getRandomValues(new Uint8Array(12));
+      /* 账号也一并加密，不在外层留明文。代价是 peek 只能回答「有没有」而答不出是哪个号
+         —— 这个信息量足够（面板要显示账号时走 rememberLoad），没必要为它留一个明文洞。 */
+      var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key,
+        new TextEncoder().encode(JSON.stringify({ id: String(id), pass: String(pass) })));
+      localStorage.setItem(LS_REM, JSON.stringify({ v: 1, iv: b64(iv), data: b64(ct), at: new Date().toISOString() }));
+      return true;
+    } catch (e) { return false; }
+  }
+  async function rememberLoad(){
+    try {
+      var raw = localStorage.getItem(LS_REM); if (!raw) return null;
+      var o = JSON.parse(raw); if (!o || !o.data || !o.iv) return null;
+      var key = await _remKey();
+      var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(o.iv) }, key, unb64(o.data));
+      var j = JSON.parse(new TextDecoder().decode(pt));
+      return (j && j.id && j.pass) ? { id: String(j.id), pass: String(j.pass) } : null;
+    } catch (e) { return null; }
+  }
+  function rememberClear(){
+    try { localStorage.removeItem(LS_REM); } catch (e) {}
+  }
+  /* 只回「有没有」和「什么时候记的」，不碰密码也不解账号（账号也在密文里）。
+     要显示/预填就走 rememberLoad。 */
+  function rememberPeek(){
+    try {
+      var raw = localStorage.getItem(LS_REM); if (!raw) return null;
+      var o = JSON.parse(raw); return (o && o.data) ? { has: true, at: o.at || '' } : null;
+    } catch (e) { return null; }
+  }
+  /* 自动登录：token 还在就直接返回；不在就用记住的凭据静默重登。
+     失败一律静默——它跑在开机那条路上，没网、没组件都不该弹东西打扰人。
+     但「密码不对」这类**永久**失败要清掉记住的凭据，否则每次开机都白试一遍。 */
+  async function autoSignIn(){
+    try {
+      if (!boot()) return null;
+      var u = await sess(); if (u) return u;
+      var c = await rememberLoad(); if (!c) return null;
+      var u2 = await signIn(c.id, c.pass);
+      lg('auth', '按记住的账号自动登录：' + userName(u2), 'ok');
+      return u2;
+    } catch (e) {
+      var t = ''; try { t = errText(e, 'login'); } catch (e2) { t = ''; }
+      /* 只有「凭据本身不对」才清。网络不通、组件没加载、超时这些**一律不清**——
+         断网时开一次 App 就把记住的密码抹掉，是最招人烦的那种自作聪明：
+         用户什么都没做错，回来却发现又要重新输一遍。
+         （这条是 e2e 逼出来的：测试里把网络掐掉，凭据当场被清，R06 直接红。） */
+      var offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+      var looksNet = offline || /网络|超时|未加载|连不上|断网|timeout|network|fetch|offline/i.test(t);
+      var badCred = /密码|不存在|未注册|不正确|错误|失效/i.test(t);
+      if (badCred && !looksNet) {
+        rememberClear();
+        lg('auth', '记住的登录已失效，已清除（' + t + '），下次手动登录可重新记住', 'warn');
+      }
+      return null;
+    }
   }
 
   /* 错误翻译：把 CloudBase/SDK 报错翻成用户能看懂的中文；ctx: signup|login|generic
@@ -546,7 +643,10 @@
     var area = box.querySelector('#cbArea');
     if (!area) return;
     if (!boot()) { area.innerHTML = '<div class="mini" style="color:var(--muted)">云同步组件未加载（本次需联网加载一次，刷新重试）。</div>'; return; }
-    sess().then(function(u){ draw(area, u); }).catch(function(){ area.innerHTML = '<div class="mini" style="color:var(--danger)">云同步初始化失败，请刷新重试。</div>'; });
+    /* v2.42.0：开面板时也走一遍自动登录——开机那次可能因为组件还没加载完而错过，
+       用户点开账号却看到登录框，会以为「记住」没生效。这里补一次，代价只是一次 sess()。 */
+    autoSignIn().then(function(u){ draw(area, u); })
+      .catch(function(){ area.innerHTML = '<div class="mini" style="color:var(--danger)">云同步初始化失败，请刷新重试。</div>'; });
   }
 
   function startCooldown(btn){
@@ -593,7 +693,10 @@
       area.querySelector('#cbOut').onclick = async function(){
         var cbu = await sess().catch(function(){ return null; });
         await signOut();
-        lg('auth', '退出登录' + (cbu ? '：' + userName(cbu) : ''), 'ok');
+        /* v2.42.0：退出登录一并清掉记住的凭据。不清的话「退出」只是把界面换成登录框，
+           刷新后自动登录又把他登回去 —— 那颗按钮就是假的。 */
+        rememberClear();
+        lg('auth', '退出登录' + (cbu ? '：' + userName(cbu) : '') + '（已清除本机的记住登录）', 'ok');
         draw(area, null);
       };
       return;
@@ -622,6 +725,10 @@
         '<input id="cbUser" autocomplete="username" placeholder="you@example.com"/>' +
         '<label>密码</label>' +
         pwdRow('cbPass', '请输入密码', 'current-password') +
+        /* v2.42.0「记住登录状态和密码」：默认勾上——用户要的就是「下次不用再敲」，
+           再让他去勾一次等于没做。风险写在下面那行小字里，不藏在帮助文档里。 */
+        '<label class="cbrem"><input type="checkbox" id="cbRemember" checked/> 记住登录状态和密码</label>' +
+        '<div class="tiny cbnote">只存在这台设备，不进备份包、不上传云端；点「退出登录」即清除。</div>' +
         '<div class="msg" id="cbMsg"></div>' +
         '<div class="row2"><button class="b1" id="cbLogin" style="width:100%">登录</button></div>' +
         '<div class="tiny cbfoot">还没有账号？<a href="javascript:;" id="cbToReg">注册</a>' +
@@ -666,6 +773,16 @@
 
     area.innerHTML = PANE_LOGIN + PANE_REG + PANE_RESET;
 
+    /* v2.42.0：记住过就把账号和密码填回去。密码框仍是 password 类型——
+       看不见但能直接点登录，这正是「记住密码」该有的样子（不是把明文打在屏幕上）。 */
+    rememberLoad().then(function (c) {
+      if (!c) return;
+      var iu = area.querySelector('#cbUser'), ip = area.querySelector('#cbPass'), rm = area.querySelector('#cbRemember');
+      if (iu && !iu.value) iu.value = c.id;
+      if (ip && !ip.value) ip.value = c.pass;
+      if (rm) rm.checked = true;
+    }).catch(function () {});
+
     /* 密码明暗切换：整块面板重画后统一挂一遍，不必逐个输入框点名 */
     Array.prototype.forEach.call(area.querySelectorAll('.cb-eye'), function(b){
       b.onclick = function(){
@@ -709,6 +826,10 @@
       try {
         var u2 = await signIn(idv, pass);
         lg('auth', '登录成功：' + userName(u2), 'ok');
+        /* v2.42.0：勾了就记住（重写一遍，改密码后存的也是新的）；没勾就清掉，
+           别让上一次的勾选在用户看不见的地方继续生效。 */
+        var rm = area.querySelector('#cbRemember');
+        if (rm && rm.checked) await rememberSave(idv, pass); else rememberClear();
         m.textContent = '';
         var doc = await peek().catch(function(){ return null; });
         draw(area, u2);
@@ -910,9 +1031,19 @@
     window.addEventListener('load', function(){
       if (sessionStorage.getItem('at_cb_boot_done')) return;
       sessionStorage.setItem('at_cb_boot_done', '1');
-      setTimeout(startupMerge, 1200);
+      /* v2.42.0：先自动登录，再跑开机云合并。
+         顺序不能反——startupMerge 开头就是 `if (!u) return null`，
+         没登录态它直接跳过，于是「记住登录」看着生效了，云端那份却永远合不进来。 */
+      setTimeout(async function(){
+        try { await autoSignIn(); } catch (e) {}
+        try { await startupMerge(); } catch (e) {}
+      }, 1200);
     });
   } catch (e) {}
 
-  window.CBSync = { mount: mount, autosync: autosync, get version(){ return window.AT_VERSION || VERSION; }, isOn: isOn, current: current, startupMerge: startupMerge, applyCloudMerge: applyCloudMerge };
+  /* v2.42.0：导出记住登录的读写口。给门禁用（要能在不开面板的情况下验「存了能取回、
+     退出会清掉」），也给将来可能的「换号」入口用。注意 peek 不碰密码，load 才解。 */
+  window.AT_REMEMBER = { save: rememberSave, load: rememberLoad, clear: rememberClear, peek: rememberPeek };
+
+  window.CBSync = { mount: mount, autosync: autosync, get version(){ return window.AT_VERSION || VERSION; }, isOn: isOn, current: current, startupMerge: startupMerge, applyCloudMerge: applyCloudMerge, autoSignIn: autoSignIn };
 })();
