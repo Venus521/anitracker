@@ -151,7 +151,7 @@ const get = (host, port, p, ms) => new Promise(res => {
     console.log('FATAL ' + (e && e.stack ? e.stack : e));
     code = 1;
   } finally {
-    try { if (browser) await browser.close(); } catch (e) {}
+    try { if (browser) await Promise.race([browser.close(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {}
     try { srv.kill(); } catch (e) {}
   }
   process.exit(code);

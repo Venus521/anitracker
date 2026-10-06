@@ -109,7 +109,9 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       'openDoubanSync', 'dbnPull', 'dbnImport', 'dbApplyOne', 'timeLineHtml', 'editWatchTime', 'fmtDay', 'parseDay',
       /* v2.31.0 推送（追迹 → 豆瓣）：写回走本机 :3000 网关的 /hub/api/db/mark，
          面板加方向切换后，拉方向的老用例一根都不能少。 */
-      'dbnPush', 'dbnPushable', 'dbnWantStatus', 'dbnPushDiff', 'dbnDirNote'];
+      'dbnPush', 'dbnPushable', 'dbnWantStatus', 'dbnPushDiff', 'dbnDirNote',
+      /* v2.32.0 凭据跨设备：Cookie 加密存自己的 CloudBase 账号，换设备取回。 */
+      'dbnPutCred', 'dbnTakeCred', 'dbnCredRow', 'dbnAskPassword'];
     const boot = await page.evaluate((names) => ({
       missing: names.filter(n => typeof window[n] !== 'function')
     }), BOOT_FN);
@@ -556,7 +558,11 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
   } catch (e) {
     check('99', '测试执行异常', false, String(e && e.stack || e).slice(0, 400));
   }
-  try { if (browser) await browser.close(); } catch (e) { }
+  /* 收尾必须有硬超时：browser.close() 一旦卡住（Chrome 残留、驱动无响应），
+     后面写结果文件和打 SUMMARY 都到不了 —— 症状是断言全 PASS、进程却一直不退出、
+     最后被外层超时 SIGTERM 砍掉，连「29/29」这行都看不到。判据一个字没松，
+     只是不让「关浏览器」这件事有资格否决全部结果。 */
+  if (browser) { try { await Promise.race([browser.close(), new Promise(r => setTimeout(r, 8000))]); } catch (e) { } }
   try { mock.kill(); } catch (e) { }
   try { pySrv.kill(); } catch (e) { }
   fs.writeFileSync(path.join(__dirname, 'last-regression.json'), JSON.stringify({ t: new Date().toISOString(), results }, null, 1));

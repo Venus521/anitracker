@@ -62,7 +62,7 @@
 })();
 </script>
 <script src="vendor/cloudbase.full.js" onerror="(function(){var s=document.createElement('script');s.src='https://static.cloudbase.net/cloudbase-js-sdk/3.7.0/cloudbase.full.js';document.head.appendChild(s);})()"></script>
-<script src="cloudbase-sync.js?v=20261002b"></script>
+<script src="cloudbase-sync.js?v=20261006a"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   window.addEventListener('load',function(){ navigator.serviceWorker.register('tracker-sw.js').catch(function(){}); try{ atVerCheck(); }catch(e){} });
@@ -4349,6 +4349,8 @@ async function dbnPull(scope, keepMsg){
   dbnRender();
   if(!keepMsg) dbnNote('拉到了 —— 勾选要入库的条目，不勾的一条都不动','ok');
 }
+/* 只活在内存，页面一关就没了 —— Cookie 不落localStorage、不进 packAll 的导出包 */
+var dbnLastCookie='', dbnLastUid='';
 async function dbnConnect(){
   var ck=document.getElementById('dbnCookie'), v=ck?String(ck.value||'').trim():'';
   if(!v){ dbnNote('还没粘贴 Cookie','bad'); if(ck) ck.focus(); return; }
@@ -4356,17 +4358,87 @@ async function dbnConnect(){
   var c;
   try{ c=await fetch(GW+'/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookie:v})}).then(function(r){ return r.json(); }); }
   catch(e){ dbnNote('连接异常：'+((e&&e.message)||e),'bad'); return; }
-  if(!c||!c.ok){ dbnNote('连接失败：'+((c&&c.msg)||'未知错误'),'bad'); return; }
-  if(ck) ck.value='';
-  /* uid 读不出来时说清下一步该做什么，别让「连接成功」和「拉不到东西」互相打架 */
-  if(c.uidUnknown||!c.uid){
-    var ui=document.getElementById('dbnUid'); if(ui) ui.style.display='';
-    dbnNote('Cookie 已存下，但豆瓣没让程序读出你的 uid —— 拉收藏页需要它。把个人页地址（形如 douban.com/people/xxxx）粘进第二个框点「填 uid」即可','bad');
+  if(!c||!c.ok){
+    dbnNote('连接失败：'+((c&&c.msg)||'未知错误'),'bad');
+    /* uid 认出来了但收藏页打不开 = Cookie 过期，这个组合值得单独说，否则用户不知道该重粘 */
+    if(c&&c.uidSaved) dbnNote('uid 认出来了（'+c.uid+'），但豆瓣打不开它的收藏页 —— Cookie 过期了，重粘一次','bad');
     return;
   }
-  dbnNote('豆瓣已连接（uid '+(c.uid||'')+'）','ok');
+  if(ck) dbnLastCookie=v; dbnLastUid=(c&&c.uid)||'';   /* 留一份在内存给「存到云端」用；页面一关即消失 */
+  if(ck) ck.value='';
+  /* 没认出 uid 才亮出兜底输入框；正常路径（Cookie 自带 dbcl2）一次就通，不该让用户看见多一步 */
+  if(c.uidUnknown||!c.uid){
+    var ui=document.getElementById('dbnUid'), ub=document.getElementById('dbnUidGo');
+    if(ui) ui.style.display=''; if(ub) ub.style.display='';
+    dbnNote('这份 Cookie 里没认出 uid —— 多半是少复制了 dbcl2 那段。可以重粘一次，或在下面手填','bad');
+    return;
+  }
+  /* 粘一次就够：Cookie 里的 dbcl2 自带 uid，网关直接认出来并顺手验了收藏页 */
+  dbnNote('豆瓣已连接（uid '+(c.uid||'')+'）'+(c.n?('，收藏页读到 '+c.n+' 条'):''),'ok');
+  /* 连上之后顺手问一句要不要存云端 —— 这样手机/平板换设备时不用再粘一遍 */
+  dbnOfferCred(c.uid);
   var sc=document.querySelector('#dbnScope .dbn-q.on');
   await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
+}
+/* ===== 豆瓣凭据跨设备（v2.32.0）=====
+   Cookie 存本机网关只够这一台设备用；手机上的 127.0.0.1 是手机自己，够不到 PC。
+   所以连上之后可以把 Cookie 加密存进你自己的 CloudBase 账号，换设备登录后自动取回。
+   加密密钥由账号密码派生（PBKDF2 → AES-GCM），所以只有本人能解。 */
+function dbnCredRow(){
+  var el=document.getElementById('dbnCredRow');
+  if(!el) return;
+  var C=window.AT_CRED;
+  if(!C){ el.innerHTML=''; return; }   /* 云同步脚本没就位（离线打开）→ 什么都不显示，不报错 */
+  C.exists().then(function(r){
+    if(!r) return;                                  /* 没登录追迹账号，不显示这一行 */
+    el.innerHTML = r.has
+      ? '<span class="dbn-note">云端已存一份凭据（'+String(r.at||'').slice(0,10)+'）</span>'+
+        '<button type="button" class="dbn-q" id="dbnTake">从云端取回</button>'+
+        '<button type="button" class="dbn-q" id="dbnForget">删掉云端那份</button>'
+      : '<span class="dbn-note">要在这台以外也能用豆瓣？把凭据加密存到你的追迹账号，换设备登录后自动取回</span>'+
+        '<button type="button" class="dbn-q" id="dbnPut">存到云端</button>';
+    var P=function(id,fn){ var b=document.getElementById(id); if(b) b.onclick=fn; };
+    P('dbnPut',function(){ dbnPutCred(); });
+    P('dbnTake',function(){ dbnTakeCred(); });
+    P('dbnForget',function(){
+      C.clear().then(function(){ dbnNote('云端那份已删','ok'); dbnCredRow(); });
+    });
+  });
+}
+function dbnAskPassword(why){
+  var v=prompt(why+'\n\n（密码只在这一刻用来派生加密密钥，不会被存下来）');
+  return v?String(v):'';
+}
+function dbnPutCred(){
+  var C=window.AT_CRED;
+  if(!C){ dbnNote('云同步模块没加载 —— 检查网络或换个入口打开','bad'); return; }
+  if(!dbnLastCookie){ dbnNote('这次没拿到 Cookie —— 先在上面粘一次','bad'); return; }
+  var pw=dbnAskPassword('存到云端需要你的追迹账号密码，用来加密 Cookie');
+  if(!pw) return;
+  C.stashDouban(dbnLastCookie, dbnLastUid, pw).then(function(){
+    dbnNote('已加密存到云端 —— 以后在这台以外登录同一账号，点「从云端取回」就行','ok');
+    dbnCredRow();
+  }).catch(function(e){ dbnNote('存云端失败：'+((e&&e.message)||e),'bad'); });
+}
+function dbnTakeCred(){
+  var C=window.AT_CRED;
+  if(!C){ dbnNote('云同步模块没加载 —— 检查网络或换个入口打开','bad'); return; }
+  var pw=dbnAskPassword('从云端取回需要同一密码来解密');
+  if(!pw) return;
+  dbnNote('正在解密…');
+  C.takeDouban(pw).then(async function(o){
+    if(!o||!o.cookie){ dbnNote('云端没有可用的凭据','bad'); return; }
+    var r=await fetch(GW+'/hub/api/db/cookie',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cookie:o.cookie,uid:o.uid||''})}).then(function(x){ return x.json(); });
+    if(!r||!r.ok){ dbnNote('取回了但连不上豆瓣：'+((r&&r.msg)||'未知错误'),'bad'); return; }
+    dbnNote('已从云端恢复（uid '+(r.uid||'')+'），正在拉取…','ok');
+    var sc=document.querySelector('#dbnScope .dbn-q.on');
+    await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
+  }).catch(function(e){ dbnNote('取回失败：'+((e&&e.message)||e),'bad'); });
+}
+/* 面板每次打开都探一次云端那份在不在 */
+function dbnOfferCred(){
+  dbnCredRow();
 }
 /* 手填 uid：填完当场验一次收藏页通不通，填错当场说 */
 async function dbnSaveUid(){
@@ -4378,6 +4450,8 @@ async function dbnSaveUid(){
   catch(e){ dbnNote('连接异常：'+((e&&e.message)||e),'bad'); return; }
   if(!r||!r.ok){ dbnNote('uid 填不了：'+((r&&r.msg)||'未知错误'),'bad'); return; }
   if(el) el.value='';
+  /* 兜底用完就收起来，别让它一直杵在面板上提醒你「还得填 uid」 */
+  var ub=document.getElementById('dbnUidGo'); if(ub) ub.style.display='none';
   dbnNote('uid 记下了（'+r.uid+'）'+(r.n?('，收藏页读到 '+r.n+' 条'):'')+' —— 开始拉取','ok');
   var sc=document.querySelector('#dbnScope .dbn-q.on');
   await dbnPull(sc?sc.getAttribute('data-sc'):'tv');
@@ -4391,11 +4465,11 @@ function openDoubanSync(){
     '<div class="msg" id="dbnMsg">正在确认豆瓣登录态…</div>'+
     '<div id="dbnAuth" style="display:none">'+
       '<div class="dbn-note">Cookie 只发给本机 :3000 网关、由它代为请求豆瓣；追迹不保存，拉取成功即清空输入框。</div>'+
-      '<input class="dbn-in" id="dbnCookie" type="text" placeholder="粘贴豆瓣 Cookie" aria-label="豆瓣 Cookie" />'+
-      /* Cookie 有效但程序认不出账号时的兜底：豆瓣 2026-10-06 起 /mine/ 对已登录 Cookie 也返回 403，
-         uid 常常读不出来，而收藏页必须靠 uid 才拉得到。让人手填一次最省事。 */
-      '<input class="dbn-in" id="dbnUid" type="text" placeholder="豆瓣个人页地址或 uid（认不出账号时才需填）" aria-label="豆瓣 uid" />'+
-      '<div class="dbn-foot"><button type="button" class="b2" id="dbnUidGo">填 uid</button><button type="button" class="b1" id="dbnConn">连接并拉取</button></div>'+
+      '<input class="dbn-in" id="dbnCookie" type="text" placeholder="粘贴豆瓣 Cookie（连登录后的整条 dbcl2）" aria-label="豆瓣 Cookie" />'+
+      /* uid 一般不用填：Cookie 里的 dbcl2 自带「uid:token」，网关直接认出来。
+         这个框只在「复制到的 Cookie 里没有 dbcl2」时才亮出来（uidUnknown 时自动显示）。 */
+      '<input class="dbn-in" id="dbnUid" type="text" style="display:none" placeholder="上一步没认出 uid 时才需填：个人页地址或纯 uid" aria-label="豆瓣 uid" />'+
+      '<div class="dbn-foot"><button type="button" class="b2" id="dbnUidGo" style="display:none">填 uid</button><button type="button" class="b1" id="dbnConn">连接并拉取</button></div>'+
     '</div>'+
     '<div class="dbn-quick" id="dbnScope">'+
       '<button type="button" class="dbn-q on" data-sc="tv">只看剧集</button>'+
@@ -4406,6 +4480,8 @@ function openDoubanSync(){
       '<button type="button" class="dbn-q" data-dir="push">推：追迹 → 豆瓣</button>'+
     '</div>'+
     '<div class="dbn-note" id="dbnDirNote"></div>'+
+    /* 凭据跨设备：存云端 / 从云端取回 / 删云端。没登录追迹账号时这一行自动为空 */
+    '<div id="dbnCredRow" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'+
     '<input class="dbn-in" id="dbnQ" type="text" inputmode="search" placeholder="按片名过滤（条目几百条时先筛再勾），空=看全部" aria-label="按片名过滤" />'+
     '<div id="dbnBody"></div>'+
     '<div class="dbn-foot">'+
@@ -4444,6 +4520,7 @@ function openDoubanSync(){
     };
   });
   dbnDirNote();
+  dbnOfferCred();   /* 探云端凭据在不在（未登录追迹账号则这一行留空） */
   box.querySelector('#dbnConn').onclick=dbnConnect;
   box.querySelector('#dbnUidGo').onclick=dbnSaveUid;
   box.querySelector('#dbnGo').onclick=function(){ if(dbnDir==='push') dbnPush(); else dbnImport(); };

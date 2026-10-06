@@ -300,7 +300,7 @@ const SEED = [
   } catch (e) {
     check('99', '测试执行异常', false, (e && e.stack ? e.stack : String(e)).slice(0, 600));
   } finally {
-    if (browser) { try { await browser.close(); } catch (e) {} }
+    if (browser) { try { await Promise.race([browser.close(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {} }
     try { process.kill(srv.pid); } catch (e) {}
   }
 

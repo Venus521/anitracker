@@ -384,7 +384,7 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
     console.log('FATAL: ' + (e && e.stack ? e.stack : e));
     process.exitCode = 1;
   } finally {
-    try { if (browser) await browser.close(); } catch (e) {}
+    try { if (browser) await Promise.race([browser.close(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {}
     try { srv.kill(); } catch (e) {}
   }
   const fails = results.filter(r => !r.ok);
