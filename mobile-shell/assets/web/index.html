@@ -447,6 +447,17 @@ body.panel-open #toast{bottom:96px}
 .acctbk{display:flex;align-items:center;gap:8px;margin:16px 0 2px;padding-top:12px;border-top:1px solid var(--line)}
 .acctbk .lnk{background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;padding:2px 0;cursor:pointer}
 .acctbk .sep{color:var(--muted);font-size:12px}
+/* v2.44.2：账号面板每一行统一成「标签 · 按钮 · 说明」三段。
+   改之前这四行是四种长相：豆瓣那行按钮后面拖着说明、「手机版App」那行后面也拖着说明、
+   封面来源那行后面是空的、本地备份是两个按钮加一个分隔点—— 摆在一起看，
+   后两行的说明文字长短不一，读起来不像一组（用户令：「账号哪个框的 UI 跟其他不统一」）。
+   规则只定结构、不定内容：
+     ① 标签（.mini）固定在最左；
+     ② 按钮（.lnk）紧随其后，个数随功能（本地备份本来就是两个，不强塞成一個）；
+     ③ 说明统一收进.acctbk .note，并且 `margin-left:auto` 把它推到行尾——
+        这样长短不一的说明一律右对齐，视觉重量落在同一条竖线上，就是一组了。
+   没有说明的行不必补空占位：右对齐在没有内容时天然成立。 */
+.acctbk .note{color:var(--muted);font-size:12px;margin-left:auto;line-height:1.5}
 .syrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .sybtn{border:1px solid var(--line);background:none;border-radius:var(--r-2);padding:12px 16px;font-size:12px;color:var(--muted);min-height:38px}
 .sybtn.pri{background:var(--ink);border-color:var(--ink);color:var(--bg);font-weight:500}
@@ -560,6 +571,10 @@ html[data-theme=dark] .ctxmenu .ctxi.dg:hover{background:rgba(208,112,74,.14)}
   .scrlbtn{width:38px;height:38px}
   .acctbk{gap:12px;flex-wrap:wrap}
   .acctbk .lnk{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px 16px;min-height:38px}
+  /* v2.44.2：按钮在手机档变方框并换行，说明文字这时候 `margin-left:auto` 会把它甩到行尾、
+     和按钮之间拉出一段空白，读着更散。小屏改成「占满整行、跟在按钮下面」：
+     `flex-basis:100%` 强制换行，宽度自撑满，缩进对齐到按钮左缘。 */
+  .acctbk .note{flex-basis:100%;margin-left:0}
   .dbn-row{min-height:60px}
   .dbn-q,.dbn-file{min-height:38px}
   /* v2.31.0：面板主按钮（导入/推送）原先漏在小屏触点规则外，实测 393 宽下只有 19px 高。
@@ -1313,7 +1328,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.1', AT_BUILD='20261007f';
+var AT_VERSION='2.44.2', AT_BUILD='20261007g';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -5474,6 +5489,9 @@ async function openAccount(focus){
   var box=document.createElement('div'); box.className='panel';
   box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">账号</h3><button onclick="window.__closeSync()" aria-label="关闭" style="background:none;border:none;font-size:20px;color:var(--muted)">×</button></div>'+
     '<div id="cbArea"><div class="mini" style="color:var(--muted)">…</div></div>'+
+    /* v2.44.2：四行统一成「标签 · 按钮 · 说明」。说明统一用 .note（见 .acctbk .note 注），
+       分隔点那个 .sep 一并去掉——它在「导出 · 导入」之间还有用（两个动作之间），
+       但混在标签行里只会让某一行看着比别人重。 */
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">本地备份</span>'+
       '<button type="button" class="lnk" id="syExport">导出</button><span class="sep">·</span>'+
       '<button type="button" class="lnk" id="syImport">导入</button></div>'+
@@ -5481,7 +5499,7 @@ async function openAccount(focus){
       '<button type="button" class="lnk" id="cvSrcOpen">TMDB 密钥（可选）…</button></div>'+
     '<div class="acctbk"><span class="mini" style="color:var(--muted)">豆瓣</span>'+
       '<button type="button" class="lnk" id="dbSyncOpen">同步标记…</button>'+
-      '<span class="sep">·</span><span class="mini" style="color:var(--muted)">拉回来先给清单，勾了才入库</span></div>'+
+      '<span class="note">拉回来先给清单，勾了才入库</span></div>'+
     '<input type="file" id="syFile" accept=".json" style="display:none" aria-label="选择要导入的备份文件"/>'+
     '<div class="verline" id="verLine">页面 v'+AT_VERSION+'</div>';
   /* 手机端整块不渲染这两行：封面来源（TMDB 密钥）与豆瓣同步。豆瓣要够到本机 :3000 网关，
@@ -5509,7 +5527,7 @@ async function openAccount(focus){
     var urow=document.createElement('div'); urow.className='acctbk';
     urow.innerHTML='<span class="mini" style="color:var(--muted)">安装包</span>'+
       '<button type="button" class="lnk" id="updBtn">检查更新</button>'+
-      '<span class="mini" id="updMsg" style="color:var(--muted)"></span>';
+      '<span class="note" id="updMsg"></span>';
     box.insertBefore(urow,box.querySelector('#verLine'));
     var ubtn=urow.querySelector('#updBtn'),umsg=urow.querySelector('#updMsg');
     try{ umsg.textContent='App v'+AndroidShell.appVersion(); }catch(e){}
@@ -5519,7 +5537,7 @@ async function openAccount(focus){
       var crow=document.createElement('div'); crow.className='acctbk';
       crow.innerHTML='<span class="mini" style="color:var(--muted)">网页内容</span>'+
         '<button type="button" class="lnk" id="webBtn">检查更新</button>'+
-        '<span class="mini" id="webMsg" style="color:var(--muted)"></span>';
+        '<span class="note" id="webMsg"></span>';
       box.insertBefore(crow,box.querySelector('#verLine'));
       var wbtn=crow.querySelector('#webBtn'),wmsg=crow.querySelector('#webMsg');
       try{ var wc=parseInt(AndroidShell.contentCode(),10)||0; wmsg.textContent=wc?('内置副本 + 热更 code '+wc):'内置副本'; }catch(e){}
@@ -5535,7 +5553,7 @@ async function openAccount(focus){
     var arow=document.createElement('div'); arow.className='acctbk';
     arow.innerHTML='<span class="mini" style="color:var(--muted)">手机版 App</span>'+
       '<button type="button" class="lnk" id="apkBtn">下载 APK</button>'+
-      '<span class="mini" id="apkMsg" style="color:var(--muted)">装到手机桌面，离线也能用</span>';
+      '<span class="note" id="apkMsg">装到手机桌面，离线也能用</span>';
     box.insertBefore(arow,box.querySelector('#verLine'));
     var abtn=arow.querySelector('#apkBtn'),amsg=arow.querySelector('#apkMsg');
     window.__atApk=function(t,ok){ abtn.textContent='下载 APK'; abtn.disabled=false;
@@ -5670,6 +5688,33 @@ function _atAutoHealRound(){
   }catch(e){}
 }
 setTimeout(_atAutoHealRound,4000);
+/* ===== v2.44.2：后台补封面（用户令「后台也可以补封面」）=====
+   开机那一轮只有三轮共 18 部的名额，且它跑在 4 秒后——这时候组件还在加载、
+   云合并更没落地（自动登录 + 合并要 1.2 秒之后才跑），所以开机那一轮看到的
+   常常是**登录前/合并前**的片单：换设备或重装后回来的那批一部封面都没有，
+   而它们恰恰是最需要补的（封面 dataURL 不进云同步，合并回来必然是空的）。
+   这里接住 cloudbase-sync.js 发来的 at_bgcover 事件，在这些时刻各补一轮：
+     · 自动登录/云合并刚完成 —— 拿到真正登录态、合并结果已刷新的那份片单；
+     · 用户点开账号面板 —— 界面开着，补完当场看得见。
+   三条护栏，少一条就白搭：
+     ① **必须有封面可补**（pool 为空直接结束，不做无谓请求）；
+     ② **冷却**：距上一轮超过 60 秒才跑 —— 用户可能反复点开面板，
+        也可能自动登录与mount 前后脚各发一次，不设冷却就是同一轮跑两遍；
+     ③ **只补一轮 6 部**，不跟开机那三轮叠成 18 部：账号面板开着的时候
+        还要渲染/查版本，长尾巴会让门禁 T15 的测量窗重新变脏。
+   用「静默」调用（manual=false），所以不弹进度、不打断用户正在做的事。 */
+var _atBgCoverAt=0;
+window.addEventListener('at_bgcover',function(e){
+  try{
+    if(!navigator.onLine) return;
+    var need=shows.filter(function(s){ return coverNeedsHeal(s)&&coverCanAuto(s); }).length;
+    if(!need) return;
+    if(Date.now()-_atBgCoverAt<60000) return;
+    if(_coverHealRunning) return;
+    _atBgCoverAt=Date.now();
+    coverHealAll(false,6);
+  }catch(err){}
+});
 /* v2.10.0：后台定时同步已随 WebDAV 移除（账号云同步由 CBSync.autosync 在 save() 时触发） */
 </script>
 

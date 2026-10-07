@@ -645,7 +645,16 @@
     if (!boot()) { area.innerHTML = '<div class="mini" style="color:var(--muted)">云同步组件未加载（本次需联网加载一次，刷新重试）。</div>'; return; }
     /* v2.42.0：开面板时也走一遍自动登录——开机那次可能因为组件还没加载完而错过，
        用户点开账号却看到登录框，会以为「记住」没生效。这里补一次，代价只是一次 sess()。 */
-    autoSignIn().then(function(u){ draw(area, u); })
+    autoSignIn().then(function(u){
+      draw(area, u);
+      /* v2.44.2：拿到登录态就通知补封面（用户令「后台也可以补封面」）。
+         开面板是最可靠的触发点——不管之前是自动登录还是用户亲手点的，
+         走到这里都意味着「现在是登录态、且界面开着」，补完当场看得见。
+         为什么不在登录成功那一刻发：自动登录与手动登录会各触发一次，
+         而两者常常前后脚（比如开机自动登录→ 用户点开面板），
+         两次都发就等于同一轮补齐跑两遍，把豆瓣额度自己撞掉。 */
+      if (u) bgCoverPing('mount');
+    })
       .catch(function(){ area.innerHTML = '<div class="mini" style="color:var(--danger)">云同步初始化失败，请刷新重试。</div>'; });
   }
 
@@ -1037,9 +1046,26 @@
       setTimeout(async function(){
         try { await autoSignIn(); } catch (e) {}
         try { await startupMerge(); } catch (e) {}
+        /* v2.44.2：后台补封面（用户令「后台也可以补封面」）。
+           这三个时刻是补封面的最佳窗口，比开机那一次强得多：
+             ① 自动登录刚成功 —— 换设备/重装后第一次能联网，原来只有开机那 6 部名额；
+             ② 云合并刚落地 —— **合进来的每一部都还没封面**，它们的老封面存在云端、
+                但 dataURL 不进云同步，所以合并回来必然是空的，这是「一片灰」最集中的一次；
+             ③ 手动登录完成 —— 用户刚在面板里点了登录，界面正开着，补完当场看得见。
+           为什么不在这里直接调 coverHealAll：那函数在 index.html 里，本模块是独立文件，
+           而且 index.html 自己的开机补齐（_atAutoHealRound）已经占了开机那一轮。
+           这里只发一个事件，由 index.html 侧决定要不要真跑 —— 免得两处各跑一轮，
+           豆瓣额度被自己撞风控（那正是 v2.44.1 熔断存在的原因）。 */
+        try { window.dispatchEvent(new CustomEvent('at_bgcover')); } catch (e) {}
       }, 1200);
     });
   } catch (e) {}
+
+  /* v2.44.2：手动登录成功那一刻也通知一次（用户就在面板前，补完立刻看得见）。
+     autoSignIn 走的是「静默」路径，不该打扰；mount 里用户亲手点的那次才发。 */
+  function bgCoverPing(why){
+    try { setTimeout(function(){ window.dispatchEvent(new CustomEvent('at_bgcover', { detail: why })); }, 300); } catch (e) {}
+  }
 
   /* v2.42.0：导出记住登录的读写口。给门禁用（要能在不开面板的情况下验「存了能取回、
      退出会清掉」），也给将来可能的「换号」入口用。注意 peek 不碰密码，load 才解。 */
