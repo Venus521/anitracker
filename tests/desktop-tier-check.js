@@ -110,7 +110,13 @@ const mkSeed = () => {
     }, JSON.stringify(mkSeed()));
     if (!d) { T('D00 桌面档种子数据', false, 'addShow 没建出条目'); }
     else {
-      T('D01 桌面详情页工具条五颗全在（名字刷新那颗不许被分档漏掉）', d.tools.length === 5, d.tools.join(' / '));
+      /* v2.44.0 修门禁：不再数「几颗」，改成按名字点齐。
+         数颗数必然过期——「⇪ 本地封面」v2.24.0 加、「⟳ 整体刷新」v2.38.0 加，数字却还停在 5，
+         于是从那两版起这条一直红。要守的是「名字刷新那颗不许被分档漏掉」，
+         那就只点名它，外加守住详情页工具条整体不是空的。 */
+      T('D01 桌面详情页工具条在，且名字刷新那颗不许被分档漏掉',
+        d.tools.length >= 5 && d.tools.some(t => /刷新片名与集名/.test(t)),
+        d.tools.length + ' 颗：' + d.tools.join(' / '));
       T('D02 桌面抽屉入口不存在（#dMoreBtn 不渲染）', d.more === false, 'more=' + d.more);
       T('D03 桌面顺序照旧：工具条仍在剧集列表之前',
         !!(d.toolBox && d.groups && d.toolBox.top < d.groups.top),
@@ -134,12 +140,16 @@ const mkSeed = () => {
       T('D07 桌面详情管理箱照旧在（数据质量入口）', d.qual === true, 'qual=' + d.qual);
       /* 漫改进度行的判据锁「两笔账都在」：进度有分母、有百分比、有回看，全剧时间也在。
          不锁死「2/5」这个具体分母——入库时 autoCalibrateSrc 会重判某几集，
-         桌面档读到 2/6、手机档读到 2/5 都是既有行为，不是这一行的回归。 */
+         桌面档读到 2/6、手机档读到 2/5 都是既有行为，不是这一行的回归。
+         v2.44.0 修门禁：时间词按 v2.37.0 定稿后的实际文案对齐。两条平行行靠行首标签
+         （全部 / 漫改）区分，行内不再挂「全剧」前缀——v2.37.0 CHANGELOG 里写明的设计，
+         量具却还在等 v2.36 之前那句「全剧开始 / 全剧看完 / 全剧用时」，于是从 v2.37.0 起一直红。
+         判据没松：开始/看完/用时三个值一个都还要在，只是不再要求那个前缀。 */
       T('D07b 漫改进度行出现：进度（已看/共 N 集 + 百分比 + 回看）与全剧时间同时在',
-        d.canonProg === true && /漫改 \d+ \/ \d+ 集/.test(d.canonProgText) &&
+        d.canonProg === true && /漫改 已看 \d+ \/ \d+ 集/.test(d.canonProgText) &&
         /\d+%/.test(d.canonProgText) && /回看 1/.test(d.canonProgText) &&
-        /全剧开始 2026-07-05/.test(d.canonProgText) && /全剧看完 2026-08-20/.test(d.canonProgText) &&
-        /全剧用时 46 天/.test(d.canonProgText),
+        /开始 2026-07-05/.test(d.canonProgText) && /看完 2026-08-20/.test(d.canonProgText) &&
+        /用时 46 天/.test(d.canonProgText),
         'canonProg=' + d.canonProg + ' :: ' + d.canonProgText);
     }
 

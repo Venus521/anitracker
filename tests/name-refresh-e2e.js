@@ -116,8 +116,12 @@ const OFFICIAL_EPS = [
     /* ---------- N01/N03/N04/N05/N09 ---------- */
     const r1 = await page.evaluate(async (name) => {
       const s = bySid('tv777');
-      /* 拨回「刷新前」：加片那轮已经自动校准过，不拨回去量到的是上一轮成果 */
-      s.title = '原来的片名'; delete s.titleFrom;
+      /* 拨回「刷新前」：加片那轮已经自动校准过，不拨回去量到的是上一轮成果。
+         v2.44.0 修 N01：种子必须是**纯外文现名**。原来写的是「原来的片名」——含 CJK，
+         按 v2.33.0/v2.36.0 剧名铁律第①档（现名含 CJK → 外文官方名没资格覆盖）压根不该被改，
+         于是 refreshNamesFor 正确地什么都没做，量具却判它「没改名」。这道门禁要验的是
+         官方名校准那一档（现名纯外文），种子得给对前提。中文剧那一档由 T31/T34 守着。 */
+      s.title = 'Original Placeholder Name'; delete s.titleFrom;
       s.eps = [
         { s: 1, sn: 1, en: 1, t: '第 1 集', dur: 24 },
         { s: 2, sn: 1, en: 2, t: '第 2 集', dur: 24 },
@@ -222,7 +226,9 @@ const OFFICIAL_EPS = [
     /* ---------- N10：手动点那颗 ---------- */
     const r6 = await page.evaluate(async () => {
       const s = bySid('tv777');
-      s.title = '被改回去的名字'; delete s.titleFrom;
+      /* v2.44.0 修 N10：同一个前提问题——「被改回去的名字」含 CJK，铁律下不动它，
+         回执也说「都是最新的」。改用纯外文现名，才能真正走到「手动点那颗会改名并给回执」这条路。 */
+      s.title = 'Some Manual Name'; delete s.titleFrom;
       renderList(); openDetail('tv777');
       await new Promise((r) => setTimeout(r, 600));
       const before = s.title;

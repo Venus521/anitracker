@@ -69,7 +69,8 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
   /* v2.35.0：光记次数不记是谁，加片那轮后台刷名（v2.14.0b 起就有、v2.35.0 又扩了名与集名）
      一旦落进 T15 的测量窗口，只会看到「webReqs=1」猜不出是谁发的。留个尾巴列表，失败时直接读。 */
   let webReqTail = [];
-  const noteWebReq = (u) => { webReqs++; webReqTail.push(String(u).replace('http://127.0.0.1:8093', 'api.tvmaze.com').slice(-96)); if (webReqTail.length > 8) webReqTail.shift(); };
+  const REQ_T0 = Date.now();
+  const noteWebReq = (u) => { webReqs++; webReqTail.push((Date.now() - REQ_T0) + 'ms ' + String(u).replace('http://127.0.0.1:8093', 'api.tvmaze.com').slice(-96)); if (webReqTail.length > 8) webReqTail.shift(); };
   let browser;
   try {
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
@@ -109,6 +110,25 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
 
     await post('/__ctl', { mode: 'ok', target: 'all' });
     await page.goto('http://127.0.0.1:8094/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    /* v2.44.0：给「后台补封面还在不在跑」装一个可读的计数。
+       T15 要判的是「标记这一击发不发请求」，而开机补齐 / 豆瓣联想建档（T30）都会各自起一条
+       healCoverFor 的异步链，链上每一源之间隔得又开（_wget 单次最多等 4 秒），
+       光靠「窗口里没请求」永远分不清是收工了还是正好卡在两跳之间 —— 实测 T15 就这么
+       一半红一半绿（同一份代码，计量起点在 11.5s 与 13.6s 之间跳，而那一发
+       douban-relay 落在 12.6s）。这里直接在页面上数在飞的 healCoverFor，等它归零再计量。
+       装在 goto 之后、开机 4s 定时器之前，全程有效。 */
+    const healPatched = await page.evaluate(() => {
+      const orig = window.healCoverFor;
+      if (typeof orig !== 'function') return false;
+      window.__atHealN = 0;
+      window.healCoverFor = function () {
+        window.__atHealN++;
+        const done = () => { window.__atHealN--; if (window.__atHealN < 0) window.__atHealN = 0; };
+        try { return Promise.resolve(orig.apply(this, arguments)).then(v => { done(); return v; }, e => { done(); throw e; }); }
+        catch (e) { done(); throw e; }
+      };
+      return true;
+    });
     await sleep(1100);
 
     /* 开机自检：index.html 的脚本是一整块，里面任何一处语法错都会让整块失效，
@@ -355,16 +375,31 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     /* T15 标记已看：本地生效且不发出任何写请求 */
     /* 计量前先让后台安静：开机小批量补封面 / 上一条 addShow 的请求尾巴正好可能落进这 1.2s 窗口，
        那测的就不是「标记这一击发不发请求」了（v2.30.0 把 Wikidata 桩进门禁后补齐变快，就是这个窗口先撞红）。
-       判据一个字没松——仍然是窗口内 webReqs 必须为 0，只是先把不属于本击的流量排除在外。 */
+       判据一个字没松——仍然是窗口内 webReqs 必须为 0，只是先把不属于本击的流量排除在外。
+       v2.44.0：取样窗 500ms → 1500ms。**取样窗必须长过后台两击之间的最大间隔**，否则量具会把
+       「间隔中」误读成「已收工」：开机补齐打豆瓣那两部之间隔 1200ms（见 coverHealAll 的
+       relay?1200:420），比 500ms 的窗还宽，于是窗里没请求就判安静、下一击随即落进计量窗，
+       实测把 douban-relay 那一发算到了「标记已看」头上（1/1 红）。
+       1500 > 1200，间隔里不可能凑出一个空窗，判据这才真的成立。 */
     const quietThenZero = async () => {
-      for (let q = 0; q < 24; q++) {
-        const a = webReqs; await sleep(500); const b = webReqs;
+      for (let q = 0; q < 14; q++) {
+        const a = webReqs; await sleep(1500); const b = webReqs;
         if (a === b) { webReqs = 0; webReqTail = []; return 'settled(前置后台流量 ' + b + ' 次)'; }
       }
       webReqs = 0; webReqTail = []; return 'NOT-QUIET';
     };
     await page.evaluate(() => openDetail('tv900003')); await sleep(500);
+    /* 先等所有在飞的 healCoverFor 落地（计数装在上面 goto 之后），再走静置窗口。
+       两者缺一不可：只等计数会漏掉「刚落地又排上一跳」的尾巴，只等窗口会遇上「卡在两跳之间」。 */
+    let healN = -1;
+    for (let q = 0; q < 40; q++) {
+      healN = await page.evaluate(() => (typeof window.__atHealN === 'number' ? window.__atHealN : -1));
+      if (healN === 0) break;
+      await sleep(400);
+    }
+    const t15t0 = Date.now() - REQ_T0;
     const t15quiet = await quietThenZero();
+    console.log('[DBG] T15 计量起点 ' + t15t0 + 'ms，静置结果 ' + t15quiet + '，窗口结束 ' + (Date.now() - REQ_T0) + 'ms，在飞补齐 ' + healN + '，计数已装 ' + healPatched);
     await page.evaluate(() => { const els = document.querySelectorAll('#dGroups .eprow'); els[1] && els[1].click(); });
     await sleep(1200);
     const markedLocal = await page.evaluate(() => {

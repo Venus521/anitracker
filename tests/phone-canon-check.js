@@ -134,9 +134,11 @@ function probe() {
       T('P03 详情页类型筛选行可见（含漫改/TV原创/半原创/待核）',
         d.typeRow === true && /漫改/.test(d.typeRowText) && /TV原创/.test(d.typeRowText),
         'typeRow=' + d.typeRow + ' :: ' + d.typeRowText);
-      T('P04 漫改进度行出现，进度+时间都在（2/5 集 · 40% · 全剧看完 2026-08-20）',
-        d.canonProg === true && /漫改 2 \/ 5 集/.test(d.canonProgText) &&
-        /40%/.test(d.canonProgText) && /全剧看完 2026-08-20/.test(d.canonProgText),
+      /* v2.44.0 修门禁：时间词按 v2.37.0 定稿后的实际文案对齐——两条平行行由行首标签
+         （全部 / 漫改）区分，行内不再挂「全剧」前缀。判据没松：完成日期那个值还要在。 */
+      T('P04 漫改进度行出现，进度+时间都在（已看 2/5 集 · 40% · 看完 2026-08-20）',
+        d.canonProg === true && /漫改 已看 2 \/ 5 集/.test(d.canonProgText) &&
+        /40%/.test(d.canonProgText) && /看完 2026-08-20/.test(d.canonProgText),
         'canonProg=' + d.canonProg + ' :: ' + d.canonProgText);
       T('P05 集级长按菜单恢复「改来源标注」', d.ctxHas.found === true && /改来源标注/.test(d.ctxHas.txt), d.ctxHas.txt || '(菜单没开出来)');
       T('P06 管理箱恢复在手机上，且排在「从片单移除」之后',

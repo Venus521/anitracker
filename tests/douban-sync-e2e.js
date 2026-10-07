@@ -203,14 +203,21 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
       det.shown && /看完 2026-07-15/.test(det.txt) && det.rows === 1, JSON.stringify(det));
     await page.evaluate(() => window.backList());
     await sleep(400);
+    /* v2.44.0 修 B08：这条断言从 v2.30.0 起一直红到今天，是量具落后于产品、不是功能坏了。
+       v2.39.0 把「打开默认落点」改成「在看」分类（curFilter 初值 'watching'），而要验的这张
+       「测试剧·看过C」是 done 状态 —— 它在默认筛选下压根不进列表，量具自然取到空串。
+       修法是走真实用户路径：切到「全部」再看卡，判据一个字没松（日期格式 + 「看完」只出现一次）。 */
     const card = await page.evaluate(() => {
+      window.setFilter('all');
       const it = Array.prototype.filter.call(document.querySelectorAll('#list .show'),
         n => /测试剧·看过C/.test(n.textContent))[0];
-      return it ? it.querySelector('.s').textContent : '';
+      if (!it) return { txt: '', n: document.querySelectorAll('#list .show').length };
+      return { txt: it.querySelector('.s').textContent, n: document.querySelectorAll('#list .show').length };
     });
     await page.screenshot({ path: path.join(__dirname, '_artifacts', 'dbn-list.png') });
     check('08', '列表卡只在「看完」的条目上露完成日期，写成「2026-07-15 看完」不重复状态词（其它卡不多一行）',
-      /2026-07-15 看完/.test(card) && (card.match(/看完/g) || []).length === 1, card.slice(0, 120));
+      /2026-07-15 看完/.test(card.txt) && (card.txt.match(/看完/g) || []).length === 1,
+      JSON.stringify(card.txt).slice(0, 120) + ' 卡数=' + card.n);
 
     /* ---------- B9 本机标记不覆盖豆瓣给的时间 ---------- */
     const keep = await page.evaluate(() => {

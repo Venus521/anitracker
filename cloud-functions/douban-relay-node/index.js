@@ -38,7 +38,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- 成功缓存：LRU 300 条 / 7 天（同剧名不打豆瓣） ----
 const CACHE = new Map();
-const CACHE_MAX = 300;
+/* v2.44.0：图从 ~5KB 涨到 ~120KB（见 upscaleCover），300 条就是 35MB，云函数内存吃不消。
+   120 条 ≈ 14MB，够一轮批量补齐反复命中，也不会把实例撑爆。 */
+const CACHE_MAX = 120;
 const CACHE_TTL = 7 * 24 * 3600 * 1000;
 function cacheGet(k) {
   const v = CACHE.get(k);
@@ -131,6 +133,11 @@ async function searchSubject(name, deadline) {
   throw new NotFound('no subject for ' + name + ' [' + tried.join('; ') + ']');
 }
 
+/* v2.44.0：豆瓣进了自动补封面的链路（App 端 healCoverFor 不再只在手动时才调它），
+   「一条都对不上就拿第一条」这条兜底必须收紧——自动场景下它等价于往片单里塞张错图，
+   而本项目的老教训是「错封面比没封面更糟」（v2.14.0g，《海贼王》被换成水墨错图）。
+   现在只认三种：标题完全相等 / 互相包含（庆余年 → 庆余年 第一季）/ 只搜到一条（无从歧义）。
+   对不上就抛 NotFound → 前端立刻退下一路源，并进负缓存，下一轮不再白跑。 */
 function pickCover(items, name) {
   // 优先标题完全相等，其次前 5 条
   const cand = [];
@@ -143,7 +150,9 @@ function pickCover(items, name) {
   const exact = cand.find((c) => c.title === name);
   if (exact) return exact.cover;
   const loose = cand.find((c) => c.title.includes(name) || name.includes(c.title));
-  return (loose || cand[0]).cover;
+  if (loose) return loose.cover;
+  if (cand.length === 1) return cand[0].cover;
+  throw new NotFound('no title match for ' + name + ' (' + cand.length + ' candidates)');
 }
 
 // ---- ② subject_suggest 搜索（2026-10-03 实测新增）：rexxar 对部分剧名按查询弹 403 登录墙时，
@@ -167,7 +176,26 @@ function pickSuggestCover(arr, name) {
   if (!arr.length) return null;
   const exact = arr.filter((x) => x.title === name);            // 标题完全相等优先
   const pool = exact.length ? exact : arr;
-  return (pool.find((x) => x.ep) || pool[0]).cover;             // 再要带集数字段（剧集标志），否则取第一个
+  const hit = pool.find((x) => x.ep) || pool[0];                // 再要带集数字段（剧集标志），否则取第一个
+  if (!hit) return null;
+  // v2.44.0：与 pickCover 同一条规矩——没对上剧名就不许出图（理由见 pickCover 注）
+  if (hit.title !== name && hit.title.indexOf(name) < 0 && name.indexOf(hit.title) < 0 && arr.length !== 1) return null;
+  return hit.cover;
+}
+
+/* v2.44.0：rexxar 给的封面 URL 自带 imageView2 缩放指令
+   （...&imageView2/0/q/80/w/9999/h/120/format/jpg），等于豆瓣自己就把图压成了 120px 的邮票，
+   前端再按 200×300 转存，存下来的是一张被放大的糊图——「封面全都有，就是看着糊」的根因。
+   修法只改尺寸指令、签名原样保留：
+     · sa_cv / sa_ct 是签名，去掉或换路径（view/photo/l、raw）一律回 12 字节的错误体；
+     · 把 /h/<N> 改成 /h/600 实测 120×169/5KB → 600×846/117KB（庆余年），三倍超采样，
+       压成 200×300 后边缘干净；再往上（h/800，208KB）画质增益已经看不出来，
+       但云函数内存里的字节缓存会跟着翻番，故停在 600。
+   suggest 通道给的是 s_ratio_poster 小图，仍走「换 l_ratio_poster」那条老路。 */
+function upscaleCover(u) {
+  if (!u) return u;
+  if (u.indexOf('imageView2') >= 0) return u.replace(/\/h\/\d+/, '/h/600');
+  return u;
 }
 
 async function doubanCover(name, deadline) {
@@ -186,15 +214,16 @@ async function doubanCover(name, deadline) {
   // rexxar 4 级回退（带地区 → 不带地区 → 不限 type）
   if (!cover) {
     const items = await throttled(() => searchSubject(name, deadline));
-    cover = pickCover(items, name);
+    try { cover = pickCover(items, name); }
+    catch (e) { if (e instanceof NotFound) negSet(name); throw e; }   // 对不上剧名＝确认没有，进负缓存
   }
   if (!cover) { negSet(name); throw new NotFound('no cover for ' + name); }
 
-  // 升级到原图：view/photo/s_ratio_poster 路径 → l_ratio（约 470KB，200 实测）；旧路径用 _[a-z] 尺寸后缀正则
-  const big1 = cover.replace('s_ratio_poster', 'l_ratio_poster');
-  const big2 = cover.replace(/_[a-z]\.(jpg|webp|png)$/i, '_b.jpg');
+  // 升级到大图，三条路按 URL 形态挑一条（见 upscaleCover 注）
+  const big1 = upscaleCover(cover);
+  const big2 = cover.replace('s_ratio_poster', 'l_ratio_poster');   // 旧形态兜底（约 470KB，200 实测）
   let img = null;
-  for (const c of [big1, cover, big2]) {
+  for (const c of [big1, big2, cover]) {
     if (Date.now() > deadline) break;
     try {
       const r = await get(c, { 'User-Agent': UA, Referer: 'https://movie.douban.com/' }, IMG_TIMEOUT);
