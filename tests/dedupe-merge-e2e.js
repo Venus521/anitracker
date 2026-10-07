@@ -86,6 +86,55 @@ function probe(port) {
     check('M02', '片单存中文名 + 豆瓣给双语名 → 判得出「已在片单」', match.m2 === 'm2', JSON.stringify(match));
     check('M03', '片单的名字挂在别名里 + 豆瓣给那个叫法 → 判得出「已在片单」', match.m3 === 'm3', JSON.stringify(match));
 
+    /* ---------- M03b：季数不能剥错（v2.44.3）----------
+       旧口径是无条件`.replace(/[0-9]+$/,'')`，本意是把「第一季/第二季」并成同一部，
+       但它把「灌篮高手 2」也削成「灌篮高手」—— 两部不同的电影被并成一条，进度全丢；
+       同时「咒术回战（第二季）」括号里是中文数字「第二季」，旧正则只认阿拉伯数字，剥不掉。
+       实测这两条正是「同一份片单在豆瓣和追迹对不上」的常见形态。
+       量具只验归一化后的可比性（dbNormTitle 是判据的地基），不验 dbTargetOf：
+       后者要拿全局 shows 摆样本，容易在「哪条该命中」上写反。 */
+    const season = await page.evaluate(() => {
+      const n = window.dbNormTitle;
+      return {
+        s1: n('漫长的季节 第二季') === n('漫长的季节'),      /* 中文数字季数该被剥掉 → 同一部 */
+        s2: n('咒术回战（第二季）') === n('咒术回战'),        /* 全角括号里的中文季数 */
+        s3: n('漫长的季节 第2季') === n('漫长的季节'),       /* 阿拉伯数字 */
+        s4: n('Battle Spirits S2') === n('Battle Spirits'),  /* S1/S2 缩写 */
+        bad1: n('灌篮高手 2') !== n('灌篮高手'),              /* 裸数字是续作编号，必须不同 */
+        bad2: n('浪客行') !== n('浪客行者和狗')                /* 前缀相同但不同剧 */
+      };
+    });
+    check('M03b', '季数只认「第N季/部/卷/篇」与S1/S2：同剧不同季归一化后并成一条，全角括号版也对得上',
+      season.s1 && season.s2 && season.s3 && season.s4, JSON.stringify(season));
+    check('M03c', '裸数字不再被当季数剥掉：续作编号与不同剧绝不归一化到同一键（错并比漏并更糟）',
+      season.bad1 && season.bad2, JSON.stringify(season));
+
+    /* ---------- M03d：内置库当译名桥（v2.44.3）----------
+       前两道（按 dbId、按名字集合比）只在两边叫法重合时有效。剩下那类两边都没错、
+       纯靠字符串永远对不上：豆瓣叫 Cowboy Bebop、追迹存的是「星际牛仔」。
+       内置库 301 条人工校对了中英对照，于是「豆瓣那个叫法在库里是哪部、
+       那部在片单里叫什么」这条链接上了。判据仍然是归一化全等，没有模糊匹配。 */
+    const bridge = await page.evaluate(() => {
+      const lib = window.INTERNAL_SHOWS || [];
+      /* 拿库里真实条目当素材：豆瓣侧给 nameJp（外文），片单侧存 title（中文） */
+      const items = lib.filter(x => x.nameJp && x.nameJp !== x.title);
+      let hit = 0; const miss = [];
+      items.forEach(L => {
+        window.shows = [{ sid: 'b_' + L.id, title: L.title, nameJp: '', aliases: [], total: 0, eps: [], statuses: {} }];
+        const d = { subjectId: '', title: L.nameJp, origTitle: L.nameJp, cnTitle: '', year: L.year };
+        if (window.dbTargetOf(d)) hit++; else miss.push(L.title);
+      });
+      /* 反向：剧场版是另一部作品，绝不该被当成同一部并掉 */
+      window.shows = [{ sid: 'b_to', title: '海贼王 剧场版', nameJp: '', aliases: [], total: 0, eps: [], statuses: {} }];
+      const theatre = window.dbTargetOf({ subjectId: '', title: 'One Piece', origTitle: 'One Piece', cnTitle: '' });
+      return { n: items.length, hit, miss: miss.slice(0, 5), theatre: theatre ? theatre.sid : '' };
+    });
+    check('M03d', '内置库译名桥：豆瓣给外文名 + 片单存中文名，靠库里中英对照认出来（≥95%）',
+      bridge.n > 0 && bridge.hit / bridge.n >= 0.95,
+      JSON.stringify(bridge));
+    check('M03e', '剧场版绝不并进正篇（它是另一部作品，并了进度就废了）',
+      bridge.theatre === '', 'theatre=' + bridge.theatre);
+
     /* ---------- M04 / M05：合并重复 ---------- */
     const merge = await page.evaluate(async () => {
       window.shows = [];

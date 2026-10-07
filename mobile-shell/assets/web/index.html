@@ -1328,7 +1328,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.2', AT_BUILD='20261007g';
+var AT_VERSION='2.44.3', AT_BUILD='20261007h';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4868,10 +4868,25 @@ function switchPart(key){
   toast('已切到第 '+n+' 季（全剧共 '+seasonsOf(s).length+' 季）');
 }
 /* 标题归一：用于门户导入 / 全网库之间的去重比对 */
+/* v2.44.3：剥尾部季数，但只认「第 N 季/部/卷/篇」与「S1/S2」这类**带标记**的写法。
+   原来是无条件 `.replace(/[0-9]+$/,'')`，本意是把「漫长的季节 第一季」和
+   「漫长的季节 第二季」并成同一部（对的），但它顺手也把
+   「灌篮高手 2」削成「灌篮高手」—— 那是两部完全不同的电影/剧，
+   并进去等于把两部的进度混成一条（实测抓到的误判）。
+   实测代价（旧口径正向 4/8、误判 1/4）：
+     「咒术回战（第二季）」对不上「咒术回战」—— 括号里的「第二季」是中文数字，
+       旧正则只认阿拉伯数字，所以剥不掉；
+     「灌篮高手 2」被误判成「灌篮高手」—— 无标记裸数字，凭什么认定它是第2季？
+   现在：中文数字与阿拉伯数字的「第N季/部/卷/篇」都剥，括号一并清掉；
+   裸数字**保留**（它更可能是续作编号而不是季数）。
+   另补：S1/S2 这类缩写也剥（「Battle Spirits S2」与「Battle Spirits」同一部）。 */
 function dbNormTitle(t){
-  return String(t||'').toLowerCase()
-    .replace(/[\s·・:：\-—~～!！?？.,，、'"“”‘’()（）\[\]【】]/g,'')
-    .replace(/[0-9]+$/,'');
+  var s=String(t||'').toLowerCase()
+    .replace(/[\s·・:：\-—~～!！?？.,，、'"“”‘’()（）\[\]【】]/g,'');
+  /* 「第2季 / 第二季 / 第2部 / 上部…」与 S1/S2 缩写：有标记才当季数 */
+  s=s.replace(/(?:第)?[0-9一二三四五六七八九十]+(?:季|部|卷|篇)/g,'')
+     .replace(/s[0-9]+(?![a-z0-9])/g,'');
+  return s;
 }
 /* —— 剧名铁律（用户令 2026-10-06）：外语剧＝中文+原文，中文剧＝中文名，已有条目永不改名 ——
    网关把豆瓣收藏页的「中文名 / 原名」按 / 拆成 title/origTitle 两截；外语剧在片单里要双语，
@@ -4971,6 +4986,12 @@ function dbKeysOf(d){
   if(cjk) put(cjk);
   var lat=(t.match(/[A-Za-z0-9][A-Za-z0-9'!?.\-]*(?:\s+[A-Za-z0-9'!?.\-]+)*/g)||[]).join(' ').trim();
   if(lat) put(lat);
+  /* v2.44.3：豆瓣原名也给一份剥掉季数的中文侧键。
+     场景：豆瓣给 Cowboy Bebop、追迹那条存的是「星际牛仔」——两边叫法全不同，
+     光靠主标题永远对不上（实测正向 8 个场景里这类就占了 1 个）。
+     这不是放宽成模糊匹配：仍然是归一化**全等**才认，
+     只是把「原名 + 季数」这个必然同指的两种形态都收进同一个键里。 */
+  if(d.origTitle){ var ok2=dbNormTitle(d.origTitle); if(ok2) out[ok2]=1; }
   return out;
 }
 function showHasKey(s,keys){
@@ -4985,6 +5006,33 @@ function dbTargetOf(d){
   if(!t){
     var keys=dbKeysOf(d);
     for(i=0;i<shows.length;i++){ if(showHasKey(shows[i],keys)){ t=shows[i]; break; } }
+  }
+  /* v2.44.3：内置库当「译名桥」——同一份片单在豆瓣和追迹对不上的最后一块。
+     前两道（dbId、按名字集合比）只在两边叫法重合时有效，而剩下那类怎么都比不上：
+     豆瓣叫Cowboy Bebop、追迹那条存的是「星际牛仔」；两边各自都「没出错」，
+     纯靠字符串永远对不上。内置库 301 条人工校对了中英对照（含别名），
+     于是「豆瓣那个叫法在库里对应哪部、那部在片单里叫什么」这条链就接上了。
+     安全：仍然是**归一化全等**才认，没有模糊匹配、没有相似度——
+     库是离线静态数据，给什么比什么，不猜。库里查不到就直接放弃，走原有路径。 */
+  if(!t){
+    var lib=window.INTERNAL_SHOWS||[], q=dbKeysOf(d), hit2=null;
+    for(i=0;i<lib.length&&!hit2;i++){
+      var L=lib[i], lk={};
+      lk[dbNormTitle(L.title)]=1;
+      if(L.nameJp) lk[dbNormTitle(L.nameJp)]=1;
+      (L.aliases||[]).forEach(function(a){ var k=dbNormTitle(a); if(k) lk[k]=1; });
+      for(var kk in q){ if(q[kk]&&lk[kk]){ hit2=L; break; } }
+    }
+    if(hit2){
+      for(i=0;i<shows.length;i++){
+        var S=shows[i];
+        if(dbNormTitle(S.title)===dbNormTitle(hit2.title) ||
+           (S.nameJp && dbNormTitle(S.nameJp)===dbNormTitle(hit2.nameJp)) ||
+           (S.aliases||[]).some(function(a){ return dbNormTitle(a)===dbNormTitle(hit2.title); })){
+          t=S; break;
+        }
+      }
+    }
   }
   return t;
 }
