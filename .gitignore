@@ -42,6 +42,11 @@ mobile-shell/keystore/
 *.keystore
 *.jks
 
+# tcb CLI 默认只认 functions/<name>/，而真源在 cloud-functions/<name>/。
+# functions/ 下是mklink /J 建的**目录联接**（Windows junction），不是真文件 ——
+# 跟着它入库会出现同一份代码两个副本，改一份漏一份。真源那份才入库。
+functions/
+
 # 历史本地素材（不入库）
 docs/shots/v250-preview.png
 DELIVERY/anitracker-v2.8.0-sync-filler-20260924/爬虫-animefillerlist.py
