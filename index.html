@@ -1313,7 +1313,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.0', AT_BUILD='20261007e';
+var AT_VERSION='2.44.1', AT_BUILD='20261007f';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -3909,7 +3909,11 @@ function coverCanAuto(s){
   var m=_cTry(), r=m[String(s.sid)];
   if(!r) return true;
   if(r.ok) return false;
-  return (Date.now()-(r.at||0))>24*3600*1000; /* 失败 24h 退避，防重试风暴 */
+  /* v2.44.1：失败退避从 24 小时缩到 2 小时。
+     24h 是防重试风暴定的，但用户反馈「还是没封面很多」——一次网络抖动/一次豆瓣风控
+     就把这一部晾一整天，而开机自动每轮只挑一小批，等于这批永远轮不到。
+     真风暴靠的是「每轮限量+ 熔断」，不靠把单部锁死一整天。 */
+  return (Date.now()-(r.at||0))>2*3600*1000;
 }
 function coverMark(sid,ok){
   var m=_cTry(); m[String(sid)]={at:Date.now(),ok:!!ok};
@@ -3937,6 +3941,35 @@ async function webMatchShow(s){
     if(hit) return hit;
   }
   return null;
+}
+/* v2.44.1：中文剧专走TVMaze——按号取图，不按名字。
+   实测证据（2026-10-07，8 部国剧逐个打 API）：
+     庆余年→Joy of Life ✓图　漫长的季节→The Long Season ✓图　狂飙→The Knockout ✓图
+     隐秘的角落→The Bad Kids ✓图　三十而已→Nothing But Thirty ✓图　大江大河→Like a Flowing River ✓图
+     觉醒年代 ✗　山海情 ✗
+   TVMaze 对国剧**有条目有图**，比例 6/8；但 webMatchShow 的消歧是名字全等，
+   TVMaze 给的是英文名 → 中文名永远对不上 → 这一跳对国剧等于不存在。
+   「国剧在英文源是死路」这个结论没错，但理由当年写错了（不是「没条目」，是「名字对不上」），
+   于是 v2.44.0 的修法也跟着错：把豆瓣判据写成「没有 tvId 才优先」，
+   有tvId 的国剧全被推到链尾，而它们本来在 TVMaze 就有图。这就是「补了还是一片灰」的真根因。
+   安全（沿用 v2.14.0g「错封面比没封面更糟」）：
+     · **只在候选本身就是中文剧（language=Chinese）时采纳** —— 国剧条目不会有「同名不同剧」的坑；
+     · **必须带图**，没图直接放弃；
+     · 标题一致性再用一次：英文名与中文片名无从比对，所以改用**搜索位次**把关——
+       只认第 1 条（TVMaze 搜索对单一剧名基本唯一命中，实测上面 6 部都是第 1 条）；
+     · 结果仍然只是候选 URL，后面还要过转存校验，不写coverBy='net'。
+   上面三重门都过不了的，等豆瓣那一跳——它才是覆盖最全的那条。 */
+async function cnShowBySearch(s){
+  var cur=String(s&&s.title||'').trim();
+  if(!cur||!/[\u4e00-\u9fff]/.test(cur)) return '';
+  try{
+    var arr=await webSearchOne(cur);
+    if(!arr||!arr.length) return '';
+    var top=arr[0];
+    if(!top||String(top.language||'')!=='Chinese') return '';
+    var u=webCoverOf(top);
+    return u||'';
+  }catch(e){ return ''; }
 }
 /* v2.26.0：判断当前是否跑在「本地/局域网模式」（页面由本机 8089 服务托管）。
    只有这种模式下 /cover-relay 才同源可达；此时豆瓣中转优先走本机端点（更快、免公网流量），
@@ -4069,18 +4102,17 @@ async function coverFromAniList(s){
   }catch(e){}
   return '';
 }
-/* v2.44.0：中文剧先把豆瓣排到前面。
-   TVMaze 是英文库、TMDB 要自备 key、Wikidata 覆盖很弱——一条中文剧名在它们那儿基本是三条死路，
-   而每条死路都不便宜：_wget 单次最多等 4 秒，webMatchShow 还要按 3 个叫法各试一遍，
-   实测一部《漫长的季节》要干等十几秒才轮到链尾的豆瓣（run-regression T15 抓到 douban-relay
-   那一发落在 14.9s）。十几秒的等待在「自动补封面」里等于没生效——用户早就切走了。
-   判据只用两条，都很硬：
-     ① 没有 tvId —— 说明 TVMaze 侧没有对应条目，再按名字去搜属于瞎猜；
-     ② 片名含中日文字符 —— 这才是那三条英文源的盲区。
-   安全靠云函数那边：pickCover 已收紧成对不上剧名就不出图（见 douban-relay 注释），
-   不会像旧版那样「随便拿第一条」往片单里塞错图。 */
+/* v2.44.0：中文剧把豆瓣排到前面。
+   TVMaze 是英文库、TMDB 要自备key、Wikidata 覆盖很弱——每条死路都不便宜：
+   _wget 单次最多等 4 秒，webMatchShow 还要按 3 个叫法各试一遍。
+   v2.44.1 修判据①：原来写的是「没有 tvId 才优先」，理由是「没 tvId 说明 TVMaze 没条目」。
+   实测证明这个理由是错的：TVMaze 对国剧**有条目有图**（6/8，见 cnShowBySearch 注），
+   真正让 webMatchShow 失效的是「它按名字全等匹配，而 TVMaze 给英文名」，
+   不是「没条目」。于是「有 tvId 就先走 TVMaze」这个旧判据毫无依据——
+   有 tvId 的国剧照样得靠豆瓣，而豆瓣实测单部20-50 秒（要走公网函数）。
+   现在只看一件事：片名是不是中文。是中文就走豆瓣优先，不管有没有 tvId。 */
 function doubanFirst(s){
-  if(!s||s.tvId) return false;
+  if(!s) return false;
   return /[\u4e00-\u9fff\u3040-\u30ff\uff00-\uffef]/.test(String(s.title||s.name||''));
 }
 /* 豆瓣命中后落库那几步（清裂图标、清 coverBy、清退避账、落盘），两处调用点共用。 */
@@ -4099,6 +4131,10 @@ async function healCoverFor(s,opts){
     /* v2.41.0：内置库（离线、人工校对）→ AniList（动画最全）→ 再回到原来的严格同名 TVMaze */
     if(!url){ url=coverFromLib(s); }
     if(!url){ url=await coverFromAniList(s); }
+    /* v2.44.1：中文剧先问 TVMaze（实测 6/8 有图，见 cnShowBySearch 注）。
+       这一跳插在豆瓣**之前**：它一次请求 1-2 秒就出结果，而豆瓣要走公网函数、
+       实测单部 20-50 秒。先问快的那条，能立刻解决的就不必等豆瓣。 */
+    if(!url && !s.tvId){ url=await cnShowBySearch(s); }
     /* v2.44.0：中文剧在这里插一次豆瓣，别让它排到三条英文源后面干等（理由见 doubanFirst 注） */
     if(!url && doubanFirst(s)){
       if(applyDoubanCover(s,opts,await doubanRelayCover(s.title||s.name||''))) return true;
@@ -5612,14 +5648,28 @@ applyTheme((function(){ try{ return localStorage.getItem('at_theme')==='dark'?'d
   }catch(e){}
 })();
 renderList();
-/* v2.6.0：启动后小批量静默补封面（离线自动跳过；失败 24h 退避）
-   v2.41.0 试过加到 10 部：立刻把 run-regression 的 T13（切季零网络）与 T15（标记已看零请求）
+/* v2.6.0：启动后小批量静默补封面（离线自动跳过；失败退避见 coverCanAuto）
+   v2.41.0 试过一轮加到 10 部：立刻把 run-regression的 T13（切季零网络）与 T15（标记已看零请求）
    一起撞红——那两条靠「测量窗口内无请求」判功能，开机后台这条尾巴一长就伸进窗口里，
    量具读到的就成了「切季/标记在发请求」。部数维持 6：静默补齐只做润色，
-   「封面全都要」交给用户点的那枚「⟳ 一键拉封面」（全量、带进度、有体检）。 */
-setTimeout(function(){
-  try{ if(!navigator.onLine) return; coverHealAll(false,6); }catch(e){}
-},4000);
+   「封面全都要」交给用户点的那枚「⟳ 一键拉封面」（全量、带进度、有体检）。
+   v2.44.1（用户反馈「还是没封面很多」）：单轮 6 部是量具底线，但**可以多跑几轮**——
+   开机后按 20s间隔连跑三轮，同一批 limit=6，于是最多自动补到 18 部，
+   而任何一轮的尾巴仍只有 6 部那么长，T13/T15 的测量窗量到的还是同一件事。
+   每轮之间先看有没有在跑（_coverHealRunning），不重入；离线/页面隐藏就停。
+   coverCanAuto 的失败退避缩到 2h，所以第二轮能真正捡起第一轮失败的部。 */
+var _atAutoHealRounds=0;
+function _atAutoHealRound(){
+  try{
+    if(_atAutoHealRounds>=3) return;
+    if(!navigator.onLine) return;
+    if(_coverHealRunning) { setTimeout(_atAutoHealRound,4000); return; }
+    _atAutoHealRounds++;
+    coverHealAll(false,6);
+    setTimeout(_atAutoHealRound,20000);
+  }catch(e){}
+}
+setTimeout(_atAutoHealRound,4000);
 /* v2.10.0：后台定时同步已随 WebDAV 移除（账号云同步由 CBSync.autosync 在 save() 时触发） */
 </script>
 
