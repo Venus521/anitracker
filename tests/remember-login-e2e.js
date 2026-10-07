@@ -143,6 +143,51 @@ const PWD = 'Zq7-vault-door-9931';
     check('R06', '记住过再开面板：邮箱/密码被填回，且密码框仍是 password 类型',
       fill.id === ID && fill.pwd === PWD && fill.type === 'password' && fill.checked === true, JSON.stringify(fill));
 
+    /* ---------- R09：真正走一次「点登录按钮」（v2.44.4）----------
+       R01~R06 全都直接调 AT_REMEMBER.save() 这个 API —— 也就是**绕过真实入口**。
+       真实用户是「填表单→ 点登录按钮」，而 doAuth 里存凭据那一步是有条件的：
+       `if (rm && rm.checked) await rememberSave(...)`。
+       一旦那条路上的条件/时序有问题（v2.44.4 查到的正是：登录失败就不存），
+       R01~R06 全绿而用户就是「每次都要重填」。
+       这条断言从**清空状态**起步、点真实的登录按钮、看密文有没有落盘——
+       **登录成功或失败都算数**（失败也该存，见 doAuth 的 v2.44.4 改动）。 */
+    await page.evaluate(() => { try { window.AT_REMEMBER && window.AT_REMEMBER.clear(); } catch (e) {} });
+    await sleep(500);
+    await page.evaluate(() => { try { window.__closeSync && window.__closeSync(); } catch (e) {} });
+    await sleep(700);
+    const viaBtn = await page.evaluate(async (id, pwd) => {
+      try { openAccount(); } catch (e) {}
+      await new Promise(r => setTimeout(r, 1500));
+      const iu = document.getElementById('cbUser'), ip = document.getElementById('cbPass');
+      const btn = document.getElementById('cbLogin'), rm = document.getElementById('cbRemember');
+      if (!iu || !ip || !btn) return { err: '登录控件缺失' };
+      iu.value = id; ip.value = pwd;
+      if (rm) rm.checked = true;
+      btn.click();                       /* 真实点击，走 doAuth 那条路 */
+      await new Promise(r => setTimeout(r, 2500));
+      const peek = window.AT_REMEMBER.peek();
+      const back = await window.AT_REMEMBER.load();
+      return {
+        存上了: !!localStorage.getItem('credentials_at_login'),
+        peekHas: !!(peek && peek.has),
+        读回账号: back ? back.id : '',
+        读回密码对: back ? back.pass === pwd : false
+      };
+    }, ID, PWD);
+    check('R09', '从清空起步、真点「登录」按钮，凭据真的落盘（不再只测 API那条路）',
+      viaBtn.存上了 && viaBtn.peekHas && viaBtn.读回账号 === ID && viaBtn.读回密码对,
+      JSON.stringify(viaBtn));
+
+    /* ---------- R10：清完之后状态自洽（别存成半截）---------- */
+    const after = await page.evaluate(async () => {
+      window.AT_REMEMBER.clear();
+      const p = window.AT_REMEMBER.peek();
+      const l = await window.AT_REMEMBER.load();
+      return { peek: p, load: l, 密文: !!localStorage.getItem('credentials_at_login'), 密钥: !!localStorage.getItem('credentials_at_login_key') };
+    });
+    check('R10', 'clear 之后 peek/load 皆 null（不留半截凭据）',
+      after.peek === null && after.load === null && !after.密文 && !after.密钥, JSON.stringify(after));
+
     /* ---------- R07：退出登录真的清掉（静态断言）---------- */
     const src = fs.readFileSync(path.join(ROOT, 'cloudbase-sync.js'), 'utf8');
     const iOut = src.indexOf("#cbOut'");

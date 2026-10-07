@@ -95,8 +95,15 @@
       return (j && j.id && j.pass) ? { id: String(j.id), pass: String(j.pass) } : null;
     } catch (e) { return null; }
   }
+  /* v2.44.4：连设备密钥一起清。
+     原来只remove 密文，密钥（LS_REMK）留在 localStorage 里 —— 凭据虽然读不出来了，
+     但那把AES 密钥还在原地，等于「上锁的箱子还留在那儿，钥匙没扔」。
+     留着它没有���用（密文已删，重启后会重新生成一把新的），
+     留着却有个坏处：下次记住的密码会用**同一把旧钥匙**加密，
+     等于那台设备上的所有历史密文共用一把钥匙——**换密码也不换锁**。
+     所以清除要连钥匙一起清（下次rememberSave 会自动生成新的）。 */
   function rememberClear(){
-    try { localStorage.removeItem(LS_REM); } catch (e) {}
+    try { localStorage.removeItem(LS_REM); localStorage.removeItem(LS_REMK); } catch (e) {}
   }
   /* 只回「有没有」和「什么时候记的」，不碰密码也不解账号（账号也在密文里）。
      要显示/预填就走 rememberLoad。 */
@@ -850,6 +857,24 @@
         m.style.color = 'var(--danger)';
         btn.disabled = false; btn.textContent = '登录';
         lg('auth', '登录失败：' + t, 'fail');
+        /* v2.44.4：登录失败时**照样记住凭据**（用户明说了「不想每次都填」）。
+           原来只在登录成功那一步存，于是「网络抖一下没登上→ 凭据也没存→ 下次还得手填」
+           成了闭环：用户看到的是「记住了也没用」，于是干脆放弃用这个功能。
+           现在失败也存，理由是**下次开机 autoSignIn 会自动重试**——
+           存了就有机会在不打扰用户的前提下自己登录成功；
+           而存下的密码只在**本机**、加密落盘、导出与云同步双重剔除（R02/R03 守着）。
+           真正的风险是「密码错了也一直存着反复试」——那是「密码不对」那一类，
+           autoSignIn 里已按 badCred 清掉（见 autoSignIn 注），所以这里可以放心存。
+           同时把话说清楚：失败原因里带网络字眼的，明说「网络原因没登上，凭据已记下，下次自动重试」。 */
+        try {
+          var rm2 = area.querySelector('#cbRemember');
+          if (rm2 && rm2.checked) {
+            var saved = await rememberSave(idv, pass);
+            if (saved && /网络|超时|未加载|连不上|断网|timeout|network|fetch|offline/i.test(t)) {
+              m.textContent = t + '（密码已记住，下次开机自动重试）';
+            }
+          }
+        } catch (e2) {}
       }
     };
     area.querySelector('#cbLogin').onclick = function(){ doAuth(); };
