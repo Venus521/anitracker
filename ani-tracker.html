@@ -1428,7 +1428,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.46.0', AT_BUILD='20261008e';
+var AT_VERSION='2.46.1', AT_BUILD='20261008f';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -2963,8 +2963,30 @@ async function webSearchOne(kw){
    Key 只存本机（at_tmdb_key，走 SECRET_KEY_RE 导出剔除 / 云同步剔除），不进备份与云端。
    远程海报若 CORS 不允许转 dataURL（离线会裂），则保留远程地址并打 coverBy='net'，
    由 coverNeedsHeal 跳过，不再反复自愈；能转就转成本机 dataURL（与旧版 TVMaze 封面同待遇）。 */
+/* ===== v2.46.1：TMDB 密钥两道护栏 =====
+   他实测踩的坑：申请页一次给两串东西——短的「API Key (v3 auth)」（32 位十六进制）
+   和长的「API Read Access Token (v4 auth)」（eyJ 开头的 JWT）。贴了长的那串，
+   TMDB 回 {"status_code":7,"status_message":"Invalid API key: You must be granted a valid key."}，
+   而这里原样 catch 掉就静默跳过——他那边看不到半句报错，只觉得「配了 key 也没变化」。
+   ① 保存时先认形状：明显的 v4 令牌直接拦下不写盘，形状可疑的写但要说一句；
+   ② 拉封面撞 401 就认这是密钥无效：提示一次并把这一环停用（换了 key 才复活），
+      其余源照常走——不许再一遍遍白跑。 */
+var _tmdbBadKey=false;
+function tmdbKeyWarn(v){
+  v=String(v||'').trim(); if(!v) return '';
+  if(/^eyJ/i.test(v)) return '这是 v4 的 Read Access Token（eyJ 开头、带点号那串长的），追迹要的是 v3 的 API Key（32 位十六进制）';
+  if(v.indexOf('.')>=0&&v.length>60) return '这串带点号又很长，是 v4 的令牌；要填的是 v3 的 API Key（32 位十六进制）';
+  if(v.length>40) return '太长了（'+v.length+' 位）：v3 的 API Key 只有 32 位';
+  if(!/^[0-9a-fA-F]{32}$/.test(v)) return '不像 v3 的 API Key（应为 32 位十六进制，现在这串 '+v.length+' 位），一直拉不到封面就回 TMDB 页面再核对一次';
+  return '';
+}
+function tmdbKeyBlocked(v){
+  v=String(v||'').trim(); if(!v) return false;
+  return /^eyJ/i.test(v)||(v.indexOf('.')>=0&&v.length>60)||v.length>200;
+}
 async function tmdbCoverFor(s){
   var key=rd('at_tmdb_key',''); if(!key) return null;
+  if(_tmdbBadKey) return null;            /* v2.46.1：已经撞过 401 就别再白跑 */
   var tried=[];
   [s.title,s.nameJp].concat(s.aliases||[]).forEach(function(t){ t=String(t||'').trim(); if(t&&tried.indexOf(t)<0) tried.push(t); });
   try{ searchVariants(s.title).forEach(function(t){ t=String(t||'').trim(); if(t&&tried.indexOf(t)<0) tried.push(t); }); }catch(e){}
@@ -2981,7 +3003,16 @@ async function tmdbCoverFor(s){
       });
       if(!best){ data.results.forEach(function(r){ if(!best&&r&&r.poster_path) best=r; }); }
       if(best&&best.poster_path) return 'https://image.tmdb.org/t/p/w300'+best.poster_path;
-    }catch(e){ if(e&&e.webCode==='NET') throw e; continue; }
+    }catch(e){
+      /* v2.46.1：401 就是「这把钥匙不对」（TMDB 的 status_code 7）。_wget 只带状态码不带正文，
+         这里够用了——别为了读正文再发一次请求。 */
+      if(/^HTTP 401\b/.test(String((e&&e.message)||e||''))){
+        if(!_tmdbBadKey){ _tmdbBadKey=true;
+          try{ toast('TMDB 密钥无效，这一环已停用（其余封面源照常）——去 账号 → 封面来源 换 v3 的 32 位 Key'); }catch(_){} }
+        return null;
+      }
+      if(e&&e.webCode==='NET') throw e; continue;
+    }
   }
   return null;
 }
@@ -6058,15 +6089,24 @@ function openCoverSrc(){
     '<div class="row2" style="margin-top:2px"><button type="button" class="b1" id="cvSrcSave" style="flex:1">保存</button>'+
     '<button type="button" class="b2" id="cvSrcClear" style="flex:0 0 auto">清除</button></div>'+
     '<p class="aihint" style="margin-top:10px">什么时候才值得配：想给部分海外剧提升封面命中率时，去 '+
-    '<a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>（免费）申请 v3 Key 填进来即可。豆瓣偶发限流时，稍后再点详情页「⟳ 重拉封面」；总抓不到的走「⇪ 本地封面」手动传图。</p>'+
+    '<a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>（免费）申请，复制 <b style="color:var(--ink)">API Key (v3 auth)</b> 那串 <b style="color:var(--ink)">32 位</b>的填进来即可；页面上另一串 eyJ 开头、很长的 v4 令牌不是它，贴进来会被拦下。豆瓣偶发限流时，稍后再点详情页「⟳ 重拉封面」；总抓不到的走「⇪ 本地封面」手动传图。</p>'+
     '</div></div>');
   document.body.appendChild(wrap);
   var km=$('cvSrcKey'); if(km) km.value=rd('at_tmdb_key','')||'';
+  /* v2.46.1：上回撞过 401 的话，一开面板就把话说在前面（否则他只看到输入框是空的，不知道这一环停了） */
+  var mi=$('cvSrcMsg');
+  if(_tmdbBadKey){ mi.textContent='⚠ 上次拉封面时 TMDB 回「密钥无效」，这一环已停用；换一个 Key 保存就恢复'; mi.style.color='var(--warn)'; }
   wrap.addEventListener('click',function(e){ if(e.target===wrap) wrap.remove(); });
   $('cvSrcX').onclick=function(){ wrap.remove(); };
-  $('cvSrcSave').onclick=function(){ var v=String($('cvSrcKey').value||'').trim(); wr('at_tmdb_key',v);
-    var m=$('cvSrcMsg'); m.textContent=v?'已保存（本机，导出已剔除）':'已清空'; m.style.color='var(--ok)'; };
-  $('cvSrcClear').onclick=function(){ wr('at_tmdb_key',''); var k2=$('cvSrcKey'); if(k2) k2.value='';
+  $('cvSrcSave').onclick=function(){
+    var v=String($('cvSrcKey').value||'').trim(), m=$('cvSrcMsg'), w=(typeof tmdbKeyWarn==='function')?tmdbKeyWarn(v):'';
+    if(typeof tmdbKeyBlocked==='function'&&tmdbKeyBlocked(v)){ m.textContent='✗ 没保存：'+w; m.style.color='var(--danger)'; return; }
+    wr('at_tmdb_key',v); _tmdbBadKey=false;
+    if(!v){ m.textContent='已清空'; m.style.color='var(--muted)'; return; }
+    m.textContent = w ? ('⚠ 已保存，但这串可能不对：'+w) : '已保存（本机，导出已剔除）';
+    m.style.color = w ? 'var(--warn)' : 'var(--ok)';
+  };
+  $('cvSrcClear').onclick=function(){ wr('at_tmdb_key',''); _tmdbBadKey=false; var k2=$('cvSrcKey'); if(k2) k2.value='';
     var m=$('cvSrcMsg'); m.textContent='已清除 TMDB Key'; m.style.color='var(--muted)'; };
 }
   box.querySelector('#syFile').addEventListener('change',function(ev){
