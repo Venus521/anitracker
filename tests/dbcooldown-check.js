@@ -87,7 +87,11 @@ function probePort(port) {
         if (s.indexOf('mode=info') >= 0) {
           return { ok: true, status: 200, json: async () => window.__infoResp };
         }
-        if (s.indexOf('douban-relay') >= 0 && s.indexOf('mode=') < 0 && window.__cover503) {
+        /* 本地模式（127.0.0.1）下 doubanRelayCover 会先打本机 /cover-relay，
+           网络通时它真的去豆瓣抓图、把 503 这条路绕过去，于是 L04 测不到限流分支。
+           这里把本地 /cover-relay 也纳入 503 替身，让测试与网络状态无关、稳定可复现。 */
+        if (window.__cover503 && s.indexOf('mode=') < 0 &&
+            (s.indexOf('douban-relay') >= 0 || s.indexOf('cover-relay') >= 0)) {
           return { ok: false, status: 503,
             json: async () => ({ error: 'douban rate limited', coolMs: 45000 }),
             blob: async () => new Blob([]) };

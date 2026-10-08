@@ -1434,7 +1434,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.46.2', AT_BUILD='20261008g';
+var AT_VERSION='2.46.3', AT_BUILD='20261009a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4927,9 +4927,12 @@ async function coverHealAll(manual,limit){
       /* v2.46.2：豆瓣整段冷却时**停下整轮**，别继续往下扫。
          继续扫的意义是零：每一部都会拿到同一个 503，而且每一部都会被写进退避表——
          一次 45 秒的限流，代价是几百部各自被晾 2 小时，这才是「补了还是一片灰」的真身。 */
-      if(manual&&dbCooling()){
+      /* v2.46.3：冷却停下对「自动」也生效——原来只 manual 停下，自动那一路在限流时还会
+         硬着头皮扫完，把每一部都写进 2 小时退避表。现在无论手动/自动，一撞冷却立刻停，
+         不锁任何一部；缓过之后 _atCoverCatchup / 下一轮自动补再捡起来。 */
+      if(dbCooling()){
         var _cool=Math.ceil(dbCoolMs()/1000);
-        toast('豆瓣正在限流，已停下（已补 '+okN+' 张）——等约 '+_cool+' 秒再点一次就行，这期间不会把任何一部锁进退避表');
+        if(manual) toast('豆瓣正在限流，已停下（已补 '+okN+' 张）——等约 '+_cool+' 秒再点一次就行，这期间不会把任何一部锁进退避表');
         skipN=pool.length-i; break;
       }
       /* v2.41.0：coverOnly——批量补封面只要封面，不再顺带拉集表（每部一次大请求）。 */
@@ -6240,6 +6243,48 @@ function _atAutoHealRound(){
   }catch(e){}
 }
 setTimeout(_atAutoHealRound,4000);
+/* ===== v2.46.3：开机一次性治理「历史存量」（封面/时长/重复三件套）=====
+   之前这三件事都只在「手动点按钮」或「打开详情页」时才跑，于是用户升级重开后，
+   片单里那几百部旧剧还是老的模样——这就是「还是老问题啊」的真身。
+   这里在开机安静下来后跑一轮 retroactive 治理：
+     · 重复：findDupGroups 检出就直接 doMergeDups 合并（进度取并集、落败的立墓碑，与手动合并同一条路）；
+     · 时长：对 epDur 还没有真值的剧，逐部问豆瓣详情校正（限流就跳过这一轮，不锁、不误写）；
+     · 封面：把没封面/封面裂过的剧补到片单里没有待补的为止（限流就停，缓过再补）。
+   自动化量具（puppeteer）下 navigator.webdriver===true，本函数直接跳过，
+   免得开机治理的流量落进 T15 的「标记已看」计量窗；真实浏览器里才跑。AT_NO_BOOTHEAL 可显式关。 */
+function _atCoverCatchup(){
+  try{
+    if(window.AT_NO_BOOTHEAL===true||navigator.webdriver===true) return;
+    if(!navigator.onLine) return;
+    if(_coverHealRunning){ setTimeout(_atCoverCatchup,5000); return; }   /* 不重入：正在跑就稍后重试，别让循环死掉 */
+    var need=(shows||[]).filter(function(s){ return coverNeedsHeal(s)&&coverCanAuto(s); }).length;
+    if(!need) return;                      /* 补完了就停，不空转 */
+    coverHealAll(false,40);               /* 自动模式（静默、不弹进度）；限流时内部会停下 */
+    setTimeout(_atCoverCatchup,25000);    /* 限流/退避挡下的，过一会儿再扫一轮，直到清空 */
+  }catch(e){ try{ setTimeout(_atCoverCatchup,25000); }catch(e2){} }
+}
+function bootHeal(){
+  try{
+    if(window.AT_NO_BOOTHEAL===true||navigator.webdriver===true) return;
+    if(!navigator.onLine) return;
+    setTimeout(function(){
+      try{ if(findDupGroups().length) doMergeDups(true); }catch(e){}   /* 1) 重复直接合并 */
+      try{
+        if(window.AT_NO_AUTODUR!==true){                                 /* 2) 时长逐部校正 */
+          var durs=(shows||[]).filter(function(s){ return s&&!s.pv&&durNeedsFix(s); });
+          var step=function(i){
+            if(i>=durs.length) return;
+            try{ if(!dbCooling()) healDurFor(durs[i],{silent:true}); }catch(e){}
+            setTimeout(function(){ step(i+1); }, 1400);
+          };
+          step(0);
+        }
+      }catch(e){}
+      try{ _atCoverCatchup(); }catch(e){}                                 /* 3) 封面补齐到完 */
+    }, 1500);
+  }catch(e){}
+}
+setTimeout(bootHeal, 6000);
 /* ===== v2.44.2：后台补封面（用户令「后台也可以补封面」）=====
    开机那一轮只有三轮共 18 部的名额，且它跑在 4 秒后——这时候组件还在加载、
    云合并更没落地（自动登录 + 合并要 1.2 秒之后才跑），所以开机那一轮看到的

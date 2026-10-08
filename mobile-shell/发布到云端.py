@@ -114,10 +114,32 @@ def check_shell_fresh():
     print('  壳对账 OK：包内界面 v%s · %s' % (have, u'v%s（versionCode %s）' % (name, code)))
 
 
+def _win_env():
+    """沙箱（Git-Bash）把 PATH 以 MSYS 路径（/c/Windows/...）交给 Windows 子进程时，
+       cmd /c tcb 会找不到 System32/chcp 与 node/tcb，于是 deploy 直接退出码 1。
+       这里照 build-apk.py 的做法，显式拼一份 Windows 原样 PATH：
+       固定补上 System32 / node / tcb 所在目录，再只保留原 PATH 里「盘符开头」的条目
+       （把 MSYS 路径滤掉，避免污染），保证 cmd 子进程一定找得到 chcp、node、tcb。"""
+    import os as _os
+    want = [
+        r'C:\Windows\System32', r'C:\Windows', r'C:\Windows\System32\Wbem',
+        r'C:\Users\Venus\.workbuddy\binaries\node\versions\22.22.2-6',
+        r'C:\Program Files\nodejs', r'D:\npm-global',
+    ]
+    cur = _os.environ.get('PATH', '')
+    kept = [p for p in cur.replace('/', '\\').split(';') if re.search(r'^[A-Za-z]:\\', p)]
+    used = list(want)
+    for p in kept:
+        if p not in used:
+            used.append(p)
+    return dict(_os.environ, PATH=';'.join(used))
+
+
 def tcb(args, name, quiet=False):
     # tcb 是 .cmd，CreateProcess 起不动批处理，必须过 cmd /c
+    # env 用 _win_env() 兜住沙箱下 PATH 丢失，让 chcp/node/tcb 一定可达（普通 Windows 下只是多了几条重复项，无害）
     p = subprocess.run(['cmd', '/c', 'tcb'] + args, capture_output=True, text=True,
-                       encoding='utf-8', errors='replace')
+                       encoding='utf-8', errors='replace', env=_win_env())
     out = ((p.stdout or '') + (p.stderr or '')).strip()
     if p.returncode != 0:
         tail = [l for l in out.splitlines() if l.strip()][-8:]
