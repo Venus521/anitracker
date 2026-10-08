@@ -77,9 +77,22 @@ function negSet(k) {
 //      连续 5 次 → 45s 冷却；冷却期内未缓存请求快速 503（缓存命中照常回）。 ----
 let coolUntil = 0;
 let streak403 = 0;
-function note403() { if (++streak403 >= 5) coolUntil = Date.now() + 45 * 1000; }
+/* v2.46.2：冷却**不许续期**。
+   老写法是 `if (++streak403 >= 5) coolUntil = now + 45s`——一旦过了 5 次，
+   **每一个** 403 都把冷却再往后推 45 秒。而真实流量是持续的（一键拉封面一口气几百部、
+   详情页每次打开都问一次时长），于是「冷却 → 快速失败 → 客户端再问 → 又 403 → 再续 45s」
+   **永远出不来**。实测（2026-10-08 23:2x）：连打 3 轮 info，前两轮都是
+   `{"found":false,"reason":"cooling down"}`，第三轮才通——他那边看到的就是
+   「时长还是估的、封面还是一片灰」，而函数这边其实一直活着，只是把门关着。
+   现在：只在**没在冷却**时才计数，触发一次即清零；冷却期内 403 一律不再延期。 */
+function note403() {
+  if (cooling()) return;                 // 已经在冷却：别再往后推
+  if (++streak403 >= 5) { coolUntil = Date.now() + 45 * 1000; streak403 = 0; }
+}
 function noteOk() { streak403 = 0; }
 const cooling = () => Date.now() < coolUntil;
+/* 冷却还剩多久：随失败响应一起回给客户端，让它知道「等一会儿再来」而不是「这部剧没有」 */
+const coolMs = () => Math.max(0, coolUntil - Date.now());
 
 // ---- 实例级外呼节流：相邻豆瓣请求间隔 ≥ CALL_GAP ----
 let gate = Promise.resolve();
@@ -381,8 +394,13 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(v));
       } catch (e) {
         clearTimeout(killer);
+        /* v2.46.2：把「限流」和「这部剧查不到」分开说。
+           两者原来都是 `found:false`，前端一视同仁地写进负缓存——于是「豆瓣那 45 秒」
+           被他记成了「这部剧没有时长」，整个会话再也不问。冷却时附上 coolMs 让它能等。 */
+        const limited = (e instanceof RateLimited) || cooling();
         res.writeHead(200, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
-        return res.end(JSON.stringify({ found: false, reason: String((e && e.message) || e) }));
+        return res.end(JSON.stringify({ found: false, reason: String((e && e.message) || e),
+          limited: limited, coolMs: limited ? coolMs() : 0 }));
       }
     }
     const q2 = url.parse(req.url, true).query;
@@ -404,8 +422,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (e instanceof RateLimited || cooling()) {
       // 限流（无论是否已进入冷却）：503 + Retry-After，语义是「可重试」，前端立刻退下一路源
-      res.writeHead(503, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '45' }, cors));
-      return res.end(JSON.stringify({ error: 'douban rate limited' }));
+      // v2.46.2：带上真实剩余毫秒——前端据此排重试，而不是把这一部锁进 2 小时退避表。
+      const ms = Math.max(5000, coolMs());
+      res.writeHead(503, Object.assign({ 'Content-Type': 'application/json; charset=utf-8',
+        'Retry-After': String(Math.ceil(ms / 1000)) }, cors));
+      return res.end(JSON.stringify({ error: 'douban rate limited', coolMs: ms }));
     }
     res.writeHead(502, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
     res.end(JSON.stringify({ error: 'douban fail: ' + e.message }));
