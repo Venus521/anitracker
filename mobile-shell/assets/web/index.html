@@ -1095,6 +1095,70 @@ function seasonSeqOf(t){
   m=s.match(/(?:^|[\s\-_])[Ss]([0-9]{1,2})(?:[\s:\-_]|$)/); if(m) return parseInt(m[1],10);
   return 0;
 }
+/* ===== v2.47.0 前缀指认：「正名 + 尾巴」型标题 =====
+   v2.46.x 的桥只认「归一化后完全相等的名字」，于是两类真实标题整排漏掉：
+     · 《海贼王 ワンピース》—— 中文正名后面拼了一串日文名，对不上「海贼王」也对不上
+       「One Piece」，既不会被并掉（用户截图里它跟《海贼王》各躺一条 26/1168），
+       也拿不到封面；
+     · 《凡人修仙传：重返天南》—— 挂着副标题，coverFromLib 的全等闸直接挡掉。
+   这里补一条「前缀 + 尾巴」的指认：库里某个作品名是一条标题的**前缀**，
+   且尾巴属于下面档位，才许认——
+     · **纯外文尾巴**（含假名/拉丁字母、不含汉字）——「ワンピース」是同一部作品的别名拼写；
+     · **原文挂着分隔符的副标题** —— 「：重返天南」跟在冒号后面，是同一部作品的副题卷
+       （normTxt 连「：」都剥掉了，所以这档只能在只去空格的原文上验，见 _coverByPrefix）。
+   纯汉字尾巴又不挂分隔符的不认：《海贼王外传》不是《海贼王》、《进击的巨人外传》
+   不许去拿《进击的巨人》的封面。尾巴里连个字母/假名都没有的（「高达00」的「00」）
+   也不认——数字是续作序号，不是拼写变体。
+   另带两道哨：前缀至少 2 字（防单字名见谁都吃）、季序必须相等
+   （《进击的巨人 Season 2》不许认进本传）；指认还要求**有集数锚**且集数对得上——
+   整部 1168 集就是靠这个从 lib[285]《海贼王 剧场版》(41 集) 里挑出来的。 */
+function _tailForeign(t){ return !!t && !/[\u4e00-\u9fff]/.test(t) && /[\u3040-\u30ff\uff66-\uff9fA-Za-z]/.test(t); }
+function libIdByPrefix(s){
+  var out={loose:[],strict:[]};
+  try{
+    var title=normTxt(s&&s.title);
+    var tot=Number(s&&s.total)||0;
+    if(!title||title.length<3||!tot) return out;   /* 没有集数锚就不指认：没法从《剧场版》里挑出本传 */
+    var lib=window.INTERNAL_SHOWS||window.ANITRACKER_LIB||[];
+    if(!lib||!lib.length) return out;
+    var any=[], sure=[];
+    for(var i=0;i<lib.length;i++){
+      var it=lib[i]; if(!it) continue;
+      var id=String(it.id||('lib'+i));
+      var names=[it.title,it.nameJp].concat(it.aliases||[]);
+      for(var j=0;j<names.length;j++){
+        var k=normTxt(names[j]);
+        if(!k||k.length<2||title.indexOf(k)!==0) continue;
+        if(!_tailForeign(title.slice(k.length))) continue;
+        if(seasonSeqOf(s.title)!==seasonSeqOf(names[j])) continue;
+        if(any.indexOf(id)<0) any.push(id);
+        var lt=Number(it.total)||0;
+        if(!lt||Math.abs(tot-lt)<=Math.max(2, Math.ceil(Math.max(tot,lt)*0.05))){
+          if(sure.indexOf(id)<0) sure.push(id);
+        }
+        break;
+      }
+    }
+    if(!any.length) return out;
+    if(sure.length){ out.loose=sure; out.strict=sure; }  /* 集数对得上的候选才配「明确」 */
+    else { out.loose=any; }                              /* 一个都对不上就只给 loose，让①②卫兵再判 */
+    return out;
+  }catch(e){ return {loose:[],strict:[]}; }
+}
+/* 正名 + 纯外文尾巴的别名拼写（《死神 ブリーチ》↔《死神》）也认成同一部。
+   只放这一档：尾巴带汉字（副标题）的一律不放——豆瓣那头副标题常是另一季，
+   时长/格式信号落错季比不落更糟。 */
+function _titleAliasOk(x,y){
+  try{
+    var nx=normTxt(x), ny=normTxt(y);
+    if(!nx||!ny||nx===ny) return false;
+    if(seasonSeqOf(x)!==seasonSeqOf(y)) return false;
+    var lo=nx, sh=ny;
+    if(lo.length<sh.length){ lo=ny; sh=nx; }
+    if(sh.length<2||lo.indexOf(sh)!==0) return false;
+    return _tailForeign(lo.slice(sh.length));
+  }catch(e){ return false; }
+}
 /* 返回 {loose:[所有候选 id], strict:[明确指认的 id]}——见上面② */
 function libIdsOf(s){
   try{
@@ -1107,6 +1171,10 @@ function libIdsOf(s){
       if(!arr||!arr.length) continue;
       for(var j=0;j<arr.length;j++){ if(loose.indexOf(arr[j])<0) loose.push(arr[j]); }
       if(arr.length===1 && strict.indexOf(arr[0])<0) strict.push(arr[0]);
+    }
+    if(!loose.length){
+      var pf=libIdByPrefix(s);        /* v2.47.0：《海贼王 ワンピース》这类「正名+尾巴」标题的指认 */
+      if(pf&&pf.loose.length){ loose=pf.loose; strict=pf.strict; }
     }
     var out={loose:loose,strict:strict};
     _libIdsMemo[key]=out; return out;
@@ -1434,7 +1502,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.46.3', AT_BUILD='20261009a';
+var AT_VERSION='2.47.0', AT_BUILD='20261009b';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4347,7 +4415,9 @@ function durNeedsFix(s){
 }
 function dbInfoAccept(s,info){
   if(!s||!info||!info.found) return false;
-  if(normTxt(info.title)!==normTxt(String(s.title||''))) return false;
+  /* v2.47.0：全等之外再放「正名 + 纯外文尾巴」一档（《死神 ブリーチ》接得住豆瓣《死神》的详情；
+     带汉字的副标题尾巴照旧不放——那常是另一季，时长落错季比不落更糟）。 */
+  if(normTxt(info.title)!==normTxt(String(s.title||'')) && !_titleAliasOk(info.title,String(s.title||''))) return false;
   var ys=Number(s.year)||0, yi=Number(info.year)||0;
   if(ys&&yi&&Math.abs(ys-yi)>1) return false;
   return true;
@@ -4483,6 +4553,39 @@ function coverFromLib(s){
       var cand=[normTxt(it.title),normTxt(it.nameJp)];
       (it.aliases||[]).forEach(function(a){ cand.push(normTxt(a)); });
       for(var j=0;j<want.length;j++) if(cand.indexOf(want[j])>=0) return String(it.cover);
+    }
+    return _coverByPrefix(s);   /* v2.47.0：《凡人修仙传：重返天南》《海贼王 ワンピース》这类「正名+尾巴」 */
+  }catch(e){}
+  return '';
+}
+/* v2.47.0 封面的「前缀 + 尾巴」兜底（只在全等落空后走到）：
+   两档尾巴 —— 纯外文（《海贼王 ワンピース》）/ 原文挂着分隔符的副标题（《凡人修仙传：重返天南》）。
+   这档必须在**只去空格的原文**上验：normTxt 连「：」都剥掉了，光看归一化串分不清
+   「副标题」和「外传」这种续作字眼。季序不同的不认（《进击的巨人 Season 2》不许拿第一季的图），
+   纯汉字尾巴又不挂分隔符的也不认（《海贼王外传》不是《海贼王》）。 */
+function _coverByPrefix(s){
+  try{
+    var lib=window.INTERNAL_SHOWS||window.ANITRACKER_LIB||[];
+    if(!lib||!lib.length) return '';
+    var raws=[s&&s.title,s&&s.nameJp].concat((s&&s.aliases)||[]).filter(function(x){ return x&&String(x).trim(); });
+    if(!raws.length) return '';
+    for(var i=0;i<lib.length;i++){
+      var it=lib[i]; if(!it||!it.cover) continue;
+      var names=[it.title,it.nameJp].concat(it.aliases||[]);
+      for(var r=0;r<raws.length;r++){
+        var soft=String(raws[r]).toLowerCase().replace(/[\s\u3000]/g,'');
+        if(!soft) continue;
+        for(var j=0;j<names.length;j++){
+          var k=normTxt(names[j]);
+          if(!k||k.length<2) continue;
+          if(soft.indexOf(k)!==0) continue;
+          var tail=soft.slice(k.length);
+          if(!tail) continue;                                                    /* 全等上一轮已经管过 */
+          if(/[\u4e00-\u9fff]/.test(tail) && !/^[：:·・•\-—－–~～]/.test(tail)) continue;  /* 纯汉字尾巴且没挂分隔符 */
+          if(seasonSeqOf(String(raws[r]))!==seasonSeqOf(String(names[j]))) continue;       /* 季哨 */
+          return String(it.cover);
+        }
+      }
     }
   }catch(e){}
   return '';

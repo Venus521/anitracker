@@ -179,6 +179,56 @@ function probePort(port) {
     check('Q06', '粒度保护仍然成立：整部（1168 集）与其一季（24 集）不许合并 —— 加了桥也不许的热情过头',
       granu.groups === 0 && granu.merged === 0 && granu.left === 2, JSON.stringify(granu));
 
+    /* Q07 v2.47.0：正名 + 日文尾巴（《海贼王 ワンピース》）要跟《海贼王》认成同一条——
+       用户截图里唯一还躺在片单上的那对重复（两边各躺一条 26/1168）；《死神 ブリーチ》同档。
+       对照：《海贼王 剧场版》（41 集）不许被这条新规则捎带着并进 1168 集的整部。 */
+    const combo = await page.evaluate(() => {
+      const mk = (sid, title, total, st) => ({ sid: sid, title: title, nameJp: '', aliases: [],
+        total: total, eps: [], statuses: st || {}, status: 'watching', addedAt: Date.now(), updAt: Date.now() });
+      window.shows = [
+        mk('c1', '海贼王 ワンピース', 1168, { 1: 'watched' }),
+        mk('c2', '海贼王', 1168, { 2: 'watched' }),
+        mk('c3', '死神 ブリーチ', 366, { 3: 'watched' }),
+        mk('c4', '死神', 366, { 1: 'watched' }),
+        mk('c5', '海贼王 剧场版', 41, {})
+      ];
+      const g = (typeof window.findDupGroups === 'function') ? window.findDupGroups() : [];
+      let m = 0;
+      if (typeof window.doMergeDups === 'function') m = window.doMergeDups(true);
+      const op = (window.shows || []).filter((s) => /海贼王/.test(s.title) && Number(s.total) > 1000);
+      const bl = (window.shows || []).filter((s) => /死神/.test(s.title));
+      return { groups: g.length, merged: m, left: (window.shows || []).length,
+        opN: op.length, opSt: op[0] ? op[0].statuses : null,
+        blN: bl.length, blSt: bl[0] ? bl[0].statuses : null,
+        mvLeft: (window.shows || []).some((s) => s.title === '海贼王 剧场版') };
+    });
+    check('Q07', '正名+日文尾巴（《海贼王 ワンピース》《死神 ブリーチ》）被判成重复并合并，进度取并集；《剧场版》不捎带',
+      combo.groups === 2 && combo.merged === 2 && combo.left === 3 && combo.mvLeft === true &&
+      combo.opN === 1 && combo.opSt && combo.opSt['1'] === 'watched' && combo.opSt['2'] === 'watched' &&
+      combo.blN === 1 && combo.blSt && combo.blSt['1'] === 'watched' && combo.blSt['3'] === 'watched',
+      JSON.stringify(combo));
+
+    /* Q08 v2.47.0：挂副标题 / 日文尾巴的标题要从内置库接住**正主**的封面；
+       对照：外传字眼（纯汉字尾巴没挂分隔符）与另一季（季序不同）不许错接；
+       dbInfoAccept 同口径：正名+纯外文尾巴放行，汉字副标题照旧不放。 */
+    const cov = await page.evaluate(() => {
+      const L = window.INTERNAL_SHOWS || [];
+      const find = (t) => L.filter((x) => x.title === t)[0] || null;
+      const fanren = find('凡人修仙传'), op = find('海贼王');
+      const cf = (t) => (typeof window.coverFromLib === 'function') ? window.coverFromLib({ title: t, nameJp: '', aliases: [] }) : '';
+      const acc = (a, b) => (typeof window.dbInfoAccept === 'function') ? window.dbInfoAccept({ title: a, year: 0 }, { found: true, title: b, year: 0, type: 'tv' }) : null;
+      return {
+        libFanren: !!(fanren && fanren.cover), libOp: !!(op && op.cover),
+        subOk: !!(fanren && fanren.cover && cf('凡人修仙传：重返天南') === fanren.cover),
+        jpOk: !!(op && op.cover && cf('海贼王 ワンピース') === op.cover),
+        spin: cf('进击的巨人外传'), season2: cf('进击的巨人 Season2'),
+        accJp: acc('死神 ブリーチ', '死神'), accSpin: acc('进击的巨人', '进击的巨人外传')
+      };
+    });
+    check('Q08', '副标题（凡人修仙传：重返天南）与正名+日文尾巴（海贼王 ワンピース）接住正主封面；外传/另一季不许错接',
+      cov.libFanren && cov.libOp && cov.subOk && cov.jpOk && cov.spin === '' && cov.season2 === '' &&
+      cov.accJp === true && cov.accSpin === false, JSON.stringify(cov));
+
     check('E00', '全程无页面级 JS 错误', errs.length === 0, errs.join(' | '));
   } finally {
     await browser.close();
