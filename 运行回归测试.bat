@@ -21,8 +21,10 @@ node tests\phone-use.js
 set RC7=%ERRORLEVEL%
 node tests\phone-look.js
 set RC8=%ERRORLEVEL%
+node tests\ep-duration-check.js
+set RC9=%ERRORLEVEL%
 echo.
-echo EXIT CODE: cred=%RC0% regression=%RC1% douban-sync=%RC2% douban-push=%RC3% desk-tier=%RC4% phone-canon=%RC5% name-refresh=%RC6% phone-use=%RC7% phone-look=%RC8%
+echo EXIT CODE: cred=%RC0% regression=%RC1% douban-sync=%RC2% douban-push=%RC3% desk-tier=%RC4% phone-canon=%RC5% name-refresh=%RC6% phone-use=%RC7% phone-look=%RC8% ep-duration=%RC9%
 if not "%RC0%"=="0" exit /b 1
 if not "%RC1%"=="0" exit /b 2
 if not "%RC2%"=="0" exit /b 3
@@ -32,4 +34,5 @@ if not "%RC5%"=="0" exit /b 6
 if not "%RC6%"=="0" exit /b 7
 if not "%RC7%"=="0" exit /b 8
 if not "%RC8%"=="0" exit /b 9
+if not "%RC9%"=="0" exit /b 10
 pause

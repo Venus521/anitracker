@@ -1328,7 +1328,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.4', AT_BUILD='20261007i';
+var AT_VERSION='2.44.5', AT_BUILD='20261008a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1724,7 +1724,7 @@ function fmtDurShort(min){
 function durOf(s){
   s=s||{};
   var eps=s.eps||[], statuses=s.statuses||{}, def=defDurMin(s);
-  var out={epMin:def,total:0,watched:0,remain:0,seasons:{},known:false,film:isFilmEntry(s)};
+  var out={epMin:def,total:0,watched:0,remain:0,seasons:{},known:false,partial:false,film:isFilmEntry(s)};
   if(!eps.length){
     var t=Number(s.total)||0;
     out.total=def*t;
@@ -1748,7 +1748,10 @@ function durOf(s){
     if(v==='watched'||v==='rewatch') out.watched+=m;
     else { out.remain+=m; out.seasons[sn].remain+=m; }
   });
-  if(knownN){ out.epMin=Math.round(knownSum/knownN); out.known=true; }
+  if(knownN){ out.epMin=Math.round(knownSum/knownN);
+    /* v2.44.5：「有真值」必须是每条都有，不是有一条就算。缺一集就是估的，
+       整本账要标「约」——否则 12 集里 10 集有真值，报出来的数看着像实测。 */
+    out.known=(knownN===eps.length); out.partial=(knownN>0&&knownN<eps.length); }
   /* 电影部分进度折进时长账：看到 45% ⇒ 已看 45 分钟、还剩 55 分钟 */
   if(out.film){
     var fp=filmPosOf(s);
@@ -1776,7 +1779,7 @@ function durLineHtml(s){
   segs.push((d.film?'本片':'全剧')+'共 '+fmtDur(d.total));
   segs.push('已看 '+fmtDur(d.watched));
   segs.push(d.remain?('还剩 '+fmtDur(d.remain)):'✓ 已刷完');
-  if(!d.known && !d.film) segs.push('<span class="ds">无时长数据 · 按类型估</span>');
+  if(!d.known && !d.film) segs.push('<span class="ds">'+(d.partial?'部分缺单集时长 · 缺的按类型估':'无时长数据 · 按类型估')+'</span>');
   return segs.join('<span class="ds">·</span>');
 }
 
@@ -1877,6 +1880,24 @@ if(window.ANITRACKER_LIB_PROMISE){ window.ANITRACKER_LIB_PROMISE.then(function(a
         if(!s.cover && s._cvOld){ s.cover=s._cvOld; delete s._cvOld; }  /* 只还原，绝不主动清空 */
       }); save(); }
       localStorage.setItem('at_cover_q_v22','v2');
+    }
+  }catch(e){}
+  /* v2.44.5b 一次性回填（代码修好≠用户看到）：上面那条只管新加的条目，可用户片单里那批
+     「剧场版」是旧版 addInternal 建的——没 kind，片单级 type 又已被 v2.4.2 迁移删掉，
+     于是时长还按动画 24 分/集估。判据照内置库那份剧场版名单：标题归一化全等，
+     且条目本身只有一个片子（total<=1、集数<=1）才动——不模糊匹配、不看别名，宁可漏不错标。 */
+  try{
+    if(localStorage.getItem('at_filmkind_v2445')!=='1'){
+      var _films={};
+      (a||[]).forEach(function(x){ if(String(x.type)==='剧场版'){ var _k=normTxt(x.title); if(_k) _films[_k]=1; } });
+      var _fk=0;
+      if(typeof shows!=='undefined'&&shows.forEach&&Object.keys(_films).length){ shows.forEach(function(s2){
+        if(s2.kind) return;
+        if((Number(s2.total)||0)>1||(s2.eps||[]).length>1) return;
+        if(_films[normTxt(s2.title)]){ s2.kind='剧场版'; _fk++; }
+      }); }
+      if(_fk){ save(); try{ console.log('[v2.44.5] 按内置库回填剧场版分类 '+_fk+' 部（时长账随之从 24 分改成整片 100 分）'); }catch(e){} }
+      localStorage.setItem('at_filmkind_v2445','1');
     }
   }catch(e){}
 }); }
@@ -2069,7 +2090,9 @@ async function addInternal(id){
   // 构建集数组
   var eps=s.eps&&s.eps.length?s.eps:[];
   if(!eps.length){
-    for(var i=1;i<=s.total;i++) eps.push({s:i,t:'第 '+i+' 集',ref:null,dur:24});
+    /* v2.44.5：同 rebaseEps —— 新集不写 dur。原来硬写 dur:24 会让整本时长账
+       自认「有真值」，真人剧按 24 分算还不带「约」。没有时长证据就不冒充。 */
+    for(var i=1;i<=s.total;i++) eps.push({s:i,t:'第 '+i+' 集',ref:null});
   }
   var cover=s.cover||'';
   var entry={
@@ -2086,6 +2109,12 @@ async function addInternal(id){
     updAt:Date.now(),
     source:'内置库 · '+s.type
   };
+  /* v2.44.5b：内置库的 type 是「热血/经典/国漫/长篇/连载/剧场版」这类标签，
+     其中只有「剧场版」是格式信息。片单级 type 早被 v2.4.2 那条迁移删干净了
+     （分类只留集级），所以格式只能落在 kind 上——defDurMin 认 kind 里的「剧场版」
+     ⇒ 整片 100 分；之前这类条目一律退回动画 24 分/集，一部电影报成 24 分钟。
+     只给剧场版写 kind：其余留空，fillerAxisApplies 那套判定与今天一字不差。 */
+  if(String(s.type)==='剧场版') entry.kind='剧场版';
   addShow(entry);
   /* 封面转存挪出主路径：旧代码在这里 await 图片下载+压缩完才提示，手机走查实测
      点「添加」到看见回执中间干了 2.2 秒（内置库封面本来就在自家 CDN 上，当场就能显示）。
@@ -3822,8 +3851,13 @@ function rebaseEps(s,newTotal){ /* 编辑集数：重建 eps 保留已有标记 
   var eps=[];
   for(var i=1;i<=newTotal;i++){
     var oe=old.find(function(e){ return e.s===i; });
-    var e2={s:i, t:oe?oe.t:'第 '+i+' 集', ref:oe?oe.ref:null, dur:24};
-    if(oe){ if(oe.type) e2.type=oe.type; if(oe.bid) e2.bid=oe.bid; if(oe.src) e2.src=oe.src; if(oe.srcNote) e2.srcNote=oe.srcNote; }
+    /* v2.44.5：这里原来无条件写 dur:24 —— 两重错：已有集的真值时长被抹成 24，
+       新集也凭空带上 24，于是真人剧（应 45）和剧场版（应 100）整本时长账算错，
+       而且 e.dur>0 让账目自认「有真值」，估算值不再标「约」。
+       现在与「生成第 1–N 集」同口径：没有时长证据就不写时长。 */
+    var e2={s:i, t:oe?oe.t:'第 '+i+' 集', ref:oe?oe.ref:null};
+    if(oe){ if(Number(oe.dur)>0) e2.dur=Number(oe.dur);
+      if(oe.type) e2.type=oe.type; if(oe.bid) e2.bid=oe.bid; if(oe.src) e2.src=oe.src; if(oe.srcNote) e2.srcNote=oe.srcNote; }
     eps.push(e2);
   }
   s.eps=eps; if(!s.bgmTotal) s.bgmTotal=s.total; s.total=newTotal;
@@ -6635,7 +6669,7 @@ window.addEventListener('at_bgcover',function(e){
   function canonProgOf(s){
     if(!s || !fillerAxisApplies(s)) return null;
     var cn=0, cw=0, cr=0, tMin=0, tMax=0, tN=0;
-    var du={total:0,watched:0,remain:0,known:false};
+    var du={total:0,watched:0,remain:0,known:false,partial:false,kN:0,n:0};
     var def=defDurMin(s);
     (s.eps||[]).forEach(function(e){
       if(srcInfoOf(s,e).src!=='canon') return;
@@ -6645,11 +6679,12 @@ window.addEventListener('at_bgcover',function(e){
       var t=+((s.epT||{})[e.s]||0);
       if(t){ tN++; if(!tMin||t<tMin) tMin=t; if(t>tMax) tMax=t; }
       var d=Number(e.dur)||0, m=d>0?d:def;
-      if(d>0) du.known=true;
+      du.n++; if(d>0) du.kN++;
       du.total+=m;
       if(v==='watched'||v==='rewatch') du.watched+=m; else du.remain+=m;
     });
     if(!cn) return null;
+    du.known=(du.n>0&&du.kN===du.n); du.partial=(du.kN>0&&du.kN<du.n);
     var pct=Math.round((cw/cn)*100);
     return { total:cn, watched:cw, rewatch:cr, pct:pct, tMin:tMin, tMax:tMax, tN:tN, done:(cw+cr>=cn), dur:du };
   }
