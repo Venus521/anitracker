@@ -1345,7 +1345,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.7', AT_BUILD='20261008c';
+var AT_VERSION='2.45.0', AT_BUILD='20261008d';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -2487,6 +2487,9 @@ function coverPHOf(img){
 }
 function renderDetail(){
   var s=bySid(curSid); if(!s) return;
+  /* v2.45.0：这一行时长账还带着「约」、且这台机器上从没问过豆瓣 → 后台去问一次，
+     回来就地重算（几百部一起问会把额度烧穿，详情页才是他正盯着的那一个画面）。 */
+  try{ if(s&&s.sid!=null) _autoDurFor(s.sid); }catch(e){}
   /* v2.41.0：data-sid 让裂图能记到本部剧头上（进补封面池），data-ph 让占位写上首字 */
   var _dc=document.getElementById('dCover'); _dc.onerror=function(){ __coverFail(this); }; _dc.style.opacity=1;
   try{ _dc.setAttribute('data-sid',String(s.sid||'')); _dc.setAttribute('data-ph',String(s.title||'')); }catch(e){}
@@ -3955,6 +3958,8 @@ function editDur(){ /* v2.44.6：单集时长从「只能看着估」改成当�
       var t=String(v==null?'':v).trim();
       if(!t){ if(pick){ s.kind=pick.k; s.epDur=0; } else { toast('没填数，仍是'+durEstTxt(s)); return; } }
       else { var x=parseInt(t,10); s.epDur=x; if(pick) s.kind=pick.k; }
+      /* v2.45.0：手填过的那一格打上归属——自动补全的身份是「估计」，它没资格盖人的。 */
+      s.epDurFrom='me'; if(pick) s.kindFrom='me';
       save(); renderDetail();
       var d=durOf(s), m=Number(s.epDur)||defDurKind(s).m;
       toast('单集时长按 '+m+' 分记 · 全剧共 '+fmtDur(d.total)+(Number(s.epDur)?'（实测，不带约）':'（估的，带约）'));
@@ -4139,11 +4144,14 @@ async function wdCoverFor(name){
    本机 8089 服务也保留一份同源实现（局域网离线时用）。 */
 var DOUBAN_RELAY_CLOUD='https://cloud1-d7gsn5t0w6407b963.service.tcloudbase.com/douban-relay';
 /* v2.26.0：豆瓣同源中转封面。本地/局域网走 /cover-relay，其他情况走 CloudBase 公网函数。
-   服务端把豆瓣签名图字节同源返回，前端转 dataURL 离线存。返回 dataURL 或 ''。 */
-async function doubanRelayCover(name){
+   服务端把豆瓣签名图字节同源返回，前端转 dataURL 离线存。返回 dataURL 或 ''。
+   v2.45.0：id 是「这部剧在豆瓣的准确词条号」（在前一次详情核对过名字之后才有）。
+   带上它，服务端直接进详情取图，suggest + 四级搜索那一串全省掉——实测 20~50s → 1.3s。 */
+async function doubanRelayCover(name,id){
   name=String(name||'').trim(); if(!name) return '';
-  var eps=isLocalServer()?['/cover-relay?q='+encodeURIComponent(name),DOUBAN_RELAY_CLOUD+'?q='+encodeURIComponent(name)]
-                          :[DOUBAN_RELAY_CLOUD+'?q='+encodeURIComponent(name)];
+  var _id=String(id||'').trim(), _q='&id='+encodeURIComponent(_id);
+  var eps=isLocalServer()?['/cover-relay?q='+encodeURIComponent(name)+(_id?_q:''),DOUBAN_RELAY_CLOUD+'?q='+encodeURIComponent(name)+(_id?_q:'')]
+                          :[DOUBAN_RELAY_CLOUD+'?q='+encodeURIComponent(name)+(_id?_q:'')];
   for(var i=0;i<eps.length;i++){
     var dataURL='';
     try{
@@ -4180,6 +4188,122 @@ async function doubanSuggest(kw){
     var j=await r.json();
     return (j&&j.items)||[];
   }catch(e){ return []; }
+}
+/* ===== v2.45.0：单集时长与「是什么东西」去问豆瓣详情 =====
+   用户两轮都在说同一件事：「很多剧和番你自动拉的时长不对啊，都说了要看豆瓣」。
+   v2.44.6 把「按类型估」说清楚了、也给了手填出口，但它留了个结论：
+   「豆瓣联想这条路压根没有格式信号，免费源补不上」。那次只探到 suggest 那一层就停了。
+   这次多走一步（2026-10-08 实测，同一份 UA/Referer）：
+     suggest 拿到 id → 豆瓣详情 /v2/tv/{id} 或 /v2/movie/{id} → 200 且带
+     durations（大宋提刑官 45 分钟 / 漫长的季节 60 / 武林外传 48 / 肖申克的救赎 142）、
+     episodes_count、type、genres。**答案一直在，只是在详情层不在搜索层。**
+   规矩（沿用封面那几条，一条都不让步）：
+     ① 只认标题全等的词条——《怪奇物语》能搜到《怪奇物语 第五季》（78 分钟/8 集），
+        把那个数写进整部＝凭空造错账。云端那头已经核过一次，这里再核一次（改过名就作废）；
+     ② 同年卫兵：两边都有年份且差 >1 年 → 不认（翻拍/重制/同名续作常见）；
+     ③ 他手填过的（epDurFrom='me'）永远不动，哪怕豆瓣说别的数；
+     ④ 逐集都带真值的（TVMaze 那条拉来的）也不动——整本账本来就是实测。 */
+var _dbInfoCache={};                                  /* 会话内缓存：同一剧名不重复打云端 */
+function epsHaveRealDur(s){
+  var eps=(s&&s.eps)||[]; if(!eps.length) return false;
+  var n=0; eps.forEach(function(e){ if(Number(e&&e.dur)>0) n++; });
+  return n===eps.length;
+}
+function durNeedsFix(s){
+  if(!s||s.pv) return false;
+  var n=Number(s.epDur)||0;
+  if(n>0&&n<=600) return false;        /* 已有整部级真值（他手填的、AniList 同步来的都在这） */
+  if(epsHaveRealDur(s)) return false;  /* 逐集都有真值，整本账本来就不是估的 */
+  return true;
+}
+function dbInfoAccept(s,info){
+  if(!s||!info||!info.found) return false;
+  if(normTxt(info.title)!==normTxt(String(s.title||''))) return false;
+  var ys=Number(s.year)||0, yi=Number(info.year)||0;
+  if(ys&&yi&&Math.abs(ys-yi)>1) return false;
+  return true;
+}
+function applyDbInfo(s,info){
+  var got={dur:0,kind:0};
+  if(!dbInfoAccept(s,info)) return got;
+  /* 粒度这道哨：type=movie 而本机这条不是「整部只有一部片子」（12 集这种），
+     说明两头说的不是同一件事——分钟数和格式信号都不许落，连词条号也不许留
+     （留了它，下回补封面会按号去多盘一部电影的海报贴到这部剧上）。 */
+  if(String(info.type)==='movie' && !isFilmEntry(s)) return got;
+  var type=String(info.type||'');
+  var g=(info.genres||[]).join(' ');
+  /* 格式信号先立起来：哪怕豆瓣没给分钟数，「电视剧」也能把 24 的最低档抬到 45 那一档，
+     账立刻少错一半。它同时也是以后所有估算的基准——所以这一格比那个数更要紧。 */
+  var kind=/动画|动漫/.test(g)?'动画':(type==='movie'?'电影':(type==='tv'?'电视剧':''));
+  if(kind && String(s.kind||'')!==kind && String(s.kindFrom||'')!=='me'){ s.kind=kind; s.kindFrom='db'; got.kind=1; }
+  var m=Number(info.dur)||0;
+  if(m>=1&&m<=600){
+    var typeMismatch=(type==='movie'&&!isFilmEntry(s));   /* 电影真值不许乘进多集剧 */
+    var itsHis=(String(s.epDurFrom||'')==='me');
+    if(!typeMismatch&&!itsHis&&!epsHaveRealDur(s)&&Number(s.epDur)!==m){
+      s.epDur=m; s.epDurFrom='db'; got.dur=1;
+    }
+  }
+  if(info.id){ try{ s.dbSubId=String(info.id); }catch(e){} }   /* 封面再问同一部时按号直达，省掉搜索那一串 */
+  return got;
+}
+async function dbInfo(title){
+  title=String(title||'').trim(); if(!title) return null;
+  if(Object.prototype.hasOwnProperty.call(_dbInfoCache,title)) return _dbInfoCache[title];
+  if(!navigator.onLine){ _dbInfoCache[title]=null; return null; }
+  try{
+    var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },9000);
+    var r=await fetch(DOUBAN_RELAY_CLOUD+'?mode=info&q='+encodeURIComponent(title),{signal:ctl.signal});
+    clearTimeout(tm);
+    if(!r.ok) throw new Error('http '+r.status);
+    var j=await r.json();
+    _dbInfoCache[title]=(j&&j.found)?j:null;
+  }catch(e){ _dbInfoCache[title]=null; }
+  return _dbInfoCache[title];
+}
+async function healDurFor(s,opts){
+  opts=opts||{};
+  try{
+    if(!durNeedsFix(s)) return 0;
+    var info=await dbInfo(String(s.title||'').trim());
+    if(!info) return 0;
+    var got=applyDbInfo(s,info);
+    if(got.dur||got.kind){
+      s.updAt=Date.now();
+      if(opts.save!==false){ try{ save(); }catch(e){} }
+      /* 「静默」是不弹话，不是不重算。第一版就是这样被自己这条门禁判红的：
+         存档里已经是 45 分、账也算对了，可屏幕上那一行还写着「约 24 分钟 · 没标类型」——
+         他看到的仍然是对不上的那一版（N01 实测量到：读出来对、渲染出来错）。
+         所以刷新一定要做，只是不说话；且只刷正开着的详情页，不做整屏重排。 */
+      try{
+        if(typeof renderDetail==='function'){
+          var dd=document.getElementById('vDetail');
+          if(dd&&dd.style.display!=='none'&&String(window.curSid)===String(s.sid)) renderDetail();
+        }
+      }catch(e){}
+      try{ if(typeof renderList==='function') renderList(); }catch(e){}
+      if(!opts.silent){
+        var d=durOf(s);
+        toast('《'+s.title+'》'+(got.dur?('单集 '+Number(s.epDur)+' 分钟（豆瓣，整本 '+fmtDur(d.total)+'）'):('按'+durEstTxt(s))));
+      }
+      if(got.dur) try{ logAdd('时长按豆瓣记：'+s.title,'《'+s.title+'》单集 '+Number(s.epDur)+' 分钟（豆瓣）',true); }catch(e){}
+      return 1;
+    }
+  }catch(e){}
+  return 0;
+}
+/* 打开详情页那一下才问： listings 里几百部一起问会把豆瓣那点额度烧穿，
+   而他真正盯着看、也最容易发现「数不对」的，就是详情页那一行时长账。 */
+var _durAutoSeen={};
+function _autoDurFor(sid){
+  try{
+    if(window.AT_NO_AUTODUR===true) return;    /* 门禁要安静：后台一发请求都不许多发 */
+    if(!navigator.onLine) return;
+    var s=bySid(sid); if(!s||s.pv) return;
+    if(_durAutoSeen[String(sid)]) return; _durAutoSeen[String(sid)]=1;
+    if(!durNeedsFix(s)) return;
+    setTimeout(function(){ try{ healDurFor(s,{silent:false}); }catch(e){} },700);
+  }catch(e){}
 }
 /* ===== v2.41.0（用户令「封面全都要」）：给补封面补上两条真正对口的源 =====
    原来那条源链是：TVMaze（按 tvId，或严格同名）→ TMDB（要 key）→ Wikidata（免 key 但
@@ -4269,7 +4393,7 @@ async function healCoverFor(s,opts){
     if(!url && !s.tvId){ url=await cnShowBySearch(s); }
     /* v2.44.0：中文剧在这里插一次豆瓣，别让它排到三条英文源后面干等（理由见 doubanFirst 注） */
     if(!url && doubanFirst(s)){
-      if(applyDoubanCover(s,opts,await doubanRelayCover(s.title||s.name||''))) return true;
+      if(applyDoubanCover(s,opts,await doubanRelayCover(s.title||s.name||'',s.dbSubId))) return true;
     }
     if(!url){ var sh=await webMatchShow(s); if(sh) url=webCoverOf(sh); }
     /* v2.25.0：TVMaze 没有（中文剧/国产剧常这样）就走 TMDB 按中文名补海报 */
@@ -4287,7 +4411,7 @@ async function healCoverFor(s,opts){
          只有显式 relay:false 才跳过——留给「本机离线、不想等它超时」的场景。
          （中文剧已经在上面 doubanFirst 那一环问过一次，这里不重复问。） */
     if(!url && opts.relay!==false && !doubanFirst(s)){
-      var dr=await doubanRelayCover(s.title||s.name||'');
+      var dr=await doubanRelayCover(s.title||s.name||'',s.dbSubId);
       if(applyDoubanCover(s,opts,dr)) return true;
     }
     /* v2.24.0：拉不到不许留白——把手写在 _cvOld 里的旧封面还回去（见 ANITRACKER_LIB_PROMISE 那条注释） */
@@ -4401,6 +4525,12 @@ async function refreshNamesFor(s,opts){
      封面模式直接跳过片名与集表，只跑 healCoverFor。 */
   if(opts.coverOnly){
     if(coverNeedsHeal(s)||opts.relay){ try{ out.coverOk=await healCoverFor(s,{save:false,relay:opts.relay}); }catch(e){ out.coverOk=false; } }
+    /* v2.45.0：批量那一趟顺手把时长也问了。这不是顺手加的活——补封面本来就要去豆瓣
+       查那个词条，详情里同一个 JSON 就带着单集分钟数，等于多花一道换乘、不多打一次搜索。
+       失败的代价为零（内网也好风控也好，静默退回原来的估算）。 */
+    if(opts.dur!==false && window.AT_NO_AUTODUR!==true){
+      try{ await healDurFor(s,{save:false,silent:true}); }catch(e){}
+    }
     if(opts.save!==false) save();
     return out;
   }

@@ -37,6 +37,8 @@ function get(u, headers, timeoutMs) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- 成功缓存：LRU 300 条 / 7 天（同剧名不打豆瓣） ----
+// v2.45.0：info 与封面各存各处（封面是大字节、走 120 条上限；info 只有几百字节，允许 300 条）
+const INFO = new Map();
 const CACHE = new Map();
 /* v2.44.0：图从 ~5KB 涨到 ~120KB（见 upscaleCover），300 条就是 35MB，云函数内存吃不消。
    120 条 ≈ 14MB，够一轮批量补齐反复命中，也不会把实例撑爆。 */
@@ -167,9 +169,97 @@ async function suggestSubject(name, deadline) {
   let arr;
   try { arr = JSON.parse(r.body.toString('utf-8')); } catch (e) { throw new Error('bad suggest json'); }
   if (!Array.isArray(arr)) return [];
+/* suggest 返回的原始项里有 id（v2.45.0 起带上——详情接口的门票）。
+   以前只留 title/img/ep/year/url，拿到字也换不到详情页那张卷上去。 */
   return arr.map((x) => ({ title: String(x.title || ''), cover: String(x.img || ''), ep: String(x.episode || ''),
-                          year: String(x.year || ''), url: String(x.url || '') }))
+                          year: String(x.year || ''), url: String(x.url || ''), id: String(x.id || '') }))
             .filter((x) => x.cover);
+}
+
+/* ===== v2.45.0 info 模式：同一次详情把「单集时长 / 类型 / 集数 / 封面」全量带回 =====
+   起因：用户反复说「很多剧和番你自动拉的时长不对啊，都说了要看豆瓣」。
+   v2.44.6 当时写下的结论是「豆瓣联想这条路压根没有格式信号、词条页是登录墙壳，免费源补不上」，
+   所以那一版只做了「把假设摊开 + 给手填出口」。这套记账至今没改错，但它把探测停在了 suggest 那一层。
+   实测（2026-10-08，同一台机器、同一份 UA/Referer）：
+     suggest 拿到 id → rexxar 详情 /v2/tv/{id} 或 /v2/movie/{id} → 200，
+     大宋提刑官 durations=["45分钟"] episodes_count=52 type=tv
+     漫长的季节 durations=["60分钟"] / 武林外传 ["48分钟"] / 肖申克的救赎(movie) ["142分钟"]
+   **豆瓣恰恰有这道题的正确答案**，只是它不在搜索层，在详情层。
+   规矩沿用 pickCover 那条：名字对不上就不许出数——错时长比估时长更糟，它会让人信以为真。 */
+function normName(s) {
+  return String(s || '').replace(/[\s\u3000·・:：!！?？\-—_….,，'"“”()（）[\]【】<>《》]/g, '').toLowerCase();
+}
+function parseDurMin(arr) {
+  if (!Array.isArray(arr) || !arr.length) return 0;
+  const m = String(arr[0] || '').match(/(?:(\d+)\s*小时)?\s*(\d+)\s*分钟/);
+  if (!m) return 0;
+  const v = (Number(m[1] || 0) * 60) + Number(m[2] || 0);
+  return (v > 0 && v <= 600) ? v : 0;   /* 越界的脏数不许冒充实测（与前端 durOf 同一条线） */
+}
+// 一个 id 可能是剧也可能是电影：两条路问过来，谁回数据认谁。
+// 注意：这里**不能**再套一层 throttled()——外层 doubanInfo/doubanCover 已经在同一种节流里，
+// 嵌套会让内层等外层那张 gate（它要等内层跑完才 settle），两边互等即死锁（实测 19s 硬超时挂死）。
+// 现有代码里 suggestSubject / searchSubject 的 fetch 都是**裸调用**，同一条规矩。
+async function subjectDetail(id, deadline) {
+  for (const api of ['tv', 'movie']) {
+    if (Date.now() > deadline) throw new RateLimited('budget exhausted');
+    try {
+      const d = await fetchJson('https://m.douban.com/rexxar/api/v2/' + api + '/' + id, deadline);
+      if (d && (d.id || d.title)) return d;
+    } catch (e) {
+      if (e instanceof RateLimited) throw e;      // 预算/风控：不换策略，直接交上层
+      /* 其余（404/坏 JSON）换下一路 */
+    }
+  }
+  return null;
+}
+const INFO_TTL = 7 * 24 * 3600 * 1000;
+const INFO_MAX = 300;
+async function doubanInfo(name, deadline) {
+  const key = 'info:' + name;
+  const c = INFO.get(key);
+  if (c && Date.now() - c.at < INFO_TTL) { INFO.delete(key); INFO.set(key, c); return c.val; }
+  if (cooling()) throw new RateLimited('cooling down');
+  if (negGet(key)) throw new NotFound('known miss (info)');
+
+  // 第 0 级：suggest（便宜、带 id）；只有**标题全等**的那条才配拿 id
+  let picked = null;
+  try {
+    const arr = await throttled(() => suggestSubject(name, deadline));
+    picked = arr.find((x) => normName(x.title) === normName(name) && x.id) || null;
+  } catch (e) { /* suggest 失败静默，继续 rexxar 搜索 */ }
+
+  // 第 1 级：rexxar 搜索（suggest 里没有完全同名时用），同样只认全等的那条
+  if (!picked) {
+    try {
+      const items = await throttled(() => searchSubject(name, deadline));
+      for (const it of items) {
+        const t = it.target || {};
+        if (normName(t.title) === normName(name) && t.id) { picked = { id: String(t.id), title: t.title }; break; }
+      }
+    } catch (e) { if (e instanceof RateLimited) throw e; }
+  }
+  if (!picked || !picked.id) { negSet(key); throw new NotFound('no subject for ' + name); }
+
+  const d = await subjectDetail(picked.id, deadline);
+  if (!d) { negSet(key); throw new NotFound('no detail for ' + name); }
+  /* 只认名字全等的记录：搜索可以给《怪奇物语》回《怪奇物语 第五季》（78 分钟/8 集），
+     把那个数写进「怪奇物语」整部＝凭空造错账。这一关是刻意的，不放松成包含匹配。 */
+  if (normName(d.title) !== normName(name)) { negSet(key); throw new NotFound('title mismatch: ' + d.title); }
+
+  const val = {
+    found: true, title: d.title, id: picked.id,
+    type: String(d.type || d.subtype || ''),
+    dur: parseDurMin(d.durations),
+    eps: Number(d.episodes_count) || 0,
+    genres: Array.isArray(d.genres) ? d.genres.slice(0, 8) : [],
+    year: String(d.year || ''),
+    cover: String(d.cover_url || '')
+  };
+  INFO.set(key, { at: Date.now(), val });
+  if (INFO.size > INFO_MAX) INFO.delete(INFO.keys().next().value);
+  noteOk();
+  return val;
 }
 
 function pickSuggestCover(arr, name) {
@@ -195,21 +285,35 @@ function pickSuggestCover(arr, name) {
 function upscaleCover(u) {
   if (!u) return u;
   if (u.indexOf('imageView2') >= 0) return u.replace(/\/h\/\d+/, '/h/600');
+  /* v2.45.0：详情页给的 m_ratio_poster 是手机列表上的小图（约 3:4 小尺寸），
+     换成同一张图的 l_ratio_poster 原尺寸 */
+  if (u.indexOf('m_ratio_poster') >= 0) return u.replace('m_ratio_poster', 'l_ratio_poster');
   return u;
 }
 
-async function doubanCover(name, deadline) {
+async function doubanCover(name, deadline, id) {
   const hit = cacheGet(name);
   if (hit) return { bytes: hit.buf, ctype: hit.ctype, hit: true };
   if (cooling()) throw new RateLimited('cooling down');      // 冷却期严格止损：缓存命中照常回，未缓存不再外呼
   if (negGet(name)) throw new NotFound('known miss (negative cached)');
 
-  // 第 0 级：subject_suggest（对 rexxar 被 403 的剧名也能 200，见 pickSuggestCover 注）
+  // v2.45.0：已知准确的词条 id 时直接进详情取图——省掉 suggest + 四级搜索那一串，
+  // 一条巨贵的链路压成一次请求。id 来自 info 模式那一次「名字全等」的核对（没核对过不会有 id）。
   let cover = null;
-  try {
-    const arr = await throttled(() => suggestSubject(name, deadline));
-    cover = pickSuggestCover(arr, name);
-  } catch (e) { /* suggest 失败静默，继续 rexxar */ }
+  if (id) {
+    try {
+      const d = await subjectDetail(id, deadline);
+      cover = (d && (d.cover_url || d.cover)) || null;
+    } catch (e) { cover = null; }   // id 那条路失败就退回老的去 chip 链
+  }
+
+  // 第 0 级：subject_suggest（对 rexxar 被 403 的剧名也能 200，见 pickSuggestCover 注）
+  if (!cover) {
+    try {
+      const arr = await throttled(() => suggestSubject(name, deadline));
+      cover = pickSuggestCover(arr, name);
+    } catch (e) { /* suggest 失败静默，继续 rexxar */ }
+  }
 
   // rexxar 4 级回退（带地区 → 不带地区 → 不限 type）
   if (!cover) {
@@ -265,8 +369,25 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ items: [] }));
       }
     }
+    // —— 详情模式（v2.45.0）：?mode=info&q=剧名 → 单集时长 / 类型 / 集数 / 封面一次带回。
+    //    这是「自动拉的时长不对」的正解：豆瓣的分钟数在详情层，不在搜索层（见 doubanInfo 注）。
+    //    失败一律 200 + found:false：它不是网络错误，是「这部剧查不到 / 名字没对上」，
+    //    前端拿到就静默退下一路源，不许把它当成 Promise 失败抛到界面上。 ----
+    if (url.parse(req.url, true).query.mode === 'info') {
+      try {
+        const v = await doubanInfo(name, Date.now() + BUDGET_MS);
+        clearTimeout(killer);
+        res.writeHead(200, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }, cors));
+        return res.end(JSON.stringify(v));
+      } catch (e) {
+        clearTimeout(killer);
+        res.writeHead(200, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
+        return res.end(JSON.stringify({ found: false, reason: String((e && e.message) || e) }));
+      }
+    }
+    const q2 = url.parse(req.url, true).query;
     const deadline = Date.now() + BUDGET_MS;
-    const { bytes, ctype, hit } = await doubanCover(name, deadline);
+    const { bytes, ctype, hit } = await doubanCover(name, deadline, String(q2.id || '').trim());
     clearTimeout(killer);
     res.writeHead(200, Object.assign({
       'Content-Type': ctype,
