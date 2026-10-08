@@ -1,0 +1,116 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><title>追迹 v2.44.7 交付页</title><style>
+body{margin:0;background:#efece3;color:#22262d;font:14px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 20px 60px}
+h1{font-size:22px;margin:0 0 6px}
+h2{font-size:16px;margin:34px 0 10px;padding-top:20px;border-top:1px solid #d8d3c7}
+.sub{color:#6b7280;font-size:13px;margin-bottom:18px}
+.card{background:#fff;border:1px solid #e2ddd2;border-radius:16px;padding:14px 16px;margin-bottom:14px}
+.kv{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px}
+.kv b{font-weight:600}
+.mono{font-family:Consolas,monospace;font-size:12px}
+.row{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
+figure{margin:0;flex:1 1 320px;background:#fbfaf6;border:1px solid #e2ddd2;border-radius:14px;padding:12px}
+figure img{display:block;width:100%;border:1px solid #ded9cd;border-radius:10px;background:#ded9cd}
+figcaption{margin:8px 0 0;font-size:12px;color:#4b5563}
+figcaption b{display:block;color:#22262d;font-size:13px;margin-bottom:3px}
+table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}
+th,td{border-top:1px solid #efeae0;padding:7px 10px;text-align:left;vertical-align:top}
+th{background:#f7f4ee;font-weight:600}
+td.ok{color:#0f7a3d;font-weight:600}
+ul{margin:8px 0 0;padding-left:20px}
+li{margin:4px 0}
+.bad{color:#b3261e}.good{color:#0f7a3d}
+a{color:#1a56b4}
+.tag{display:inline-block;background:#f1ede2;border:1px solid #e0dacd;border-radius:999px;padding:1px 9px;font-size:12px;margin-right:6px}
+</style></head><body><div class="wrap">
+
+<h1>追迹 v2.44.7 — 开机自动对齐豆瓣标记</h1>
+<div class="sub">「合并第 1 和第 4 项，实现自动对齐标记」：片单顺序不再等你重导一次，那份豆瓣快照终于有了读它的人。2026-10-08 发布。</div>
+
+<div class="card"><div class="kv">
+<span><b>页面版本</b> v2.44.7 · build 20261008c</span>
+<span><b>内容包</b> code 129（11 个文件 · 2.08 MB）</span>
+<span><b>APK 壳</b> v1.45 · versionCode 46 · 776,049 B</span>
+<span><b>index.html</b> 526,555 B · sha1 745d08678b94a8b8</span>
+<span><b>公网回核</b> <span class="good">包内 index.html 与本机同字节同 sha1</span></span>
+<span><b>固定入口</b> <a class="mono" href="https://cloud1-d7gsn5t0w6407b963-1460816419.tcloudbaseapp.com/">cloud1-…tcloudbaseapp.com/</a></span>
+</div></div>
+
+<h2>这一版补的是哪两格账（同源，一次收）</h2>
+<div class="card">
+<span class="tag">缺口 1</span>「我的片单按豆瓣标记顺序」只生效一半：<span class="mono">dbMark</span> 只有走「勾选导入」才写；没重导过的条目掉到 <span class="mono">addedAt</span>——那是本机加进片单那一刻，不是你在豆瓣标记的那天。<br>
+<span class="tag">缺口 4</span>豆瓣快照 <span class="mono">tr_db_snap</span> 每次拉取都存、还随账号云同步到手机，但 <span class="mono">dbSnapGet</span>／<span class="mono">dbSnapItems</span> 零调用者——写了没人读。<br><br>
+<b>做法</b>：新增 <span class="mono">dbMarkIndex()</span> ＋ <span class="mono">dbMarkSync()</span>，开机在第一次 <span class="mono">renderList()</span> <b>之前</b>跑一趟（先看到错误顺序再隔一秒跳一次，比不跳更让人怀疑数据丢了）。<b>零新增界面</b>：没有新按钮、没有新的一行。
+<ul>
+<li>只补排序用的两格：<span class="mono">dbMark</span>（标记哪天）＋ <span class="mono">dbMarkSeq</span>（同一天里豆瓣那一列的第几条）。</li>
+<li>状态／题名／集表一律不自动动——快照写着「看过」，也不许据此把你本地的「想看」改掉（判据 B22）。</li>
+<li>先按 <span class="mono">dbId</span> 查，再按片单侧全部叫法（正名／原名／别名）归一化全等查；对不上就跳过，绝不新增条目。</li>
+<li>不顶 <span class="mono">updAt</span>：顶了它等于每次开机都宣称「本机最新」，而云合并正是拿它当裁判。</li>
+<li>老快照不用回填：<span class="mono">dbMarkIndex</span> 认数组下标，存进去的就是豆瓣「最近标记在前」那一列的原序。</li>
+</ul>
+</div>
+
+<h2>成本实测：800 条快照 × 250 部片单（豆瓣上限那档），4 趟</h2>
+<table>
+<tr><th>趟</th><th>开机那一趟</th><th>再调一次（热）</th><th>命中／补写</th></tr>
+<tr><td>1</td><td class="mono">14 ms</td><td class="mono">3.5 ms · set:0</td><td class="mono">hit 250 / set 250</td></tr>
+<tr><td>2</td><td class="mono">16 ms</td><td class="mono">3.3 ms · set:0</td><td class="mono">hit 250 / set 250</td></tr>
+<tr><td>3</td><td class="mono">19 ms</td><td class="mono">3.1 ms · set:0</td><td class="mono">hit 250 / set 250</td></tr>
+<tr><td>4</td><td class="mono">17 ms</td><td class="mono">3.7 ms · set:0</td><td class="mono">hit 250 / set 250</td></tr>
+</table>
+<div class="sub" style="margin-top:8px">参照物（同机同数据量，日志 <span class="mono">tests/_artifacts/_bench_render_v2447.log</span>）：片单放 250 部时，界面把列表<b>重画一遍</b> <span class="mono">renderList()</span> 实测 7 趟 <b>6~24.9 ms</b>（中位 16.2 ms，默认「在看」档渲染出 84 张卡）——开机这一趟 14~19 ms 与它同量级，也就是「本来就有一次重画」的那个数量级，不是多出来的一段等待。更早期一趟没存日志的读到 35 ms／18.1 ms，无从回核，没写进结论。<span class="mono">set:0</span> 意味着补齐过就不再写盘、不再触发上传。</div>
+
+<h2>负测：把真身换回改动前那份，判据必须红</h2>
+<div class="card">
+换底本跑 <span class="mono">douban-sync-e2e</span> → 恰好红 2 项 <b class="bad">B21／B22</b>，其余 20 项照绿（B20、B14 绿＝底本真换了，不是量具没跟上）。<br>
+红的实量：B21 首屏 <span class="mono">db9001,db9002,manual-1</span>＝addedAt 序，四格 <span class="mono">dbMark=-/undefined</span>；B22 切「全部」后仍是 <span class="mono">db9001,db9002,db9003,manual-1</span>。<br>
+两张首屏图同为 46,186 B 但 sha1 不同（正 <span class="mono">d6ee1f65</span>／负 <span class="mono">9c060509</span>）——所以判据只认哈希，不认字节数。
+<div class="row">
+<figure><img src="tests/_artifacts/dbn-boot-align.png" alt=""><figcaption><b>修复后首屏（真身 v2.44.7）</b>「在看B」(09-01) 在「在看A」(08-26) 之前＝豆瓣标记序；没标记过的「手工加的」垫底。</figcaption></figure>
+<figure><img src="tests/_artifacts/dbn-boot-align-neg.png" alt=""><figcaption><b>换回改动前底本的首屏</b>「在看A」跑到最前＝按加入时间排，正是你说的那个「对不上」。</figcaption></figure>
+</div>
+</div>
+
+<h2>门禁账（发版前串行一整轮，10 条全绿）</h2>
+<table>
+<tr><th>门禁</th><th>结果</th><th>这一轮它管的是什么</th></tr>
+<tr><td class="mono">cred-crypto-check</td><td class="ok">10/10 PASS</td><td>账号凭证与加密落盘</td></tr>
+<tr><td class="mono">run-regression</td><td class="ok">33/33 PASS</td><td>主路径回归（含 T12 点「添加」立刻回执 &lt;600 ms）</td></tr>
+<tr><td class="mono">douban-sync-e2e</td><td class="ok">22/22 PASS</td><td>豆瓣这条链：拉取→建档→时间账→排序→<b>本轮新增 B21/B22</b></td></tr>
+<tr><td class="mono">douban-push-e2e</td><td class="ok">25/25 PASS</td><td>反向：本机改回去</td></tr>
+<tr><td class="mono">desktop-tier-check</td><td class="ok">16/16 PASS</td><td>桌面档位与布局</td></tr>
+<tr><td class="mono">phone-canon-check</td><td class="ok">9/9 PASS</td><td>剧名铁律（双语正名）</td></tr>
+<tr><td class="mono">name-refresh-e2e</td><td class="ok">11/11 PASS</td><td>改名后片单刷新</td></tr>
+<tr><td class="mono">phone-use</td><td class="ok">没发现影响使用的问题</td><td>真机视口走查（首屏第一行剧集可见）</td></tr>
+<tr><td class="mono">phone-look</td><td class="ok">PASS 15 屏无出界、可点区全部 ≥34px</td><td>视觉与触点地板</td></tr>
+<tr><td class="mono">ep-duration-check</td><td class="ok">ALL GREEN pass=20 fail=0</td><td>时长口径（上一版那四条判据仍在）</td></tr>
+</table>
+
+<h2>启动方式已同步（你定的规矩：每次更新都要更新）</h2>
+<div class="card">
+<span class="mono">发布到云端.py</span> 的 <span class="mono">[S]</span> 步读的是<b>线上清单</b>，不是本机记忆：
+<ul>
+<li><span class="mono">D:\项目\PROJECTS.md</span> 追迹版本快照行 → v2.44.7 · build 20261008c · 内容包 code 129 · APK v1.45（versionCode 46）</li>
+<li><span class="mono">C:\Users\Venus\DeskBox\入口总览.html</span> → 同一串数字</li>
+<li><span class="mono">同步启动方式.py</span> 体检：与本项目相关的告警 <b class="good">0 条</b>（死链／待退役均无）</li>
+</ul>
+</div>
+
+<h2>三条你没问但该问的</h2>
+<div class="card"><ul>
+<li><b>「我手机上那份顺序现在就会对吗？」</b>——要满足一个前提：这台设备至少拉过一次豆瓣快照（<span class="mono">tr_db_snap</span> 非空），或账号云同步已经把 PC 那份快照带过来。全新设备第一次开机仍是 addedAt 序，直到你打开一次豆瓣面板。</li>
+<li><b>「它会不会偷偷改我的观看状态？」</b>——不会，也不该：B22 就是钉这一条的（状态照旧、不新增条目、手改的开始时间纹丝不动、<span class="mono">updAt</span> 一条都没被顶）。要动看得见的数据，得你点导入。</li>
+<li><b>「同一天标记的一批怎么分先后？」</b>——按 <span class="mono">dbMarkSeq</span>（豆瓣那一列的原序）升序，所以批量补标记的一批不会互相打乱。</li>
+</ul></div>
+
+<h2>下一步翻哪一页</h2>
+<div class="card"><ul>
+<li>这一版为什么这么修、踩了哪三个假红 → <span class="mono">CHANGELOG.md</span> 顶部 v2.44.7 一节。</li>
+<li>开机对齐的判据原文 → <span class="mono">tests/douban-sync-e2e.js</span> 的 B21／B22。</li>
+<li>手机怎么拿到这一版 → <span class="mono">PROJECTS.md</span>「AniTracker 追迹」那一行（固定入口永远最新，App 内「账号 → 检查更新」）。</li>
+</ul></div>
+
+<div class="sub" style="margin-top:26px">现场图：豆瓣面板 <img src="tests/_artifacts/dbn-panel.png" alt="" style="width:100%;margin-top:6px;border:1px solid #ded9cd;border-radius:10px">
+</div>
+
+</div></body></html>

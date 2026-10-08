@@ -383,6 +383,66 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
       persist.n === 6 && persist.cDone === '2026-07-15' && persist.aStart === '2020-01-01' && persist.off === 'db',
       JSON.stringify(persist));
 
+    /* ---------- B21/B22（v2.44.7，用户令「合并第 1 和第 4 项，实现自动对齐标记」）
+       B20 只管「勾选导入之后」；可他真实的状态是条目早就在片单里、从没为了重排再导一遍，
+       而那份豆瓣快照（v2.35.0 起每次拉取都存、随账号云同步传到手机——手机上打不到 :3000 网关，
+       那份快照是它唯一的豆瓣账）以前没有任何一处读它：老条目的标记日期永远补不上，
+       顺序掉回 addedAt＝本机把它加进片单的那一刻，不是他在豆瓣标的那天。
+       这两条种回「老格式」：条目一律没有 dbMark，快照里也没有 seq 这一格（那才是他设备/云端今天存着的形状），
+       然后重载页面——第一屏渲染出来就必须直接是豆瓣标记顺序，而且除了标记账以外一条都不许动。 */
+    await page.evaluate(() => {
+      const snapItems = [
+        { subjectId: '9002', title: '测试剧·在看B', cnTitle: '测试剧·在看B', origTitle: '', year: '2023', status: 'do', markedAt: '2026-09-01', pic: '', rating: 8, ep: 5, isAnime: 0, genres: ['剧情'] },
+        { subjectId: '9001', title: '测试剧·在看A', cnTitle: '测试剧·在看A', origTitle: 'TEST A', year: '2024', status: 'do', markedAt: '2026-08-26', pic: '', rating: 0, ep: 0, isAnime: 1, genres: ['动画'] },
+        { subjectId: '9003', title: '测试剧·看过C', cnTitle: '测试剧·看过C', origTitle: '', year: '2022', status: 'collect', markedAt: '2026-07-15', pic: '', rating: 0, ep: 0, isAnime: 1, genres: ['动画'] },
+        { subjectId: '9004', title: '测试剧·想看D', cnTitle: '测试剧·想看D', origTitle: '', year: '2025', status: 'wish', markedAt: '2026-06-05', pic: '', rating: 0, ep: 0, isAnime: 0, genres: [] }
+      ];
+      localStorage.setItem('tr_db_snap', JSON.stringify({ at: Date.now(), n: snapItems.length, items: snapItems }));
+      /* addedAt 故意排成标记日期的反序：没补齐时第一屏就会露出 db9001 在前 */
+      const old = [
+        { sid: 'db9001', title: '测试剧·在看A TEST A', dbId: '9001', year: '2024', total: 12, eps: [], statuses: {}, status: 'watching', source: '豆瓣·动画', addedAt: 3, updAt: 7, tStart: 123, tStartFrom: 'me' },
+        { sid: 'db9002', title: '测试剧·在看B', dbId: '9002', year: '2023', total: 0, eps: [], statuses: {}, status: 'watching', source: '豆瓣·真人', addedAt: 2, updAt: 7 },
+        { sid: 'db9003', title: '测试剧·看过C', dbId: '9003', year: '2022', total: 0, eps: [], statuses: {}, status: 'want', source: '豆瓣·动画', addedAt: 1, updAt: 7 },
+        { sid: 'manual-1', title: '手工加的·豆瓣没有', year: '2019', total: 0, eps: [], statuses: {}, status: 'watching', source: '', addedAt: 0, updAt: 7 }
+      ];
+      localStorage.setItem('tr_shows', JSON.stringify(old));
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(900);
+    const ord21 = await page.evaluate(() => {
+      const cards = Array.prototype.map.call(document.querySelectorAll('#list .show[data-sid]'), x => x.getAttribute('data-sid'));
+      const d = window.__dbMarkSync || {};
+      return { cards: cards, r: d.r || {}, ms: d.ms, err: d.err || '',
+        marks: [].slice.call(window.shows).map(x => x.sid + '=' + (Number(x.dbMark) ? window.fmtDay(x.dbMark) : '-') + '/' + x.dbMarkSeq) };
+    });
+    check('21', '开机自动对齐豆瓣标记：老格式数据（条目无 dbMark、快照里也无 seq）重载后第一屏就是标记顺序 ' +
+      'db9002(09-01) › db9001(08-26) › manual-1（快照里没有这本账，按加入时间垫底）；补齐 3 条',
+      ord21.cards.join(',') === 'db9002,db9001,manual-1' && ord21.err === '' &&
+      ord21.r.snap === 4 && ord21.r.hit === 3 && ord21.r.set === 3 &&
+      ord21.marks.indexOf('db9002=2026-09-01/0') >= 0 &&
+      ord21.marks.indexOf('db9001=2026-08-26/1') >= 0 &&
+      ord21.marks.indexOf('db9003=2026-07-15/2') >= 0,
+      JSON.stringify(ord21));
+    const keep22 = await page.evaluate(() => {
+      const a = JSON.parse(localStorage.getItem('tr_shows') || '[]');
+      const g = id => a.filter(x => x.sid === id)[0] || {};
+      window.setFilter('all');
+      const cardsAll = Array.prototype.map.call(document.querySelectorAll('#list .show[data-sid]'), x => x.getAttribute('data-sid'));
+      return { n: a.length, upd: a.map(x => x.updAt), stat9003: g('db9003').status,
+        t9001: g('db9001').tStart, from9001: g('db9001').tStartFrom, has9004: a.filter(x => x.sid === 'db9004').length,
+        ms: (window.__dbMarkSync || {}).ms, cardsAll: cardsAll };
+    });
+    /* 界线：快照写的是 9003=看过、9004 也在豆瓣，自动对齐不许据此改状态、不许建条目、
+       不许动他手改的开始时间，也不许顶 updAt——顶了它就等于每次开机都宣称「本机最新」，
+       而云合并正是拿 updAt 当裁判（markCmp 并列时最后一档用的也是它）。 */
+    check('22', '自动对齐只管标记账：状态照旧（9003 仍在「想看」，哪怕快照写的是看过）、不新增条目（9004 没被建出来）、' +
+      '手改的开始时间纹丝不动、updAt 一条都没被顶、切「全部」后四条按标记日期排齐',
+      keep22.n === 4 && keep22.has9004 === 0 && keep22.stat9003 === 'want' &&
+      keep22.t9001 === 123 && keep22.from9001 === 'me' && keep22.upd.every(u => u === 7) &&
+      keep22.cardsAll.join(',') === 'db9002,db9001,db9003,manual-1',
+      JSON.stringify(keep22));
+    await page.screenshot({ path: path.join(__dirname, '_artifacts', 'dbn-boot-align' + (process.env.AT_SHOT_TAG || '') + '.png') });
+
     /* ---------- B15 手机宽度：面板不横向溢出、勾选行触点够大（真机必踩的两条） ---------- */
     await page.setViewport({ width: 393, height: 851, deviceScaleFactor: 2.75, isMobile: true, hasTouch: true });
     await sleep(300);

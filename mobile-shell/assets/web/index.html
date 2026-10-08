@@ -1345,7 +1345,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.6', AT_BUILD='20261008b';
+var AT_VERSION='2.44.7', AT_BUILD='20261008c';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -5072,7 +5072,10 @@ function dbSnapSave(items){
         cnTitle:String(d.cnTitle||''), origTitle:String(d.origTitle||''),
         year:String(d.year||''), status:String(d.status||''), pic:String(d.pic||''),
         rating:d.rating||0, ep:d.ep||0, markedAt:String(d.markedAt||''),
-        isAnime:d.isAnime?1:0, genres:(d.genres||[]).slice(0,6) };
+        isAnime:d.isAnime?1:0, genres:(d.genres||[]).slice(0,6),
+        /* v2.44.7：seq 也存下来。没有它，离线快照里「同一天标的那几部」就分不出先后，
+           而这一列的顺序本来就是豆瓣给的唯一线索（拉取时按「最近标记在前」的下标）。 */
+        seq:(typeof d.seq === 'number' ? d.seq : -1) };
     });
     localStorage.setItem(DB_SNAP_KEY, JSON.stringify({ at:Date.now(), n:slim.length, items:slim }));
     return slim.length;
@@ -5193,6 +5196,53 @@ function markCmp(a,b){
   if(sa!==sb) return (sa<0?1e9:sa)-(sb<0?1e9:sb);
   return (b.updAt||0)-(a.updAt||0);
 }
+
+/* v2.44.7（用户令「合并第 1 和第 4 项，实现自动对齐标记」）：这张快照终于有了读它的人。
+   以前每次拉取都 dbSnapSave 一份、还随账号云同步传到手机（手机上打不到 :3000 网关，
+   那份快照是它唯一的豆瓣账），但全项目没有任何一处读它。
+   而 v2.44.6 把片单排序改成按豆瓣标记时间后，dbMark 只有走「勾选导入」才写
+   （dbApplyOne 唯一调用点在导入里，拉取本身一条都不改）——于是他没重导过的那些条目
+   永远拿不到标记日期，顺序掉回 addedAt：那是本机把它加进片单的那一刻，不是他在豆瓣标的那天。
+   现在开机先按快照把「标记哪天 + 同日第几条」这两格补齐，再渲染第一屏。
+   刻意只补排序要用的账：状态/题名/集表一律不自动动——那是会看得见的数据，得他点导入才算他同意。
+   成本：只拿片单里已有的条目去查表（索引一次建好，O(快照条数 + 片单条数)）；
+   不走 dbTargetOf 那条逐条 × 内置库的三路匹配，开机不该为这件事等上百毫秒。 */
+function dbMarkIndex(items){
+  var byId={}, byKey={};
+  (items||[]).forEach(function(d,i){
+    if(!d) return;
+    var rec={ markedAt:String(d.markedAt||''), seq:(typeof d.seq==='number'?d.seq:i),
+      subjectId:String(d.subjectId||'') };
+    /* 快照存的就是「最近标记在前」那一列原序：同一条目重名时以先出现的那条为准 */
+    if(/\d+$/.test(rec.subjectId) && !byId[rec.subjectId]) byId[rec.subjectId]=rec;
+    var keys=dbKeysOf(d);
+    Object.keys(keys).forEach(function(k){ if(!byKey[k]) byKey[k]=rec; });
+  });
+  return { byId:byId, byKey:byKey };
+}
+function dbMarkSync(){
+  var o=dbSnapGet(); if(!o||!o.items||!o.items.length) return { snap:0, hit:0, set:0, at:0 };
+  var ix=dbMarkIndex(o.items), hit=0, set=0;
+  (shows||[]).forEach(function(s){
+    if(!s||s.pv) return;
+    var rec=(s.dbId&&ix.byId[String(s.dbId)])||null;
+    if(!rec){
+      var cands=[s.title,s.nameJp].concat(s.aliases||[]);
+      for(var i=0;i<cands.length&&!rec;i++){ var k=dbNormTitle(cands[i]); if(k&&ix.byKey[k]) rec=ix.byKey[k]; }
+    }
+    if(!rec) return; hit++;
+    var ms=parseDay(rec.markedAt); if(!ms) return;
+    var ch=false;
+    if(Number(s.dbMark)!==ms){ s.dbMark=ms; s.dbMarkFrom='db'; ch=true; }
+    if(Number(s.dbMarkSeq)!==rec.seq){ s.dbMarkSeq=rec.seq; ch=true; }
+    if(ch) set++;
+  });
+  /* 不顶 updAt：顶了它，开机这次补账就成了「本机最新」，每开一次机都跟云里比个新，
+     还把并列时的判据搅浑（markCmp 最后一档用的就是 updAt）。 */
+  if(set) save();
+  return { snap:o.items.length, at:o.at||0, hit:hit, set:set };
+}
+
 function dbApplyOne(d){
   var stt=DB_ST[d.status]||'watching', cur=dbTargetOf(d), ch=false;
   var real=/^\d+$/.test(String(d.subjectId||''));
@@ -5857,6 +5907,11 @@ applyTheme((function(){ try{ return localStorage.getItem('at_theme')==='dark'?'d
     sync();
   }catch(e){}
 })();
+/* v2.44.7：开机补标记日期必须在第一次渲染之前——先看到按 addedAt 排的错误顺序、
+   隔一秒再跳一次，比不跳更让人怀疑数据丢了。耗时当场记下，写进 CHANGELOG 的是量到的数。 */
+var _dbmT=Date.now(), _dbmR=null, _dbmE='';
+try{ _dbmR=dbMarkSync(); }catch(e){ _dbmE=String((e&&e.message)||e); }
+window.__dbMarkSync={ r:_dbmR, ms:Date.now()-_dbmT, err:_dbmE };
 renderList();
 /* v2.6.0：启动后小批量静默补封面（离线自动跳过；失败退避见 coverCanAuto）
    v2.41.0 试过一轮加到 10 部：立刻把 run-regression的 T13（切季零网络）与 T15（标记已看零请求）

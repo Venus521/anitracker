@@ -13,6 +13,9 @@ const http = require('http');
 const { spawn } = require('child_process');
 const puppeteer = require('puppeteer-core');
 const ROOT = path.resolve(__dirname, '..');
+/* v2.44.7：底本可换（默认 index.html）。负测拿改动前那份跑时，
+   连「源码自检读的那个文件」一起换——只换 goto、自检仍读真身，旧版也会绿，那是假绿。 */
+const PAGE = process.env.AT_PAGE || 'index.html';
 const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const results = [];
 function check(id, name, ok, detail) {
@@ -24,7 +27,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
 
 (async () => {
   /* ---- 文件级 ---- */
-  const ib = fs.readFileSync(path.join(ROOT, 'index.html'));
+  const ib = fs.readFileSync(path.join(ROOT, PAGE));
   const ab = fs.readFileSync(path.join(ROOT, 'ani-tracker.html'));
   check('00', '双入口字节一致', ib.equals(ab), ib.length + 'B vs ' + ab.length + 'B');
   const ix = ib.toString('utf-8');
@@ -61,7 +64,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     }
     return false;
   };
-  const srvUp = await waitPort(8094, '/index.html', 30);
+  const srvUp = await waitPort(8094, '/' + PAGE, 30);
   await waitPort(8093, '/__state', 20);
   if (!srvUp) console.log('WARN: 8094 静态服务未就绪，浏览器类用例可能失败');
   await sleep(400);
@@ -109,7 +112,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     });
 
     await post('/__ctl', { mode: 'ok', target: 'all' });
-    await page.goto('http://127.0.0.1:8094/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto('http://127.0.0.1:8094/' + PAGE, { waitUntil: 'domcontentloaded', timeout: 30000 });
     /* v2.44.0：给「后台补封面还在不在跑」装一个可读的计数。
        T15 要判的是「标记这一击发不发请求」，而开机补齐 / 豆瓣联想建档（T30）都会各自起一条
        healCoverFor 的异步链，链上每一源之间隔得又开（_wget 单次最多等 4 秒），
