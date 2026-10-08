@@ -398,6 +398,66 @@ def publish_web(host, env_id, notes):
     publish_root(host, env_id, expect_code=code)
 
 
+# ---- [S] 启动方式三处登记同步（2026-10-08 用户点名：每次发版都要把启动方式一起更新）----
+# 登记里那行版本以前靠手抄，抄漏一次 hub 就开始说谎。现在归进发版流水线：
+# 数字一律现读**公网清单**（本地副本不算「用户实际拿到的」），整段用 <!--ATSNAP--> 哨兵替换。
+REG_MD = r'D:\项目\PROJECTS.md'
+HUB_HTML = r'C:\Users\Venus\DeskBox\入口总览.html'
+SYNC_GATE = r'C:\Users\Venus\DeskBox\工具脚本\同步启动方式.py'
+A_SNAP, B_SNAP = '<!--ATSNAP-->', '<!--/ATSNAP-->'
+SNAP_TEXT = ['']
+
+
+def live_manifest(host):
+    """现拉公网两份清单：版本 / build / 内容 code / APK 版本都以「线上是什么」为准。"""
+    st, vb, _ = get('https://' + host + '/app/version.json?_=' + str(int(time.time() * 1000)),timeout=60, binary=True)
+    st2, wb, _ = get('https://' + host + '/app/web.json?_=' + str(int(time.time() * 1000)),timeout=60, binary=True)
+    if st != 200 or st2 != 200:
+        die('[S] 公网清单取不回来（version.json %s / web.json %s）——先查发布，再谈同步登记' % (st, st2))
+    return json.loads(vb.decode('utf-8')), json.loads(wb.decode('utf-8'))
+
+
+def rewrite_snap(path, label):
+    if not os.path.exists(path):
+        print('  [S] 登记文件不在，跳过：%s' % path)
+        return
+    s = open(path, 'rb').read().decode('utf-8')
+    pat = re.compile(re.escape(A_SNAP) + '(.*?)' + re.escape(B_SNAP), re.S)
+    if len(pat.findall(s)) != 1:
+        die('[S] %s 里 ATSNAP 哨兵找到 %d 处（应为 1 处）——先补标记，别回来手抄版本'
+            % (label, len(pat.findall(s))))
+    out = pat.sub(lambda m: A_SNAP + SNAP_TEXT[0] + B_SNAP, s, count=1)
+    if chr(0xFFFD) in out:
+        die('[S] 改写后出现乱码，放弃写入：' + path)
+    if out != s:
+        open(path, 'wb').write(out.encode('utf-8'))
+    print('  [S] %s 已同步：%s' % (label, SNAP_TEXT[0]))
+
+
+def sync_launch_entries(host):
+    vi, wi = live_manifest(host)
+    idx = read(os.path.join(os.path.dirname(SHELL), 'index.html'))
+    mv = re.search(r"AT_VERSION='([^']+)', AT_BUILD='([^']+)'", idx)
+    if not mv:
+        die('[S] index.html 读不到 AT_VERSION/AT_BUILD')
+    SNAP_TEXT[0] = ('v%s · build %s · 内容包 code %s · APK v%s（versionCode %s）· 固定入口 https://%s/'
+                    % (mv.group(1), mv.group(2), wi.get('code'), vi.get('versionName'),
+                       vi.get('versionCode'), host))
+    rewrite_snap(REG_MD, 'PROJECTS.md 启动方式总表')
+    rewrite_snap(HUB_HTML, 'DeskBox 入口总览')
+    if not os.path.exists(SYNC_GATE):
+        print('  [S] 体检脚本不在，跳过：%s' % SYNC_GATE)
+        return
+    r = subprocess.run([sys.executable, '-X', 'utf8', SYNC_GATE], capture_output=True, timeout=600)
+    out = (r.stdout or b'').decode('utf-8', 'replace') + (r.stderr or b'').decode('utf-8', 'replace')
+    mine = [x.strip() for x in out.splitlines() if 'AniTracker' in x or '追迹' in x]
+    print('  [S] 启动方式体检（只报告）：与本项目相关的告警 %d 条' % len(mine))
+    for x in mine[:6]:
+        print('      ' + x[:150])
+    if any(('死链' in x or '待退役' in x) for x in mine):
+        die('[S] 本项目入口体检报死链/待退役，先修入口再算发完')
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     flags = [a for a in sys.argv[1:] if a.startswith('--')]
@@ -422,6 +482,7 @@ def main():
         name = publish_apk(host, env_id, notes)
     if '--apk-only' not in flags:
         publish_web(host, env_id, notes)
+    sync_launch_entries(host)
     print('\nOK 已发布。清单：https://%s/app/version.json · https://%s/app/web.json' % (host, host))
     print('    固定入口（浏览器直接开，永远最新）：https://%s/' % host)
 

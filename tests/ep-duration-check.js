@@ -15,6 +15,9 @@
      G07 每条都有真值时不许出现「约」（反向谎报也挡）
      G08 时长账自洽：逐条单集分钟汇总 == 全剧分钟、各季汇总 == 全剧、详情页那行渲染得出字
      G09 内置库「＋ 添加到片单」那条路同样不许编造时长（同一缺陷的第二处，走的是另一扇门）
+     G11 豆瓣联想那条路（接口压根没格式信号）不许闷声按动画估：话要写明档位，并给一颗点得动的钮
+     G12 真实手指走一遍弹窗：预设 chip 填数→改成 46→存，账当场转成实测、落进存档
+     G13 对照组：内置库预览复用同一函数，说档位但不许长出编辑钮
      E00 全程无页面级 JS 错误 · E01 真实入口可达且集数确实改成输入值 */
 const path = require('path');
 const fs = require('fs');
@@ -73,6 +76,10 @@ const FX = [
 
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new',
     args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  /* 负测用：AT_PAGE 指到一份改回旧行为的副本，真身一个字不动 */
+  const PAGE = process.env.AT_PAGE || 'index.html';
+  /* 负测跑的是 HEAD 副本：图另存一个后缀，墙上正好是「修前 vs 修后」两栏 */
+  const TAG = process.env.AT_SHOT_TAG || (process.env.AT_PAGE ? '-before' : '');
   const rows = [];
   try {
     const page = await browser.newPage();
@@ -85,9 +92,13 @@ const FX = [
       if (/^https?:\/\/127\.0\.0\.1/.test(u) || /^data:/.test(u)) return req.continue();
       return req.abort();
     });
-    await page.goto('http://127.0.0.1:' + PORT + '/index.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto('http://127.0.0.1:' + PORT + '/' + PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
 
+      /* 只截时长那一行：墙上要看的就是这行字，不是整页 */
+      const shot = async (name) => {
+        try { const el = await page.$('#dDur'); if (el) await el.screenshot({ path: path.join(OUT, name + '.png') }); } catch (e) {}
+      };
       const read = () => page.evaluate(() => {
         const s = window.shows[0], d = window.durOf(s), el = document.getElementById('dDur');
         return { total: d.total, epMin: d.epMin, known: d.known, partial: !!d.partial,
@@ -209,6 +220,141 @@ const FX = [
         !!g10.unknown && g10.unknown.kind === '' && !!g10.tv && g10.tv.kind === '' && g10.flag === '1',
         JSON.stringify(g10));
     }
+    /* ===== G11/G12/G13（v2.44.6，用户令「时长还是对不上」）：豆瓣联想这条路 =====
+       suggest 接口只回标题/封面/集数（type 一律 'movie'，没有格式信号），条目建出来 kind 是空的
+       ⇒ 整本账退回动画 24 分/集，而旧版页面既没说要事是什么档、也没给任何能改的地方。
+       这次修的是两件：话写明「按哪一档估、多少分/集」，并当场给一颗点得动的钮。
+       G13 反向对照：内置库预览复用同一个函数，但不许长出编辑钮（库条目不是片单条目）。 */
+    const g11 = await page.evaluate(() => {
+      const eps = [];
+      for (let i = 1; i <= 52; i++) eps.push({ s: i, t: '第 ' + i + ' 集' });
+      window.shows = [{ sid: 'db-1299664', title: '大宋提刑官', kind: '', nameJp: '', year: '2005',
+        total: 52, eps: eps, statuses: {}, status: 'watching', addedAt: Date.now(), updAt: Date.now(),
+        source: '豆瓣联想', manual: 1 }];
+      window.openDetail('db-1299664');
+      const s = window.shows[0], d = window.durOf(s), el = document.getElementById('dDur');
+      /* v2.44.6c：出口不是独立按钮，是这一行本身（行尾挂「✎ 改时长」标记）。
+         可点区量的就是这一行的矩形——比任何小钮都好点，且不多占一行高。 */
+      const b = el.classList.contains('dedit') ? el : null;
+      const r = b ? b.getBoundingClientRect() : { width: 0, height: 0 };
+      const mark = [].slice.call(el.querySelectorAll('.durfix'))
+        .filter((x) => /改时长/.test(x.textContent || ''))[0];
+      const dlRow = Math.round((el ? el.getBoundingClientRect().height : 0));
+      return { def: window.defDurMin(s), total: d.total, known: d.known,
+        est: (typeof window.durEstTxt === 'function')
+          ? window.durEstTxt(s) : '（页面没有 durEstTxt＝估档那句话没有单一出口）',
+        text: ((el && el.innerText) || '').replace(/\s+/g, ' ').trim(),
+        btn: !!b, btnVisible: !!b && b.offsetParent !== null,
+        btnW: Math.round(r.width), btnH: Math.round(r.height),
+        marker: !!mark, durH: dlRow,
+        /* 首屏铁律（phone-use 抓到过 875>851）量的是 393×851 下第一行集整行可见，
+           那条判据归 phone-use（本门禁是桌面视口，量不到）；这里锁住「行是入口」这件事本身。 */
+        hasEditor: typeof window.editDur === 'function',
+        hasTap: typeof window.durLineTap === 'function' };
+    });
+    await sleep(400);
+    await shot('g11' + TAG);
+    /* 一部 52 集的国产剧不许被叫成动画（kind 空 ⇒ 只报档位）；那颗钮还得是真能点的：
+       手机走查抓到过 73×23，34px 是这项目的地板（phone-look 同源判据） */
+    check('G11', '豆瓣联想条目（无格式信号）：写明「没标类型，按最低档估 24 分/集」＋时长行本身是可点区 ≥34px 的入口（旧版只说「按类型估」、无处可改）',
+      g11.def === 24 && g11.total === 24 * 52 && g11.known === false && g11.hasEditor && g11.hasTap &&
+      g11.est === '没标类型，按最低档估 24 分/集' && g11.text.indexOf(g11.est) >= 0 && g11.marker &&
+      g11.btn && g11.btnVisible && g11.btnW >= 34 && g11.btnH >= 34,
+      JSON.stringify(g11));
+
+    const g12 = await page.evaluate(() => {
+      const el = document.getElementById('dDur');
+      if (!el.classList.contains('dedit')) return { skip: '时长行不是触点（没挂 dedit）' };
+      /* 真实手指：点行尾「✎ 改时长」那一下（事件从标记冒泡到行） */
+      const mk = [].slice.call(el.querySelectorAll('.durfix'))[0] || el;
+      mk.click();
+      const box = document.getElementById('uiDlgMask');
+      return { dlg: !!box, chips: [].slice.call((box || document).querySelectorAll('.udChip')).map((c) => c.textContent),
+        inp: !!document.getElementById('udInp'),
+        msg: (((box || {}).querySelector ? box.querySelector('.mini') : null) || {}).textContent || '' };
+    });
+    if (g12.skip) {
+      check('G12', '设定单集时长弹窗', false, g12.skip);
+    } else {
+      /* 真实手指顺序：点「真人剧 45」chip → 框里落 45 → 用户再改成 46 → 存 */
+      const chipOk = await page.evaluate(() => {
+        const c = document.querySelectorAll('.udChip')[1];
+        if (!c) return false;
+        c.click();
+        const i = document.getElementById('udInp');
+        return !!i && i.value === '45';
+      });
+      await page.evaluate(() => { document.getElementById('udInp').value = ''; });
+      await page.type('#udInp', '46', { delay: 12 });
+      await page.evaluate(() => { document.getElementById('udYes').click(); });
+      await sleep(500);
+      const after = await read();
+      await shot('g12' + TAG);
+      const persisted = await page.evaluate(() => {
+        const s = (JSON.parse(localStorage.getItem('tr_shows') || '[]')).filter((x) => x.sid === 'db-1299664')[0] || {};
+        const el = document.getElementById('dDur');
+        return { epDur: Number(s.epDur) || 0, kind: s.kind || '',
+          btns: el.classList.contains('dedit') ? 1 : 0,
+          marker: [].slice.call(el.querySelectorAll('.durfix')).filter((x) => /改时长/.test(x.textContent || '')).length };
+      });
+      check('G12', '弹窗有预设 chip（动画/真人剧/剧场版）；点 chip 填数、手改成 46 存下后 52 集 = 2392 分、「约」当场消失、' +
+        '写进存档，且那颗钮留在原处（设完还得能改）',
+        g12.dlg && g12.inp && g12.chips.length === 3 && chipOk &&
+        after.total === 46 * 52 && after.known === true && after.def === 46 &&
+        after.text.indexOf('约') < 0 && after.text.indexOf('分/集') < 0 &&
+        after.text.indexOf('单集 46 分钟') >= 0 &&
+        persisted.epDur === 46 && persisted.kind === '电视剧' &&
+        persisted.btns === 1 && persisted.marker === 1,
+        JSON.stringify({ dlg: g12.dlg, chips: g12.chips, chipOk, total: after.total,
+          known: after.known, def: after.def, text: after.text.slice(0, 170), persisted }));
+    }
+
+    /* G12b：同一件事的数据源那条路——AniList 同步把 duration 写成 s.epDur（不是用户手填）。
+       旧版只认逐集 e.dur，这类条目一直挂着「约 46 分钟」，其实 46 就是量出来的。 */
+    const g12b = await page.evaluate(() => {
+      const eps = [];
+      for (let i = 1; i <= 12; i++) eps.push({ s: i, t: 'E' + i });
+      window.shows = [{ sid: 'al-declared', title: 'al-declared', kind: '美剧', total: 12, epDur: 46,
+        eps: eps, statuses: { 1: 'watched', 2: 'watched', 3: 'watched' }, addedAt: Date.now(), updAt: Date.now() }];
+      window.openDetail('al-declared');
+      const s = window.shows[0], d = window.durOf(s), el = document.getElementById('dDur');
+      return { total: d.total, known: d.known, partial: !!d.partial, watched: d.watched,
+        text: ((el || {}).innerText || '').replace(/\s+/g, ' ').trim() };
+    });
+    await sleep(300);
+    await shot('g12b' + TAG);
+    check('G12b', '数据源给的整部级时长（AniList duration → s.epDur）算实测：全剧 552 分、已看 138 分、整行不带「约」',
+      g12b.total === 46 * 12 && g12b.watched === 138 && g12b.known === true && g12b.partial === false &&
+      g12b.text.indexOf('约') < 0 && g12b.text.indexOf('分/集') < 0 && g12b.text.indexOf('单集 46 分钟') >= 0,
+      JSON.stringify(g12b));
+
+    const g13 = await page.evaluate(() => {
+      const L = window.INTERNAL_SHOWS || [];
+      let lib = null;
+      for (const x of L) { const d = window.durOf(x); if (!d.known && !d.film && d.total) { lib = x; break; } }
+      if (!lib) return { skip: '内置库没有「按类型估」的样本' };
+      window.showInternalDetail(lib.id);
+      const el = document.getElementById('dDur');
+      const txt = ((el && el.innerText) || '').replace(/\s+/g, ' ').trim();
+      el.click();
+      const dlgAfter = !!document.getElementById('udInp');
+      if (dlgAfter) { const x = document.getElementById('udNo'); if (x) x.click(); }
+      return { id: lib.id, text: txt, saysKind: /估 \d+ 分\/集/.test(txt) && txt.indexOf('约') >= 0,
+        isTap: el.classList.contains('dedit'), marker: [].slice.call(el.querySelectorAll('.durfix')).length,
+        editBtns: [].slice.call(el.querySelectorAll('button'))
+          .filter((x) => /editDur\(\)/.test(x.getAttribute('onclick') || '')).length,
+        openedDialog: dlgAfter };
+    });
+    await sleep(300);
+    await shot('g13' + TAG);
+    if (g13.skip) {
+      check('G13', '内置库预览', false, g13.skip);
+    } else {
+      check('G13', '对照组：内置库预览同一行也说清按哪档估，但这一行不许是入口（无标记、点不开弹窗——库条目不是片单条目）',
+        g13.saysKind && g13.editBtns === 0 && g13.isTap === false && g13.marker === 0 &&
+        g13.openedDialog === false && g13.text.indexOf('约') >= 0, JSON.stringify(g13));
+    }
+
     check('E00', '全程无页面级 JS 错误', errs.length === 0, errs.join(' | '));
     check('E01', '真实入口可达：点「✎ 编辑集数」弹主题窗、填数确认后集数确实变成输入值',
       rows.every((r) => r.clicked && r.dlg && r.after.eps === r.fx.newTotal),

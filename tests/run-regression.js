@@ -657,7 +657,9 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
       };
       const withT = canonBlockHtml(mk(true, true)), noT = canonBlockHtml(mk(false, false));
       const noCn = canonBlockHtml({ sid: 'cnp-n', title: 'x', kind: '动画', eps: [{ s: 1, t: 'e1', src: 'filler' }], statuses: { 1: 'watched' } });
-      const lines = (h) => (h.match(/class="cnpline"/g) || []).length;
+      /* 数行数认前缀：v2.44.6c 起「全部」行是 class="cnpline dedit"（整行即入口），
+         一字不差的正则会把两行数成一条。数量判据本身不放宽。 */
+      const lines = (h) => (h.match(/class="cnpline(?:[" ])/g) || []).length;
       return { withT: withT, noT: noT, noCn: noCn === '', nT: lines(withT) };
     });
     check('33', 'v2.37.0 漫改块两平行行：全部行=时长+日期+改时间；漫改行=集数+时长+日期；无 epT 不混排全剧；无漫改轴整块为空',

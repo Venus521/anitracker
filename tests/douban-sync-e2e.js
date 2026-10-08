@@ -22,6 +22,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
    中转折线的路径本身就写着 douban-relay，用词当尺子会把自己的通道判成违规直连。 */
 const DB_HOST = /^https?:\/\/([a-z0-9-]+\.)*(douban\.com|doubanio\.com)([:\/]|$)/i;
 const DB_RELAY = /service\.tcloudbase\.com\/douban-relay/i;
+/* v2.44.6d：负测要拿「改动前那份」当底本跑，所以页面名可换（默认 index.html）。
+   换底本必须真换底本——B20 这条判据若仍读 index.html，旧版也会「绿」，那是假绿。 */
+const PAGE = process.env.AT_PAGE || 'index.html';
+const TAG = process.env.AT_PAGE ? '-before' : '';
 const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
 const FIX = [
   { subjectId: '9001', title: '测试剧·在看A', origTitle: 'TEST A', year: '2024', genres: ['动画'], isAnime: true, rating: null, markedAt: '2026-08-26', pic: PX, status: 'do', ep: 0 },
@@ -44,7 +48,7 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
   const waitPort = async () => {
     for (let i = 0; i < 40; i++) {
       const up = await new Promise(res => {
-        const req = http.get({ host: '127.0.0.1', port: PORT, path: '/index.html', timeout: 1500 }, x => { x.resume(); res(true); });
+        const req = http.get({ host: '127.0.0.1', port: PORT, path: '/' + PAGE, timeout: 1500 }, x => { x.resume(); res(true); });
         req.on('error', () => res(false)); req.on('timeout', () => { req.destroy(); res(false); });
       });
       if (up) return true;
@@ -117,7 +121,7 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
         return rm.apply(this, arguments);
       };
     });
-    await page.goto('http://127.0.0.1:' + PORT + '/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto('http://127.0.0.1:' + PORT + '/' + PAGE, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(1200);
 
     console.log('PROBE seed: ' + JSON.stringify(await page.evaluate(() => ({ ls: localStorage.getItem('at_e2e_seeded'), n: (window.shows || []).length, raw: (localStorage.getItem('tr_shows') || '').slice(0, 120) }))));
@@ -186,6 +190,21 @@ const SEED = [{ sid: 'db111', title: '测试剧A', dbId: '111', year: '2020', to
       JSON.stringify(after));
     check('06', '没勾的那条（已在片单的「测试剧A」）一条都没动：状态仍是想看、没被写进看完时间',
       after.seed.status === 'want' && !after.seed.tDone, JSON.stringify(after.seed) + ' note=' + after.note);
+
+    /* ---------- B20 片单排序＝豆瓣标记顺序（v2.44.6d，用户令「要按豆瓣的排序」→ 选定「我的片单按豆瓣标记顺序」） ----------
+       旧尺子是 updAt：任何一次改名、补封面、后台校准都把一条老记录顶到最前，
+       导入那批更是按「入库的先后」排，跟他豆瓣那一页（最近标记在前）对不上。
+       这条量的是**渲染出来的卡片顺序**——用户看得见的那一列，不是内部数组。
+       同日多条靠豆瓣返回的下标（dbMarkSeq）分先后；没标记过的按加入片单的时间垫底。 */
+    await page.evaluate(() => { window.curFilter = 'all'; try { window.renderList(); } catch (e) {} });
+    await sleep(400);
+    const ord20 = await page.evaluate(() => Array.prototype.map.call(
+      document.querySelectorAll('#list .show[data-sid]'), (x) => x.getAttribute('data-sid')));
+    await page.evaluate(() => { window.curFilter = 'watching'; try { window.renderList(); } catch (e) {} });
+    check('20', '片单按豆瓣标记时间排（最近标记在前）：db9002(09-01) › db9001(08-26) › db9003(07-15) › ' +
+      'db9004(06-05，「想看」也记这一天) › db111（没标记过，按加入时间垫底）；' +
+      '旧的 updAt 尺子会把刚导入的倒序顶到最前',
+      ord20.join(',') === 'db9002,db9001,db9003,db9004,db111', JSON.stringify(ord20));
 
     /* ---------- B7 详情页时间行 + 列表卡「看完」日期 ---------- */
     /* 这两张是要递到用户眼前的照片：账号面板和豆瓣面板还压在上面的话，拍出来全是遮挡。

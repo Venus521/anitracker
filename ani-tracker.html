@@ -332,6 +332,18 @@ body.dragmark,body.dragmark *{user-select:none;cursor:crosshair}
 .panel select{width:100%;border:none;border-bottom:1px solid var(--line);background:none;padding:12px 2px;font-size:14px;color:var(--ink);outline:none;margin-bottom:2px}
 .panel .row2{display:flex;gap:8px;margin-top:20px}
 .panel .row2 button{flex:1;border-radius:var(--r-3);padding:12px;font-size:14px}
+.udchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.udChip{font:inherit;font-size:13px;padding:8px 14px;min-height:36px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--r-3);cursor:pointer}
+.udChip:hover{border-color:var(--accent);background:var(--accent-soft)}
+/* v2.44.6：动作钮静止态要有底色＋描边，且可点区 ≥34px（手机走查 73×23 被判死过一次）；
+   挂在时长行末尾，所以做成小实心块而不是一串点不着的字 */
+/* v2.44.6c：「✎ 改时长」从独立按钮改成整行触点——34px 实心钮多占的一行
+   把首屏第一行剧集挤到 875（视口 851，phone-use 判死）。行本身就是钮：
+   量到的可点区 369×66，比任何小钮都好点，且一行高度不多花。 */
+.durline.dedit,.cnpline.dedit{cursor:pointer}
+.durline.dedit:active,.cnpline.dedit:active{background:var(--accent-soft)}
+.durfix{color:var(--accent-ink);font-weight:600;white-space:nowrap}
+.durline.dedit:hover .durfix,.cnpline.dedit:hover .durfix{text-decoration:underline}
 /* v2.31.0：.b1 原先没给 padding/min-height，高度全由内容撑出来 —— 面板里那个
    「导入/推送」按钮实测只有 19px 高，小屏上点不准。给一份和其它按钮一致的底子，
    各处原有的行内 padding 仍能按需覆盖。 */
@@ -827,7 +839,7 @@ window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if
       <button class="ty" onclick="editTotal()">✎ 编辑集数</button>
     </div>
     <div class="statgrid" id="dStats"></div>
-    <div class="durline" id="dDur"></div>
+    <div class="durline" id="dDur" onclick="durLineTap(event)"></div>
     <div class="filmpos" id="dFilm"></div>
     <div class="srccov" id="dSrcCov"></div>
     <div class="quickrow" style="padding:12px 16px">
@@ -936,6 +948,8 @@ function uiDialog(o){
   var h='<h3 style="margin:0 0 8px">'+esc(o.title||'确认')+'</h3>';
   if(o.msg) h+='<div class="mini" style="white-space:pre-wrap;line-height:1.6">'+esc(o.msg)+'</div>';
   if(o.input) h+='<input id="udInp" type="text" inputmode="'+esc(o.input.mode||'text')+'" placeholder="'+esc(o.input.placeholder||'')+'" value="'+esc(o.input.value||'')+'" style="width:100%;margin-top:12px">';
+  /* v2.44.6：数值调节一律「预设 chip + 输入框」（拉条第四次被否）；chip 只填数、不当提交钮 */
+  if(o.chips&&o.chips.length) h+='<div class="udchips">'+o.chips.map(function(c,i){ return '<button type="button" class="udChip" data-ci="'+i+'">'+esc(c.t)+'</button>'; }).join('')+'</div>';
   /* v2.13.0：原生弹窗→主题弹窗——fields 多输入模式（label+input 列表，onDone 第二参数为 {id:值} 收集对象） */
   else if(o.fields&&o.fields.length) h+=o.fields.map(function(f,i){
     return '<label style="display:block;margin-top:12px"><span class="mini">'+esc(f.label||'')+'</span>'+
@@ -944,6 +958,9 @@ function uiDialog(o){
   h+='<div class="msg" id="udMsg"></div><div class="row2" style="margin-top:12px"><button type="button" class="b2" id="udNo">'+esc(o.cancelText||'取消')+'</button><button type="button" class="b1" id="udYes">'+esc(o.okText||'确定')+'</button></div>';
   box.innerHTML=h; wrap.appendChild(box); document.body.appendChild(wrap);
   var inpEl=box.querySelector('#udInp'), fieldEls=[].slice.call(box.querySelectorAll('.udF')), done=false;
+  /* chip 点一下只把数填进框里（还要让用户能改），并回调记类别 */
+  if(o.chips&&o.chips.length&&inpEl){ [].forEach.call(box.querySelectorAll('.udChip'),function(b,i){
+    b.onclick=function(){ inpEl.value=String(o.chips[i].v||''); if(o.onChip) o.onChip(o.chips[i]); }; }); }
   /* a11y：label 是运行时由 o.title 拼的 h3，静态写死会错，这里按标题赋值 */
   try{ if(inpEl) inpEl.setAttribute('aria-label', o.input.aria||o.title||'输入框'); }catch(x){}
   function dlgVal(){ if(inpEl) return inpEl.value.trim();
@@ -1328,7 +1345,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.44.5', AT_BUILD='20261008a';
+var AT_VERSION='2.44.6', AT_BUILD='20261008b';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1638,15 +1655,28 @@ function srcCovLine(cov){
 /* ===== v2.19.1 时长统计（用户指令「一集多久 / 看完一季多少小时 / 看完全剧多少小时」）=====
    runtime 只有全网库那条路带得回来（ep.dur）；内置库/AI 导入的老数据没有时长，
    这时按 kind 估：真人剧 45 分、剧场版/电影 100 分、动画 24 分——所以估算时文案带「约」。 */
+/* v2.44.6：「按什么估」得说得出名字。以前 defDurMin 里三个数字、界面上只写
+   「按类型估」，用户指着《大宋提刑官》那行问「24 分钟哪来的」——答不上来也改不了。
+   现在类别与分钟数从这一个函数出，界面照它报（门禁断言界面那句里的数字 == defDurMin）。 */
+function defDurKind(s){
+  s=s||{};
+  if(/剧场版|电影|Movie|Film/i.test(String(s.kind||'')+' '+String(s.type||''))) return {n:'剧场版',m:100};
+  if(/剧$/.test(String(s.kind||''))) return {n:'真人剧',m:45};   /* 真人剧 / 英语剧 / 韩剧… */
+  return {n:'',m:24};   /* 压根没格式信号（豆瓣联想/手动建档）：只报档位，不冒充「动画」 */
+}
+/* 估档那句话只有一个出口：界面、弹窗说明、toast 都从这里取，不许各自拼一遍 */
+function durEstTxt(s){
+  var k=defDurKind(s);
+  return k.n ? ('按'+k.n+'估 '+k.m+' 分/集') : ('没标类型，按最低档估 '+k.m+' 分/集');
+}
 function defDurMin(s){
   s=s||{};
   /* v2.20.0：AniList 直接带 duration（单集分钟，真值）。有时长就用真值，
-     下面那套「按类型估」只在真的没有数据时才兜底（否则时长账会白估一整部）。 */
+     下面那套「按类型估」只在真的没有数据时才兜底（否则时长账会白估一整部）。
+     v2.44.6：真值不再只有 AniList 一条路——详情页「✎ 改」填的就是它（s.epDur）。 */
   var _ed=Number(s.epDur)||0;
   if(_ed>0&&_ed<=600) return Math.round(_ed);
-  if(/剧场版|电影|Movie|Film/i.test(String(s.kind||'')+' '+String(s.type||''))) return 100;
-  if(/剧$/.test(String(s.kind||''))) return 45;   /* 真人剧 / 英语剧 / 韩剧… */
-  return 24;
+  return defDurKind(s).m;
 }
 /* 电影＝整条只有一个片子（total/eps 都 ≤1）：进度是「看到哪一分钟」而不是「第几集」 */
 function isFilmEntry(s){
@@ -1724,12 +1754,18 @@ function fmtDurShort(min){
 function durOf(s){
   s=s||{};
   var eps=s.eps||[], statuses=s.statuses||{}, def=defDurMin(s);
+  /* v2.44.6：s.epDur 是「一条集级时长都没有时唯一的实测来源」——AniList 带的 duration、
+     详情页「✎ 改」里用户亲手填的分钟数。既然叫实测，整本账就不许再挂「约」、
+     也不许说「没有时长数据」（旧版只认逐集 e.dur，用户改完 46 分页面照旧报「约 46 分钟」，
+     就是这条「时长还是对不上」）。夹在 1~600 之外的一律不算（脏数据不许冒充实测）。 */
+  var _ed=Number(s.epDur)||0, declared=(_ed>0&&_ed<=600);
   var out={epMin:def,total:0,watched:0,remain:0,seasons:{},known:false,partial:false,film:isFilmEntry(s)};
   if(!eps.length){
     var t=Number(s.total)||0;
     out.total=def*t;
     for(var k in statuses){ if(statuses[k]==='watched'||statuses[k]==='rewatch') out.watched+=def; }
     out.remain=Math.max(0,out.total-out.watched);
+    if(declared) out.known=true;
     if(out.film){
       var fp0=filmPosOf(s);
       if(fp0>0&&fp0<100){ out.watched=Math.round(out.total*fp0/100); out.remain=Math.max(0,out.total-out.watched); }
@@ -1748,10 +1784,15 @@ function durOf(s){
     if(v==='watched'||v==='rewatch') out.watched+=m;
     else { out.remain+=m; out.seasons[sn].remain+=m; }
   });
-  if(knownN){ out.epMin=Math.round(knownSum/knownN);
+  if(knownN||declared){
+    if(knownN) out.epMin=Math.round(knownSum/knownN);
     /* v2.44.5：「有真值」必须是每条都有，不是有一条就算。缺一集就是估的，
-       整本账要标「约」——否则 12 集里 10 集有真值，报出来的数看着像实测。 */
-    out.known=(knownN===eps.length); out.partial=(knownN>0&&knownN<eps.length); }
+       整本账要标「约」——否则 12 集里 10 集有真值，报出来的数看着像实测。
+       v2.44.6：补一条同等判据——整部级 s.epDur 也是真值（AniList 的 duration、
+       或用户亲手填的分钟数）。缺的那几集按它折算就不是「估」，「约」与 partial 一并撤掉。 */
+    out.known=(knownN===eps.length)||declared;
+    out.partial=(knownN>0&&knownN<eps.length&&!declared);
+  }
   /* 电影部分进度折进时长账：看到 45% ⇒ 已看 45 分钟、还剩 55 分钟 */
   if(out.film){
     var fp=filmPosOf(s);
@@ -1763,7 +1804,7 @@ function durOf(s){
   return out;
 }
 /* 详情页/内置库详情共用的一行时长文案 */
-function durLineHtml(s){
+function durLineHtml(s,editable){
   var d=durOf(s);
   if(!d.total) return '';
   var kp=seasonKeyOf(s), segs=[];
@@ -1779,7 +1820,14 @@ function durLineHtml(s){
   segs.push((d.film?'本片':'全剧')+'共 '+fmtDur(d.total));
   segs.push('已看 '+fmtDur(d.watched));
   segs.push(d.remain?('还剩 '+fmtDur(d.remain)):'✓ 已刷完');
-  if(!d.known && !d.film) segs.push('<span class="ds">'+(d.partial?'部分缺单集时长 · 缺的按类型估':'无时长数据 · 按类型估')+'</span>');
+  if(!d.known && !d.film){
+    /* 估的就写清按哪一类、多少分——「按类型估」四个字既没信息也没出口（v2.44.6） */
+    segs.push('<span class="ds">'+(d.partial?'部分缺单集时长 · 缺的':'没有时长数据 · ')+durEstTxt(s)+'</span>');
+  }
+  /* v2.44.6：这个出口常驻，不玩「设成功那刻自己把自己藏掉」——
+     填错的那天就是下一次「对不上」，门得一直开着（片长的错也走同一条路）。
+     v2.44.6c：出口不新开一扇门，就长在这一行的行尾（点整行任意空白处都算）。 */
+  if(editable) segs.push('<span class="durfix">✎ 改时长</span>');
   return segs.join('<span class="ds">·</span>');
 }
 
@@ -2031,7 +2079,8 @@ function showInternalDetail(id){
     '<div class="stat"><b>'+s.total+'</b><span>未看</span></div>'+
     '<div class="stat"><b>0%</b><span>进度</span></div>';
   var _dli=document.getElementById('dDur');
-  if(_dli){ var _dih=durLineHtml(s); _dli.innerHTML=_dih; _dli.style.display=_dih?'':'none'; }
+  /* v2.44.6c：内置库预览复用同一行，但它不是片单条目——不许成为触点 */
+  if(_dli){ var _dih=durLineHtml(s); _dli.innerHTML=_dih; _dli.classList.remove('dedit'); _dli.style.display=_dih?'':'none'; }
   document.getElementById('qFilter').value='';
   // 渲染集列表（行式 + 页码分页）
   var eL=s.eps&&s.eps.length?s.eps:(function(){ var a=[]; for(var i=1;i<=s.total;i++)a.push({s:i,t:''}); return a; })();
@@ -2152,7 +2201,8 @@ function renderList(){
   renderFilter();
   var list=shows.filter(function(s){ return (curFilter==='all'||(s.status||'watching')===curFilter)
       && (!listQ||listHit(s,listQ)); })
-    .sort(function(a,b){ return (b.updAt||0)-(a.updAt||0); });
+    /* v2.44.6d（用户令「我的片单按豆瓣标记顺序」）：按标记时间排，不按 updAt */
+    .sort(markCmp);
   var el=document.getElementById('list');
   if(listQ&&!list.length){
     el.innerHTML='<div class="empty"><div class="big">无</div><p>没有标题含「'+esc(listQ)+'」的番剧<br/>换个关键词，或清空搜索框看全部</p></div>';
@@ -2467,7 +2517,7 @@ function renderDetail(){
   /* v2.19.1：一行时长账（单集 / 本季 / 全剧 / 已看 / 还剩），估算值带「约」。
      v2.37.0：有漫改轴的条目这行被「全部」行并走，整行隐藏（_cb 控制） */
   var _dl=document.getElementById('dDur');
-  if(_dl){ var _dlh=durLineHtml(s); _dl.innerHTML=_dlh; _dl.style.display=(_dlh&&!_cb)?'':'none'; }
+  if(_dl){ var _dlh=durLineHtml(s,1); _dl.innerHTML=_dlh; _dl.classList.toggle('dedit',!!_dlh); _dl.style.display=(_dlh&&!_cb)?'':'none'; }
   /* v2.19.1：电影条目另开「看到哪了」部分进度条（集级状态只有 0/100，装不下看到一半） */
   try{ renderFilmPos(); }catch(e){}
   /* v2.5.1 来源覆盖行/补齐入口/来源标注入口已按需求删除；本条仅保留「已隐藏集」提示与恢复 */
@@ -3878,6 +3928,39 @@ function rebaseEps(s,newTotal){ /* 编辑集数：重建 eps 保留已有标记 
      editTotal / cacheCover / upHttps / coverNeedsHeal / _cTry / _cTrySet /
      coverCanAuto / coverMark / healCoverFor
    其中「编辑集数」按钮和「重拉封面」功能直接依赖它们，缺了会报 is not defined。 */
+/* v2.44.6c：时长行本身就是那颗钮。落在行里别的控件（「✎ 改时间」那颗）上的点击
+   由那个控件自己收，这里只接「点到行的空白/文字」那一下。 */
+function durLineTap(ev){
+  var host=ev&&ev.currentTarget?ev.currentTarget:null;
+  if(!host||!host.classList||!host.classList.contains('dedit')) return;
+  var t=ev&&ev.target?ev.target:null;
+  if(t&&t.closest&&t.closest('button,[onclick]')&&t.closest('button,[onclick]')!==host) return;
+  editDur();
+}
+function editDur(){ /* v2.44.6：单集时长从「只能看着估」改成当场能定——填上就是实测值，账上的「约」当场消失 */
+  var s=bySid(curSid); if(!s) return;
+  var cur=Number(s.epDur)||0, pick=null;
+  var now=cur?('现在记的是 '+cur+' 分/集'+(s.kind?('（类别：'+s.kind+'）'):''))+
+    '。改数就按新数重算整本账；留空＝退回'+durEstTxt(s)+'。'
+    :('这条没有单集时长数据，整本账'+durEstTxt(s)+'。'+String.fromCharCode(10)+'填上真实分钟数＝按实测记（「约」消失）；留空＝继续按类型估。');
+  uiDialog({ title:'设定单集时长（分钟）',
+    msg:now,
+    input:{ value:cur?String(cur):'', mode:'numeric', placeholder:'如 45', aria:'单集时长（分钟）' },
+    chips:[{t:'动画 24',v:24,k:'动画'},{t:'真人剧 45',v:45,k:'电视剧'},{t:'剧场版 100',v:100,k:'剧场版'}],
+    onChip:function(c){ pick=c; },
+    okText:'存', cancelText:'取消',
+    validate:function(v){ var t=String(v==null?'':v).trim(); if(!t) return null;
+      var x=parseInt(t,10); return (!x||x<1||x>600)?'填 1~600 之间的分钟数，或留空按类型估':null; },
+    onDone:function(ok,v){ if(!ok) return;
+      var t=String(v==null?'':v).trim();
+      if(!t){ if(pick){ s.kind=pick.k; s.epDur=0; } else { toast('没填数，仍是'+durEstTxt(s)); return; } }
+      else { var x=parseInt(t,10); s.epDur=x; if(pick) s.kind=pick.k; }
+      save(); renderDetail();
+      var d=durOf(s), m=Number(s.epDur)||defDurKind(s).m;
+      toast('单集时长按 '+m+' 分记 · 全剧共 '+fmtDur(d.total)+(Number(s.epDur)?'（实测，不带约）':'（估的，带约）'));
+    }
+  });
+}
 function editTotal(){ /* 国内外集数不一致：手动修正，保留标记 */
   var s=bySid(curSid); if(!s) return;
   /* v2.13.0：原生弹窗→主题弹窗——非法值改由 validate 即时提示 */
@@ -5081,9 +5164,34 @@ function dbStamp(s,field,ms){
    「看过」的开始时间留空，不编。 */
 function dbStampTimes(s,status,markedAt){
   var ms=parseDay(markedAt); if(!ms||!s) return false;
-  if(status==='collect') return dbStamp(s,'tDone',ms);
-  if(status==='do') return dbStamp(s,'tStart',ms);
-  return false;
+  /* v2.44.6d：标记日期本身也记一份，**跟状态无关**——想看那天没有开始/完成可记，
+     但「哪天标的」是排序要用的账。豆瓣是这本账的记账方，每轮拉取以它为准。 */
+  var ch=false;
+  if(s.dbMark!==ms){ s.dbMark=ms; s.dbMarkFrom='db'; ch=true; }
+  if(status==='collect'){ if(dbStamp(s,'tDone',ms)) ch=true; return ch; }
+  if(status==='do'){ if(dbStamp(s,'tStart',ms)) ch=true; return ch; }
+  return ch;
+}
+/* v2.44.6d：片单的排序轴＝「标记时间」，不是「最近被动过」。
+   updAt 会被改名/补封面这类后台动作顶起来，用它排，列表跟豆瓣那页对不上。 */
+function dbMarkOf(s){
+  s=s||{};
+  var t=Number(s.dbMark)||0; if(t) return t;
+  /* 老数据没这格（v2.44.6 之前导入的）：从已有的豆瓣来源时间戳里认 */
+  var m=0;
+  if(s.tStartFrom==='db') m=Math.max(m,Number(s.tStart)||0);
+  if(s.tDoneFrom==='db') m=Math.max(m,Number(s.tDone)||0);
+  if(m) return m;
+  return Number(s.addedAt)||0;
+}
+/* 同一天标了好几部：豆瓣自己那一列的先后是唯一线索，拉取时按下标存下来 */
+function dbMarkSeqOf(s){ var q=Number((s||{}).dbMarkSeq); return isFinite(q)&&q>=0?q:-1; }
+function markCmp(a,b){
+  var ta=dbMarkOf(a),tb=dbMarkOf(b);
+  if(tb!==ta) return tb-ta;
+  var sa=dbMarkSeqOf(a),sb=dbMarkSeqOf(b);
+  if(sa!==sb) return (sa<0?1e9:sa)-(sb<0?1e9:sb);
+  return (b.updAt||0)-(a.updAt||0);
 }
 function dbApplyOne(d){
   var stt=DB_ST[d.status]||'watching', cur=dbTargetOf(d), ch=false;
@@ -5094,7 +5202,7 @@ function dbApplyOne(d){
       year:d.year||'', total:0, eps:[], statuses:{}, status:stt, rating:d.rating||0,
       genres:d.genres||[], isAnime:!!d.isAnime, dbId:real?String(d.subjectId):'',
       ep:d.ep||0, source:d.source||('豆瓣'+(d.isAnime?'·动画':'·真人')),
-      addedAt:Date.now(), updAt:Date.now() };
+      addedAt:Date.now(), updAt:Date.now(), dbMarkSeq:(typeof d.seq==='number'?d.seq:-1) };
     dbStampTimes(ns,d.status,d.markedAt);
     shows.push(ns); return 'added';
   }
@@ -5108,6 +5216,7 @@ function dbApplyOne(d){
   if(!cur.year&&d.year){ cur.year=d.year; ch=true; }
   if(!cur.rating&&d.rating){ cur.rating=d.rating; ch=true; }
   if(dbStampTimes(cur,d.status,d.markedAt)) ch=true;
+  if(typeof d.seq==='number'&&Number(cur.dbMarkSeq)!==Number(d.seq)){ cur.dbMarkSeq=d.seq; ch=true; }
   if(d.ep&&Number(cur.ep||0)!==Number(d.ep)){ cur.ep=d.ep; ch=true; }
   /* 状态以豆瓣为准：这轮是「只拉不推」，豆瓣是记账的那一方 */
   if((cur.status||'watching')!==stt){ cur.status=stt; ch=true; }
@@ -5322,10 +5431,11 @@ async function dbnPull(scope, keepMsg){
   if(!j||!j.ok){ dbnNote('拉取失败：'+((j&&j.msg)||'未知错误'),'bad'); if(j&&j.kind==='no-uid'){ var u2=document.getElementById('dbnUid'); if(u2) u2.style.display=''; } return; }
   var items=j.items||[];
   if(!items.length){ dbnNote('没抓到条目 —— Cookie 可能过期了，重新粘贴一次','bad'); if(au) au.style.display=''; return; }
-  dbnItems=items.map(function(d){
+  /* 豆瓣这个接口回来的就是「最近标记的在前」——这个先后是同日多条唯一的排序线索 */
+  dbnItems=items.map(function(d,i){
     return { subjectId:d.subjectId, title:dbShowTitle(d), cnTitle:String(d.title||'').trim(),
       origTitle:String(d.origTitle||'').trim(), year:d.year, genres:d.genres||[],
-      isAnime:!!d.isAnime, rating:d.rating, markedAt:d.markedAt, pic:d.pic, status:d.status, ep:d.ep, pick:0 };
+      isAnime:!!d.isAnime, rating:d.rating, markedAt:d.markedAt, pic:d.pic, status:d.status, ep:d.ep, seq:i, pick:0 };
   });
   /* 记下豆瓣侧「现在是什么」，推送方向的差异提示全靠它 */
   dbnItems.forEach(function(d){ if(d.subjectId) dbnBySid[String(d.subjectId)]=d.status; });
@@ -5549,11 +5659,11 @@ function importDoubanFile(box,f){
     if(!rows.length){ dbnNote('文件里没解析出条目','bad'); return; }
     var back={};
     ['do','collect','wish'].forEach(function(k){ back[DB_ST_NAME[k]]=k; });
-    dbnItems=rows.map(function(d){
+    dbnItems=rows.map(function(d,i){
       var k=DB_ST[d.status]?d.status:(back[d.status]||'do');
       return { subjectId:d.subjectId, title:dbShowTitle(d), cnTitle:String(d.title||'').trim(),
         origTitle:String(d.origTitle||'').trim(), year:d.year, genres:[], isAnime:false,
-        rating:d.rating, markedAt:d.markedAt, pic:'', status:k, ep:0, pick:0, source:'豆瓣·文件' };
+        rating:d.rating, markedAt:d.markedAt, pic:'', status:k, ep:0, seq:i, pick:0, source:'豆瓣·文件' };
     });
     dbnFrom='从文件「'+f.name+'」解析到 '+dbnItems.length+' 条 · 勾选才入库';
     dbnRender();
@@ -6671,6 +6781,7 @@ window.addEventListener('at_bgcover',function(e){
     var cn=0, cw=0, cr=0, tMin=0, tMax=0, tN=0;
     var du={total:0,watched:0,remain:0,known:false,partial:false,kN:0,n:0};
     var def=defDurMin(s);
+    var _cd=Number(s.epDur)||0, declared=(_cd>0&&_cd<=600);
     (s.eps||[]).forEach(function(e){
       if(srcInfoOf(s,e).src!=='canon') return;
       cn++;
@@ -6684,7 +6795,7 @@ window.addEventListener('at_bgcover',function(e){
       if(v==='watched'||v==='rewatch') du.watched+=m; else du.remain+=m;
     });
     if(!cn) return null;
-    du.known=(du.n>0&&du.kN===du.n); du.partial=(du.kN>0&&du.kN<du.n);
+    du.known=(du.n>0&&du.kN===du.n)||declared; du.partial=(du.kN>0&&du.kN<du.n&&!declared);
     var pct=Math.round((cw/cn)*100);
     return { total:cn, watched:cw, rewatch:cr, pct:pct, tMin:tMin, tMax:tMax, tN:tN, done:(cw+cr>=cn), dur:du };
   }
@@ -6699,6 +6810,9 @@ window.addEventListener('at_bgcover',function(e){
       var est=d.known?'':'约 ';
       a.push('时长 <b>'+est+fmtDur(d.watched)+'</b> / '+(d.known?'':'约 ')+fmtDur(d.total));
       if(d.remain>0) a.push('还剩 '+(d.known?'':'约 ')+fmtDur(d.remain));
+      /* v2.44.6：有漫改轴的条目整行时长账被这行并走，出口跟着搬进来、同样常驻
+         （设成功就把门关上，等于下一次「对不上」又无路可走） */
+      a.push('<span class="durfix">✎ 改时长</span>');
     }
     if(s.tStart) a.push('开始 <b>'+fmtDay(s.tStart)+'</b>'+(s.tStartFrom==='db'?'<span class="src">豆瓣</span>':''));
     if(s.tDone) a.push('看完 <b>'+fmtDay(s.tDone)+'</b>'+(s.tDoneFrom==='db'?'<span class="src">豆瓣</span>':''));
@@ -6706,7 +6820,9 @@ window.addEventListener('at_bgcover',function(e){
     if(dd>0) a.push('用时 <b>'+dd+'</b> 天');
     var sidE=esc(String(s.sid)).replace(/'/g,"\\'");
     a.push('<button type="button" class="lnk" onclick="editWatchTime(\''+sidE+'\')">✎ 改时间</button>');
-    out.push('<div class="cnpline"><span class="cnp-tag">全部</span><span class="cnp-main">'+a.join('<span class="ds">·</span>')+'</span></div>');
+    /* v2.44.6c：这一行是时长账，也是改时长的入口；行里另有「✎ 改时间」那颗钮，
+       durLineTap 只认落在空白处的点击，不抢那颗钮的事件 */
+    out.push('<div class="cnpline dedit" onclick="durLineTap(event)"><span class="cnp-tag">全部</span><span class="cnp-main">'+a.join('<span class="ds">·</span>')+'</span></div>');
     /* 「漫改」行：canon 集数/百分比/回看 + canon 时长 + canon 日期（epT） */
     var b=['已看 <b>'+c.watched+'</b> / '+c.total+' 集','<b>'+c.pct+'%</b>'];
     if(c.rewatch) b.push('回看 '+c.rewatch);
