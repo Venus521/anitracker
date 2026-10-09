@@ -1502,7 +1502,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.47.0', AT_BUILD='20261009b';
+var AT_VERSION='2.49.0', AT_BUILD='20261009d';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -3603,6 +3603,8 @@ async function webFillEpisodes(sid){
   try{
     var eps=await webEpisodes(s.tvId);
     var cur=bySid(sid); if(!cur||!eps.length) return;
+    /* v2.48.0：季条目只要本季的集（整部拉会把 34 集当成「第三季 34 集」） */
+    eps=seasonRowsFor(cur,eps);
     cur.eps=eps; cur.total=eps.length; cur.updAt=Date.now();
     try{ ensureSeasons(cur); }catch(e){}
     try{ autoCalibrateSrc(cur); }catch(e){}
@@ -4249,6 +4251,252 @@ function coverMark(sid,ok,soft){
   if(ks.length>400){ ks.sort(function(a,b){ return (m[a].at||0)-(m[b].at||0); }); ks.slice(0,ks.length-400).forEach(function(k){ delete m[k]; }); }
   _cTrySet(m);
 }
+/* v2.49.0：版本进位就把封面退避账清一次（常驻化的那一半）。
+   为什么必须清：at_cover_try 记的是「这部剧拉不到封面」，可它真正记的是
+   「用上一版那几条源拉不到」。这轮加进爱奇艺之后，旧账会把新源整个挡在门外——
+   一部标了非 soft 失败的国剧，coverCanAuto 两小时内一律 false，
+   于是每修一次都要等两小时才看得见，卡片照旧灰着。这正是「说一次才弄一次」的另一半。
+   只在 AT_BUILD 进位时清一次（同一次启动里绝不反复清，否则退避白写、重试风暴又回来）。 */
+function _atCoverTryReset(){
+  try{
+    var K='at_try_build', cur=String(typeof AT_BUILD!=='undefined'?AT_BUILD:'');
+    if(!cur||localStorage.getItem(K)===cur) return false;
+    localStorage.setItem('at_cover_try','{}');
+    localStorage.setItem(K,cur);
+    return true;
+  }catch(e){ return false; }
+}
+/* ===== v2.48.0 查询剥壳：只改「怎么问」，不改「算不算同一部」 =====
+   TVMaze 的搜索不做模糊匹配（2026-10-09 本机逐条打，同名一 raw/clean 对照）：
+     'Hilda Season 3'→0 条 / 'Hilda'→有图；'Amphibia Season 2'→0 / 'Amphibia'→有图；
+     'Frasier Season 1'→0 / 'Frasier'→有图；'Why Women Kill Season 1'→0 / 'Why Women Kill'→有图；
+     '夏目友人帳 第七季'→0 条 / '夏目友人帳'→1 条带图。
+   但**光剥季号对本机那份卡住的队列一条也没救回来**（实测见下面 latinBases 那段），
+   因为豆瓣导进来的条目名是「中文 英文原名 Season N」双语形，剥完还剩「希尔达 Hilda」这种中拉混排。
+   所以这里剥季号真正管用的是**单语名**那批（自己加的/英文名入库的「Hilda Season 3」型），
+   双语名那批靠下面的 latinBases。
+   反例也在册：'ドラゴン桜2' 剥成「ドラゴン桜」时 TVMaze 返回 "Like a Dragon: Yakuza"（另一部剧），
+   靠下面 webMatchShow 原有的「归一化全等」判据挡掉——所以剥壳只多问一次，身份判据一条没松。
+   **一把尺**：标记集合与 seasonSeqOf 严格对齐（第N季/部/篇卷、Season N、S1、裸数字不剥）。
+   凡剥不动出「本季」的那一类尾巴（漆／第三期／Part 2／2クール）一律不剥——
+   剥中了也只会拿回整部连号的集表，把「没封面」换成「集数不对」，那不算修好。 */
+var SEASON_STRIP_PATS=[
+  /第\s*[0-9零一二两三四五六七八九十]{1,3}\s*[季部篇卷]/g,
+  /\bSeason\s*[0-9]{1,2}\b/gi,
+  /(?:^|[\s\-_])[Ss][0-9]{1,2}(?=[\s\-_:]|$)/g
+];
+function seasonStripTxt(v){
+  var s=String(v==null?'':v);
+  SEASON_STRIP_PATS.forEach(function(p){ p.lastIndex=0; s=s.replace(p,' '); });
+  return s;
+}
+function queryBases(kw){
+  var raw=String(kw==null?'':kw).trim(); if(!raw) return [];
+  var pats=SEASON_STRIP_PATS;
+  var out=[], seen={};
+  function push(v){
+    v=String(v||'').replace(/[〈〉《》()（）\[\]【】]/g,' ')
+      .replace(/[\s　]+/g,' ').trim()
+      .replace(/[：:，,、;；。.\-—–~～]+$/,'').replace(/^[\s\-—–~～、，,：:]+/,'').trim();
+    if(!v) return;
+    var nv=normTxt(v);
+    if(!nv||nv.length<2||nv===normTxt(raw)) return;
+    if(seen[nv]) return; seen[nv]=1; out.push(v);
+  }
+  var once=raw;
+  pats.forEach(function(p){ once=once.replace(p,' '); });
+  push(once);
+  /* 尾巴型（「正名 第N季」/「正名 Season N」）：只砍最后一段，正名里含空格的别误伤 */
+  try{
+    var segs=raw.split(/[\s　]+/);
+    if(segs.length>1){
+      var tail=segs[segs.length-1], head=segs.slice(0,-1).join(' ');
+      var hitTail=pats.some(function(p){ p.lastIndex=0; return p.test(tail); });
+      if(hitTail) push(head);
+    }
+  }catch(e){}
+  return out.slice(0,2);
+}
+/* ===== v2.48.0 双语名的「拉丁整段」：豆瓣那批条目名是「中文 英文原名 Season N」 =====
+   实测（2026-10-09，本机 77 部卡在待补队列里的标题逐条打 TVMaze；口径=服务器日志里带 q= 的
+   333 次请求去重，这 77 部都是走到豆瓣那一跳=前面几跳都没给图的；判据用真身同一个 normTxt）：
+     原样问            0 / 77
+     只剥季号          0 / 77   ← 剥完剩「希尔达 Hilda」这种中拉混排，照样对不上
+     拉丁整段单独问   17 / 77   全带图（Hilda / Why Women Kill / Gravity Falls / Rick and Morty /
+                                 The Owl House / Star vs. the Forces of Evil / Amphibia / Frasier / dele …）
+     仍不中           60 / 77   （纯日文名、纯中文剧——那要靠第 2、3 层：离线喂库 + 人工指认）
+   两条从实测里长出来的规矩，都是被反例逼的：
+   · **不做前缀砍尾**：把「Gravity Falls Shorts」砍成「Gravity Falls」确实能命中（5 部），
+     可那条标题的中文正名写的是「迷你剧」——把正片海报挂到衍生条目上就是错封面，
+     按 v2.14.0g「错封面比没封面更糟」一律不做。代价实测：少救 6 部（那 5 部 + 探险活宝）。
+   · **只认整段是拉丁的空格分词**：按字符扫会从「转生成为了只有乙女游戏破灭Flag的邪恶大小姐」里
+     摘出 'Flag'，而 TVMaze 真有一部叫《Flag》的剧 → 归一化全等闸放行 → 挂错封面（实测踩过，1 部）。
+     改成按分词整段认之后这条没了；同批被一起挡掉的是 'JIN'（仁医 JIN-仁2，2 部，大概同剧但拿不到）。
+   安全：摘出来仍然只是「怎么问」，命中与否照旧过 webMatchShow 的归一化全等闸。 */
+var LATIN_STOP=/^(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|stage|stages|series|season|parts?|chapters?|movies?|films?|specials?|ovas?|onas?|shorts?|mini|ex|zero|the|a|an)$/i;
+function latinBases(kw){
+  var raw=String(kw==null?'':kw).trim(); if(!raw) return [];
+  var out=[], seen={};
+  try{
+    var s=seasonStripTxt(raw);
+    /* 只认「整段都是拉丁」的空格分词，连着几段合成一个名字：
+       中文正名里夹进来的零星拉丁碎片不算——实测「转生…破灭Flag的邪恶大小姐」若按字符扫，
+       会摘出 'Flag' 去搜到 TVMaze 另一部真叫《Flag》的剧 = 错封面，那条路必须堵死。 */
+    var TOK=/^[A-Za-z][A-Za-z0-9'&.+-]*$/;
+    var segs=String(s).split(/[\s　]+/), cur=[];
+    var runs=[];
+    function flush(){ if(cur.length){ runs.push(cur.join(' ')); cur=[]; } }
+    segs.forEach(function(t){
+      t=String(t||'').replace(/^[「『“"'（(【\[]+|[」』”"'）)】\]。，、；：;:,.!?？~～—–-]+$/g,'');
+      if(TOK.test(t) && !/^\d/.test(t) && !/^[Ss]eason$/i.test(t)) cur.push(t); else flush();
+    });
+    flush();
+    runs.forEach(function(v){
+      v=String(v||'').replace(/[\s　]+/g,' ').trim().replace(/[&.+-]+$/,'');
+      if(!v||v.length<3) return;
+      /* 整段都是季/阶段词（Fifth Stage、Part 2…）就别拿去过搜索：那不是片名 */
+      var toks=v.split(' '), nameTok=false;
+      for(var i=0;i<toks.length;i++){ if(!LATIN_STOP.test(String(toks[i]).replace(/[^A-Za-z]/g,'').toLowerCase())){ nameTok=true; break; } }
+      if(!nameTok) return;
+      var nv=normTxt(v);
+      if(!nv||nv===normTxt(raw)||seen[nv]) return;
+      seen[nv]=1; out.push(v);
+    });
+  }catch(e){}
+  return out.slice(0,2);
+}
+/* ===== v2.49.0 中文正名那把钥匙：中文站不认「中文 英文原名 Season N」 =====
+   实测（2026-10-09，本机逐条打爱奇艺匿名搜索，78 部卡住的队列）：
+     原样问 6 部命中；再问「中文正名」15 部命中 ← 致命女人/水果篮子/辛普森一家 这类双语名，英文那串它不认
+   所以给中文源必须有这一把。安全：它仍然只是「怎么问」，命中与否照旧过 iqPick 的归一化全等闸；
+   剥季号用同一把 SEASON_STRIP_PATS，不另起尺。 */
+function cnBases(kw){
+  var raw=String(kw==null?'':kw).trim(); if(!raw) return [];
+  var out=[], seen={};
+  try{
+    var s=seasonStripTxt(raw), re=/[^\s\u3000A-Za-z\u3040-\u30ff\uac00-\ud7af]+/g, m;
+    while((m=re.exec(s))){
+      var v=String(m[0]||'').replace(/[　\s]+/g,'').replace(/^[^\u4e00-\u9fff\u3400-\u4dbf]+/,'').replace(/[：:，,、;；。.·・~～\-—–_【】〔〕（）()「」『』〈〉《》<>!！?？]+$/,'');
+      if(!v||v.length<2||!/[\u4e00-\u9fff\u3400-\u4dbf]/.test(v)) continue;
+      var nv=normTxt(v);
+      if(!nv||nv===normTxt(raw)||seen[nv]) continue;
+      seen[nv]=1; out.push(v);
+    }
+  }catch(e){}
+  return out.slice(0,2);
+}
+/* ===== v2.49.0 季条目：官方集表按本条目声明的那一季切 =====
+   实测（同日，TVMaze /shows/{id}/episodes 按 season 分组计数）：
+     希尔达 第三季 整部拉=34 集（13+13+8），本季真值 8；
+     夏目友人帳 第七季 整部=86 集（13/13/13/13/11/11/12），本季真值 12。
+   原路 `cur.total=eps.length` 把整部当一季，正是「集数不对」的来源；
+   更糟的是 canonEpList 的 `byS[ex.s]` 兜底会拿整部连号去对季内号，
+   于是「第三季第 3 集」被安上第一季第 3 集的名字。
+   切法：官方行按 sn 筛出声明的那一季，再在本季内重排为 s=1..n（sn/en 原样留着，
+   canonEpList 仍靠 sn-en 优先对官方集名）。
+   卫兵（错进度比错集数更糟，同 v2.14.0g「宁缺勿错」口径）：
+   ① 标题里没声明季号 / 库里查不到这一季 / 整部就这一季 → 原样返回整部，不猜；
+   ② 本地已有的行号或观看标记（statuses/epT）最大号只要超过「本季集数」，
+      说明这套编号是整部连号，切了会把用户进度挪到别的季去 → 原样返回，不猜。
+      反过来：占位集（1..本季真值）与「已经切过一次」的条目号都 ≤ n，照常切，
+      且这条判据让它自己幂等——上一轮填过整部（行号 1..34 > 8）就一定被挡住。 */
+function seasonRowsFor(s, all){
+  var list=(all||[]);
+  try{
+    if(!s||!list.length) return list;
+    var no=seasonSeqOf(s.title)||seasonSeqOf(s.nameJp)||0;
+    if(!no) return list;
+    var keep=list.filter(function(e){ return (Number(e&&e.sn)||1)===no; });
+    if(!keep.length||keep.length===list.length) return list;
+    var n=keep.length, hi=0;
+    (s.eps||[]).forEach(function(x){ var v=Number(x&&x.s)||0; if(v>hi) hi=v; });
+    var mk=(s.statuses||{}), tt=(s.epT||{});
+    for(var k in mk){ var a=Number(k)||0; if(a>hi) hi=a; }
+    for(var k2 in tt){ var b=Number(k2)||0; if(b>hi) hi=b; }
+    if(hi>n) return list;
+    return keep.map(function(e,i){
+      var c={}; for(var f in e) c[f]=e[f];
+      c.s=i+1; c.sn=no; return c;
+    });
+  }catch(e){ return list; }
+}
+/* ===== v2.49.0 存量季切（用户令「只做零进度那批，最保守」）=====
+   为什么要它：seasonRowsFor 只管**新抓回来**的那一截，库里已经存着的整部列表不会自己瘦身——
+   所以「11/26」这种数（第 2 季只有 13 集的条目挂着整部 26 集）会一直留在界面上。
+   判据按**行身份**，不用「最大标记数」那种启发式：旧表每行自带 sn（第几季），
+   而标记（statuses/epT）记的是**位序**。于是先问「这个位序那一行到底是不是声明的那一季」：
+     · 一条标记都没有     → 切成那一季并重编号（零进度＝没有可弄丢的东西）；
+     · 标记全在那一季内  → 按同一张旧位→新位表平移，statuses/epT 的键一起挪，不留旧键；
+     · 有标记落在季外，或位序大过整表 → 一律不碰，报 refuse（多半是真在追别的季）。
+   跑法：一个构建只跑一次（at_reslice_build 记构建号），动手前把整份片单快照进
+   at_shows_bak_<构建号>，要还原就把它写回去。 */
+function seasonResliceShow(s){
+  try{
+    if(!s||!s.eps||!s.eps.length) return {act:"skip",why:"没有剧集表"};
+    var no=seasonSeqOf(s.title)||seasonSeqOf(s.nameJp)||0;
+    if(!no) return {act:"skip",why:"标题里没季号"};
+    var idx=[], outOf=[], total=s.eps.length, i;
+    for(i=0;i<total;i++){
+      var sn=Number((s.eps[i]||{}).sn)||1;
+      if(sn===no) idx.push(i+1); else outOf.push(i+1);
+    }
+    if(!idx.length) return {act:"skip",why:"表里没第 "+no+" 季的行"};
+    if(idx.length===total) return {act:"skip",why:"整表本就是第 "+no+" 季"};
+    var oldTot=Number(s.total)||0;
+    var mk=(s.statuses||{}), tt=(s.epT||{}), marked=[], k;
+    for(k in mk){ marked.push(Number(k)||0); }
+    for(k in tt){ var v0=Number(k)||0; if(marked.indexOf(v0)<0) marked.push(v0); }
+    var bad=0;
+    for(i=0;i<marked.length;i++){
+      var p=marked[i];
+      if(p>total||(p>0&&outOf.indexOf(p)>=0)) bad++;
+    }
+    if(bad) return {act:"refuse",why:bad+"个标记不在第"+no+"季",season:no,n:idx.length,total:total};
+    var keep=[], q, remap={};
+    for(q=0;q<idx.length;q++){
+      var e=s.eps[idx[q]-1]||{}, c={}, f;
+      for(f in e){ c[f]=e[f]; }
+      c.s=q+1; c.sn=no; keep.push(c);
+      remap[idx[q]]=q+1;
+    }
+    if(!marked.length){ s.eps=keep; if(!oldTot||oldTot===total) s.total=keep.length; return {act:"sliced",season:no,n:keep.length,total:total,wasTotal:oldTot}; }
+    var nst={}, ntp={}, k2;
+    for(k2 in mk){ var o1=Number(k2)||0; nst[String(remap[o1]||o1)]=mk[k2]; }
+    for(k2 in tt){ var o2=Number(k2)||0; ntp[String(remap[o2]||o2)]=tt[k2]; }
+    s.statuses=nst; s.epT=ntp; s.eps=keep; if(!oldTot||oldTot===total) s.total=keep.length;
+    return {act:"remapped",season:no,n:keep.length,total:total,marks:marked.length,wasTotal:oldTot};
+  }catch(e){ return {act:"skip",why:"异常"}; }
+}
+
+function bootSeasonReslice(){
+  var out={ran:0,sliced:0,remapped:0,refuse:0,skipped:0};
+  try{
+    var cur=String(typeof AT_BUILD!=="undefined"?AT_BUILD:"");
+    if(!cur||localStorage.getItem("at_reslice_build")===cur){ out.ran=-1; return out; }
+    if(!shows||!shows.length) return out;
+    try{ localStorage.setItem("at_shows_bak_"+cur,JSON.stringify(shows)); }catch(e){}
+    shows.forEach(function(s){
+      var r=seasonResliceShow(s);
+      if(r.act==="sliced"){ out.sliced++; s.updAt=Date.now(); }
+      else if(r.act==="remapped"){ out.remapped++; s.updAt=Date.now(); }
+      else if(r.act==="refuse"){ out.refuse++; }
+      else{ out.skipped++; }
+    });
+    if(out.sliced||out.remapped){
+      try{ save(); }catch(e){}
+      try{ if(typeof renderList==="function") renderList(); }catch(e){}
+      try{
+        toast(out.sliced+out.remapped+" 部的集数按它自己写的那一季重数了"
+          +(out.refuse?("，另有 "+out.refuse+" 部进度看着不在这季里、没敢动"):"")+"。");
+      }catch(e){}
+    }
+    localStorage.setItem("at_reslice_build",cur);
+    /* 回执留一份：这一趟到底改了几部、拒了几部，下次要核数就取这条，不用猜 */
+    try{ localStorage.setItem("at_reslice_last",JSON.stringify({b:cur,t:Date.now(),sliced:out.sliced,remapped:out.remapped,refuse:out.refuse,skipped:out.skipped})); }catch(e){}
+    out.ran=1;
+    return out;
+  }catch(e){ return out; }
+}
 /* 按剧名在全网库找一条「同名」条目：只认归一化后完全相等的标题。
    v2.14.0g 的教训沿用——错封面比没封面更糟（旧版「标题包含即算命中」正是把
    《海贼王》换成水墨错图的通道），补齐剧集同理，宁缺勿错。 */
@@ -4256,8 +4504,18 @@ async function webMatchShow(s){
   var tries=[];
   [s.title,s.nameJp].concat(s.aliases||[]).forEach(function(k){ k=String(k||'').trim(); if(k&&tries.indexOf(k)<0) tries.push(k); });
   try{ searchVariants(s.title).forEach(function(k){ k=String(k||'').trim(); if(k&&tries.indexOf(k)<0) tries.push(k); }); }catch(e){}
+  /* v2.48.0：原样的叫法问完了还问不到，再按「剥掉季号尾巴的正名」和「双语名里那整段英文原名」
+     各问一遍（见 queryBases / latinBases 的实测）。追加在后面 = 先给原名叫机会；
+     命中判据仍是下面那道归一化全等，一条没松。 */
+  try{
+    [s.title,s.nameJp].concat(s.aliases||[]).forEach(function(k){
+      queryBases(k).concat(latinBases(k)).forEach(function(b){ if(b&&tries.indexOf(b)<0) tries.push(b); });
+    });
+  }catch(e){}
   var want=normTxt(s.title);
-  for(var i=0;i<tries.length&&i<3;i++){
+  /* 预算 8 次：实测本机打 TVMaze search 一条 ~0.24 秒（首条 0.8 秒含建连），8 次约 2 秒；
+     4 秒只是「网络断了」那条路的超时上限，而网络一断第一条就抛 NET 直接收摊，不会真等 32 秒。 */
+  for(var i=0;i<tries.length&&i<8;i++){
     var arr=[];
     /* 网络不通（不是「查不到」）就到此为止：换个叫法照样连不上，只多等 4 秒 */
     try{ arr=await webSearchOne(tries[i]); }catch(e){ if(e&&e.webCode==='NET') throw e; continue; }
@@ -4290,14 +4548,116 @@ async function webMatchShow(s){
 async function cnShowBySearch(s){
   var cur=String(s&&s.title||'').trim();
   if(!cur||!/[\u4e00-\u9fff]/.test(cur)) return '';
+  var qs=[cur];
+  try{ queryBases(cur).concat(latinBases(cur)).forEach(function(b){ if(b&&qs.indexOf(b)<0) qs.push(b); }); }catch(e){}
+  for(var i=0;i<qs.length;i++){
+    try{
+      var arr=await webSearchOne(qs[i]);
+      if(!arr||!arr.length) continue;
+      var top=arr[0];
+      if(!top||String(top.language||'')!=='Chinese') continue;
+      var u=webCoverOf(top);
+      if(u) return u;
+    }catch(e){ return ''; }
+  }
+  return '';
+}
+/* ===== v2.49.0 爱奇艺：中文条目这条路的第二条活路 =====
+   为什么非加这一跳不可（2026-10-09 本机逐个打接口实测；样本＝服务器日志里 77 部 TVMaze 三条路都不中的条目）：
+     豆瓣的匿名搜索已经**官方关门**——rexxar 直接 403 result:false / msg:"need_login" / code:103，
+     豆瓣网页搜索抓回来只有模板壳、没有结果块。于是中文条目在整条链上一条活路都没有：
+     日志里 330/333 次豆瓣中转全是 502，卡片永久灰。这正是「说一次才弄一次」的真身——
+     不是漏了几部没顾上，是这条源整体不通，人工救一部是一部。
+   爱奇艺的搜索接口匿名可用、不要 key，一次同时给「海报」：
+     search.video.iqiyi.com/o?if=html5&key=<剧名>&positive=yes&sn=1
+       → data.docinfos[].albumDocInfo{albumTitle, channel, itemTotalNumber, albumVImage, albumHImage}
+   浏览器直连拿不到（接口不给 CORS、图床防盗链），所以走本机服务两个同源中转：
+     /iq-relay 搬 JSON、/iq-img 搬图字节。白名单在 iq_relay_rules.py，只放行 iqiyipic.com，
+     绝不接受任意 URL——本机服务不能变成开放代理。
+   还有一条实测过才敢写的：厂商自己的 is_exactly_same 字段**分不开同名不同作**
+     （《爱情宝典》与另一部同名条目都标 1），所以判据一律用我们自己的 normTxt 全等；
+     繁简（夏目友人帳/帐）、别名（魔卡少女樱→百变小樱）对不上就放弃，留给待指认，不许硬写。 */
+var IQ_ANIME_CH={'动漫':1,'少儿':1,'亲子':1};   /* 爱奇艺频道：画出来的那一侧 */
+var IQ_LIVE_CH={'电视剧':1,'综艺':1};            /* 拍出来的那一侧 */
+function iqIsAnime(s){
+  return /动画|动漫|番|anime/i.test(String((s&&s.kind)||'')+' '+String((s&&s.type)||''));
+}
+function iqIsMovie(s){
+  return /剧场版|电影|Movie|Film/i.test(String((s&&s.kind)||'')+' '+String((s&&s.type)||''));
+}
+/* 类型同侧：动画条目只认动漫/少儿/亲子，真人条目只认电视剧/综艺，剧场版只认电影。
+   实测这一条把 15 个候选名全等命中的挡掉 6 个（动漫改真人的同名作、单条视频挂在剧集名下），
+   留 9 个——错封面比没封面更糟，宁可少给。 */
+function iqChAllow(s,ch){
+  ch=String(ch||'').split(',')[0];
+  if(iqIsMovie(s)) return ch==='电影';
+  if(iqIsAnime(s)) return !!IQ_ANIME_CH[ch];
+  return !!IQ_LIVE_CH[ch];
+}
+function iqRows(j){
+  var out=[];
   try{
-    var arr=await webSearchOne(cur);
-    if(!arr||!arr.length) return '';
-    var top=arr[0];
-    if(!top||String(top.language||'')!=='Chinese') return '';
-    var u=webCoverOf(top);
-    return u||'';
-  }catch(e){ return ''; }
+    var d=j&&j.data;
+    if(!d||typeof d!=='object') return out;   /* 限流时它回 data:"一串文案"，按没搜到处理 */
+    (d.docinfos||[]).forEach(function(x){
+      var a=x&&x.albumDocInfo; if(!a||typeof a!=='object') return;
+      var pic='';
+      ['albumVImage','albumHImage'].some(function(k){
+        var m=/https?:\/\/[^\s"'<>]+/.exec(String(a[k]||''));
+        if(m){ pic=m[0]; return true; }
+        return false;
+      });
+      out.push({name:String(a.albumTitle||'').replace(/<[^>]+>/g,'').trim(),
+                ch:String(a.channel||'').split(',')[0], pic:pic});
+    });
+  }catch(e){}
+  return out;
+}
+/* 问法三把钥匙：片名原样 → 剥掉季号 → 只留中文正名。
+   第三把是这一环的关键：爱奇艺是中文站，「致命女人 第二季 Why Women Kill Season 2」
+   整串它不认，只认「致命女人」。每把都必须含中文，最多问 4 把。 */
+function iqKeys(s){
+  var names=[s&&s.title, s&&s.nameJp].concat((s&&s.aliases)||[]);
+  var out=[], seen={};
+  function push(v){
+    v=String(v||'').trim();
+    if(!v||v.length<2||v.length>40||!/[\u4e00-\u9fff]/.test(v)) return;
+    var n=normTxt(v);
+    if(!n||seen[n]) return;
+    seen[n]=1; out.push(v);
+  }
+  names.forEach(push);
+  try{ names.forEach(function(v){ queryBases(v).forEach(push); cnBases(v).forEach(push); }); }catch(e){}
+  return out.slice(0,4);
+}
+function iqPick(s,rows){
+  var ks=iqKeys(s).map(normTxt), list=rows||[];
+  for(var i=0;i<list.length&&i<8;i++){
+    var r=list[i];
+    if(!r||!r.pic) continue;
+    if(!iqChAllow(s,r.ch)) continue;
+    if(ks.indexOf(normTxt(r.name))<0) continue;
+    return r;
+  }
+  return null;
+}
+/* 返回的是 /iq-img 的同源相对地址，转 dataURL 交给链尾的 cacheCover（它 6s 超时、画布压缩都在）。 */
+async function iqCoverFor(s){
+  if(!isLocalServer()) return '';   /* 中转只有本机 8089 有：非本机模式这一跳直接跳过，不空等 */
+  var ks=iqKeys(s);
+  for(var i=0;i<ks.length;i++){
+    var r=null;
+    try{
+      var ctl=new AbortController(), tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },7000);
+      try{
+        var resp=await fetch('/iq-relay?q='+encodeURIComponent(ks[i]),{signal:ctl.signal});
+        if(resp&&resp.ok) r=await resp.json();
+      }finally{ clearTimeout(tm); }
+    }catch(e){ r=null; }
+    var hit=iqPick(s,iqRows(r));
+    if(hit&&hit.pic) return '/iq-img?url='+encodeURIComponent(hit.pic);
+  }
+  return '';
 }
 /* v2.26.0：判断当前是否跑在「本地/局域网模式」（页面由本机 8089 服务托管）。
    只有这种模式下 /cover-relay 才同源可达；此时豆瓣中转优先走本机端点（更快、免公网流量），
@@ -4649,6 +5009,11 @@ async function healCoverFor(s,opts){
        这一跳插在豆瓣**之前**：它一次请求 1-2 秒就出结果，而豆瓣要走公网函数、
        实测单部 20-50 秒。先问快的那条，能立刻解决的就不必等豆瓣。 */
     if(!url && !s.tvId){ url=await cnShowBySearch(s); }
+    /* v2.49.0：豆瓣匿名搜索已经官方关门（rexxar 403 need_login / code 103，见 iqCoverFor 注），
+       中文条目在这条链上原本一条活路都没有——日志里 330/333 次豆瓣中转全是 502，卡片永久灰。
+       爱奇艺这一跳插在豆瓣之前：一次请求一秒内出结果，判据和 cnShowBySearch 一样严
+       （归一化全等 + 类型同侧 + 必须有图），拿不到就原样往下走豆瓣，不硬写。 */
+    if(!url){ url=await iqCoverFor(s); }
     /* v2.44.0：中文剧在这里插一次豆瓣，别让它排到三条英文源后面干等（理由见 doubanFirst 注） */
     if(!url && doubanFirst(s)){
       if(applyDoubanCover(s,opts,await doubanRelayCover(s.title||s.name||'',s.dbSubId))) return true;
@@ -4823,7 +5188,9 @@ async function refreshNamesFor(s,opts){
   var lib=libShowOf(s), libEps={};
   if(lib) lib.eps.forEach(function(e){ libEps[e.s]=e; });
   if(tv){
-    try{ var we=await webEpisodes(tv); if(we&&we.length){ s.__webEps=we; if(!out.from) out.from='TVMaze'; } }
+    /* v2.48.0：官方集表先切到本条目声明的那一季再建索引——
+       整部连号喂给 canonEpList 的 byS 兜底，会把第一季的集名安到第三季头上。 */
+    try{ var we=await webEpisodes(tv); if(we&&we.length){ s.__webEps=seasonRowsFor(s,we); if(!out.from) out.from='TVMaze'; } }
     catch(e){}
   }
   var lookup=canonEpList(s), named=0, added=0;
@@ -5230,6 +5597,8 @@ async function fillEpisodesNow(){
     }
     if(s.tvId){
       var eps=await webEpisodes(s.tvId);
+      /* v2.48.0：「补齐剧集」同样按季切——季条目拿到的应是本季那一截（见 seasonRowsFor） */
+      eps=seasonRowsFor(s,eps);
       if(eps.length){
         s.eps=eps; s.total=eps.length; s.updAt=Date.now();
         if(!s.statuses) s.statuses={};
@@ -6371,6 +6740,8 @@ function bootHeal(){
     if(window.AT_NO_BOOTHEAL===true||navigator.webdriver===true) return;
     if(!navigator.onLine) return;
     setTimeout(function(){
+      try{ _atCoverTryReset(); }catch(e){}   /* 0) 换了构建先把封面退避账清掉，新源才看得见 */
+      try{ bootSeasonReslice(); }catch(e){}   /* 0b) 存量按季切：一个构建只跑一次 */
       try{ if(findDupGroups().length) doMergeDups(true); }catch(e){}   /* 1) 重复直接合并 */
       try{
         if(window.AT_NO_AUTODUR!==true){                                 /* 2) 时长逐部校正 */

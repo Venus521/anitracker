@@ -38,6 +38,21 @@ def app_version():
 
 last = [time.time()]
 
+def read_all(r, cap):
+    # 分块读到 EOF：一次 r.read(N) 会在第 N 字节处截断，截断的 JSON 必然解析失败。
+    # 2026-10-09 本机实测：爱奇艺搜索 JSON 动辄 0.8~1.1 MB（雍正王朝 776KB、
+    # 名侦探柯南 986KB、夏目友人帐 1.1MB），旧的 r.read(600000) 把这些热片全截成坏 JSON。
+    chunks = []
+    got = 0
+    while got < cap:
+        b = r.read(min(65536, cap - got))
+        if not b:
+            break
+        chunks.append(b)
+        got += len(b)
+    return b''.join(chunks), got >= cap
+
+
 class H(SimpleHTTPRequestHandler):
     def __init__(self, *ar, **kw):
         super().__init__(*ar, directory=a.dir, **kw)
@@ -154,12 +169,77 @@ class H(SimpleHTTPRequestHandler):
         self.send_header('Cache-Control', 'public, max-age=86400')
         self.end_headers(); self.wfile.write(data)
 
+    # ---- v2.49.0 中文剧这一环：爱奇艺匿名搜索的中转（判据在页面，服务端只搬字节）----
+    #      为什么要有它：豆瓣 rexxar 搜索已被官方锁成 403 need_login（2026-10-09 本机实测，
+    #      333 次 q= 里 330 次 502 就是这个），中文剧从此在链上一条源都没有；
+    #      爱奇艺的搜索接口匿名可通、带海报与集数，但浏览器直连没有 CORS，只能本机同源中转。
+    def _iq_relay(self):
+        import json, urllib.error, urllib.request
+        from urllib.parse import parse_qs, urlparse
+        import iq_relay_rules as IQ
+        name = (parse_qs(urlparse(self.path).query).get('q') or [''])[0].strip()
+        if not name:
+            self.send_response(400); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write('need q'.encode('utf-8')); return
+        try:
+            req = urllib.request.Request(IQ.search_url(name), headers={'User-Agent': IQ.UA, 'Referer': IQ.REFERER})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data, cut = read_all(r, 8000000)
+        except Exception as e:
+            log('iq-relay fail %s: %s' % (name[:40], e))
+            self.send_response(502); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write(('iq search fail: %s' % type(e).__name__).encode('utf-8')); return
+        if cut:
+            self.send_response(502); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write('iq response too big'.encode('utf-8')); return
+        try:
+            json.loads(data.decode('utf-8', 'replace'))     # 不是 JSON 就别递给页面（爱奇艺偶尔回 HTML 错误页）
+        except Exception:
+            self.send_response(502); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write('iq json fail'.encode('utf-8')); return
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'public, max-age=600')
+        self.end_headers(); self.wfile.write(data)
+
+    def _iq_img(self):
+        import urllib.error, urllib.request
+        from urllib.parse import parse_qs, urlparse
+        import iq_relay_rules as IQ
+        u = (parse_qs(urlparse(self.path).query).get('url') or [''])[0]
+        if not IQ.pic_url_ok(u):
+            # 白名单外一律 403：这条端点绝不能变成任意 URL 的代理
+            self.send_response(403); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write('url not allowed'.encode('utf-8')); return
+        try:
+            req = urllib.request.Request(u, headers={'User-Agent': IQ.UA, 'Referer': IQ.REFERER})
+            with urllib.request.urlopen(req, timeout=12) as r:
+                data, cut = read_all(r, 6000000)
+                ctype = r.headers.get('Content-Type') or 'image/jpeg'
+        except Exception as e:
+            self.send_response(502); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write(('iq img fail: %s' % type(e).__name__).encode('utf-8')); return
+        if cut:
+            self.send_response(502); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write('iq img too big'.encode('utf-8')); return
+        if ctype.startswith('image/') is False or len(data) < 1000:
+            self.send_response(502); self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers(); self.wfile.write('iq img not image'.encode('utf-8')); return
+        self.send_response(200)
+        self.send_header('Content-Type', ctype)
+        self.send_header('Cache-Control', 'public, max-age=86400')
+        self.end_headers(); self.wfile.write(data)
+
     def do_GET(self):
         last[0] = time.time()
         if self.path.startswith('/cb-relay'):
             self._relay('GET'); return
         if self.path.startswith('/cover-relay'):
             self._cover_relay(); return
+        if self.path.startswith('/iq-relay'):
+            self._iq_relay(); return
+        if self.path.startswith('/iq-img'):
+            self._iq_img(); return
         super().do_GET()
 
     def do_POST(self):
