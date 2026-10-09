@@ -1502,7 +1502,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.49.0', AT_BUILD='20261009d';
+var AT_VERSION='2.50.0', AT_BUILD='20261009e';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4823,16 +4823,31 @@ async function dbInfo(title){
   title=String(title||'').trim(); if(!title) return null;
   if(Object.prototype.hasOwnProperty.call(_dbInfoCache,title)) return _dbInfoCache[title];
   if(!navigator.onLine){ _dbInfoCache[title]=null; return null; }
-  try{
-    var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },9000);
-    var r=await fetch(DOUBAN_RELAY_CLOUD+'?mode=info&q='+encodeURIComponent(title),{signal:ctl.signal});
-    clearTimeout(tm);
-    if(!r.ok) throw new Error('http '+r.status);
-    var j=await r.json();
-    if(j&&j.limited){ dbCoolNote(j.coolMs||45000); return null; }   /* 限流：不落负缓存 */
-    _dbInfoCache[title]=(j&&j.found)?j:null;
-  }catch(e){ /* 网络抖动同样不落负缓存：让下次开详情页还有机会 */ }
-  return (Object.prototype.hasOwnProperty.call(_dbInfoCache,title)?_dbInfoCache[title]:null);
+  /* v2.50.0：本机优先（同源，压根没有 CORS 这一关），云端只兜底。
+     为什么非本机不可：2026-10-09 实测 CloudBase 网关对 loopback 来源回的响应头是
+       access-control-allow-origin: http://127.0.0.1:8089,*   （外加 allow-credentials: true）
+     一个头里塞两个值按规范非法，Chrome 直接判 CORS 拦死：同一时刻用 python 直问这个端点，
+     爱情宝典 50 分 / 康熙王朝 45 分 / 北平无战事 45 分 全都在；在浏览器里跑同一段代码，
+     10 部 0 部拿到时长，页面上每一张卡都落回「没标类型，按最低档估 24 分/集」。
+     封面早就没这毛病，正是因为 doubanRelayCover 走的是本机 /cover-relay——这条把时长也变同源。 */
+  var cloud=DOUBAN_RELAY_CLOUD+'?mode=info&q='+encodeURIComponent(title);
+  var eps=isLocalServer()?['/db-info?q='+encodeURIComponent(title),cloud]:[cloud];
+  for(var i=0;i<eps.length;i++){
+    try{
+      var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },9000);
+      var r=await fetch(eps[i],{signal:ctl.signal});
+      clearTimeout(tm);
+      if(r.status===503){
+        try{ var cj=await r.json(); dbCoolNote((cj&&cj.coolMs)||45000); }catch(e){ dbCoolNote(45000); }
+        return null;                    /* 限流不是「这部没有」：一条缓存都不落，下一场还有机会 */
+      }
+      if(!r.ok) continue;               /* 这条端点没答上（本机服务是旧版就回 404）：换下一条 */
+      var j=await r.json();
+      if(j&&j.limited){ dbCoolNote(j.coolMs||45000); return null; }
+      if(j&&j.found){ _dbInfoCache[title]=j; return j; }
+    }catch(e){ /* 抖动/被拦：不落负缓存，让下一条或下一次开详情页还有机会 */ }
+  }
+  return null;
 }
 async function healDurFor(s,opts){
   opts=opts||{};
