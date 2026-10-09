@@ -1,0 +1,426 @@
+{
+ "at": "2026-10-09T10:55:42.976Z",
+ "port": 8099,
+ "n": 12,
+ "cover": 12,
+ "dur": 6,
+ "kind": 6,
+ "cloudBlocked": 12,
+ "rows": [
+  {
+   "title": "爱情宝典",
+   "total": 26,
+   "year": "2002",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 10 小时 24 分 · 已看 0 分钟 · 还剩 10 小时 24 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "电视剧",
+   "kindFrom": "db",
+   "epDur": 50,
+   "est": "按真人剧估 45 分/集",
+   "line": "单集 50 分钟 · 全剧共 21 小时 40 分 · 已看 0 分钟 · 还剩 21 小时 40 分 · ✎ 改时长",
+   "dTotal": 1300,
+   "known": true,
+   "dbId": "3619080",
+   "tCover": 6970,
+   "tDur": 0,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 50,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "我爱我家",
+   "total": 120,
+   "year": "1993",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 48 小时 · 已看 0 分钟 · 还剩 48 小时 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "电视剧",
+   "kindFrom": "db",
+   "epDur": 20,
+   "est": "按真人剧估 45 分/集",
+   "line": "单集 20 分钟 · 全剧共 40 小时 · 已看 0 分钟 · 还剩 40 小时 · ✎ 改时长",
+   "dTotal": 2400,
+   "known": true,
+   "dbId": "3901388",
+   "tCover": 3427,
+   "tDur": 0,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 20,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "康熙王朝",
+   "total": 46,
+   "year": "2001",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 18 小时 24 分 · 已看 0 分钟 · 还剩 18 小时 24 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "电视剧",
+   "kindFrom": "db",
+   "epDur": 45,
+   "est": "按真人剧估 45 分/集",
+   "line": "单集 45 分钟 · 全剧共 34 小时 30 分 · 已看 0 分钟 · 还剩 34 小时 30 分 · ✎ 改时长",
+   "dTotal": 2070,
+   "known": true,
+   "dbId": "1830590",
+   "tCover": 3735,
+   "tDur": 0,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 45,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "暗算",
+   "total": 34,
+   "year": "2006",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 13 小时 36 分 · 已看 0 分钟 · 还剩 13 小时 36 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "电视剧",
+   "kindFrom": "db",
+   "epDur": 46,
+   "est": "按真人剧估 45 分/集",
+   "line": "单集 46 分钟 · 全剧共 26 小时 4 分 · 已看 0 分钟 · 还剩 26 小时 4 分 · ✎ 改时长",
+   "dTotal": 1564,
+   "known": true,
+   "dbId": "2158486",
+   "tCover": 3376,
+   "tDur": 0,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 46,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "编辑部的故事",
+   "total": 25,
+   "year": "1992",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 10 小时 · 已看 0 分钟 · 还剩 10 小时 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "电视剧",
+   "kindFrom": "db",
+   "epDur": 49,
+   "est": "按真人剧估 45 分/集",
+   "line": "单集 49 分钟 · 全剧共 20 小时 25 分 · 已看 0 分钟 · 还剩 20 小时 25 分 · ✎ 改时长",
+   "dTotal": 1225,
+   "known": true,
+   "dbId": "2154390",
+   "tCover": 3741,
+   "tDur": 0,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 49,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "大明王朝1566",
+   "total": 46,
+   "year": "2007",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 18 小时 24 分 · 已看 0 分钟 · 还剩 18 小时 24 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 18 小时 24 分 · 已看 0 分钟 · 还剩 18 小时 24 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 1104,
+   "known": false,
+   "dbId": "",
+   "tCover": 1655,
+   "tDur": 820,
+   "local": {
+    "status": 502,
+    "found": false,
+    "reason": "suggest empty (soft limit)",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "北平无战事",
+   "total": 53,
+   "year": "2014",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 21 小时 12 分 · 已看 0 分钟 · 还剩 21 小时 12 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "电视剧",
+   "kindFrom": "db",
+   "epDur": 45,
+   "est": "按真人剧估 45 分/集",
+   "line": "单集 45 分钟 · 全剧共 39 小时 45 分 · 已看 0 分钟 · 还剩 39 小时 45 分 · ✎ 改时长",
+   "dTotal": 2385,
+   "known": true,
+   "dbId": "24695611",
+   "tCover": 3135,
+   "tDur": 0,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 45,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "庆余年",
+   "total": 46,
+   "year": "2019",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 18 小时 24 分 · 已看 0 分钟 · 还剩 18 小时 24 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 18 小时 24 分 · 已看 0 分钟 · 还剩 18 小时 24 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 1104,
+   "known": false,
+   "dbId": "",
+   "tCover": 3954,
+   "tDur": 157,
+   "local": {
+    "status": 404,
+    "found": false,
+    "reason": "known miss (local)",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "The Office",
+   "total": 195,
+   "year": "2005",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 78 小时 · 已看 0 分钟 · 还剩 78 小时 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 78 小时 · 已看 0 分钟 · 还剩 78 小时 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 4680,
+   "known": false,
+   "dbId": "",
+   "tCover": 1722,
+   "tDur": 6876,
+   "local": {
+    "status": 404,
+    "found": false,
+    "reason": "known miss (local)",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "CLANNAD",
+   "total": 23,
+   "year": "2007",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 9 小时 12 分 · 已看 0 分钟 · 还剩 9 小时 12 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 9 小时 12 分 · 已看 0 分钟 · 还剩 9 小时 12 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 552,
+   "known": false,
+   "dbId": "",
+   "tCover": 677,
+   "tDur": 4003,
+   "local": {
+    "status": 404,
+    "found": false,
+    "reason": "known miss (local)",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "进击的巨人",
+   "total": 59,
+   "year": "2013",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 23 小时 36 分 · 已看 0 分钟 · 还剩 23 小时 36 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 23 小时 36 分 · 已看 0 分钟 · 还剩 23 小时 36 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 1416,
+   "known": false,
+   "dbId": "",
+   "tCover": 384,
+   "tDur": 1188,
+   "local": {
+    "status": 200,
+    "found": true,
+    "dur": 0,
+    "reason": "",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  },
+  {
+   "title": "琅琊榜",
+   "total": 54,
+   "year": "2015",
+   "before": {
+    "est": "没标类型，按最低档估 24 分/集",
+    "line": "单集 约 24 分钟 · 全剧共 21 小时 36 分 · 已看 0 分钟 · 还剩 21 小时 36 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长"
+   },
+   "err": "",
+   "covOk": true,
+   "coverIsData": true,
+   "img": null,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 21 小时 36 分 · 已看 0 分钟 · 还剩 21 小时 36 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 1296,
+   "known": false,
+   "dbId": "",
+   "tCover": 2116,
+   "tDur": 447,
+   "local": {
+    "status": 502,
+    "found": false,
+    "reason": "suggest empty (soft limit)",
+    "limited": false
+   },
+   "cloud": {
+    "status": 0,
+    "err": "TypeError"
+   }
+  }
+ ]
+}
