@@ -1,0 +1,20 @@
+{
+ "sample": 78,
+ "hitLive": 9,
+ "hitAnimeSide": 12,
+ "total": 21,
+ "families": {
+  "原样": 13,
+  "中文正名": 7,
+  "剥季号": 1
+ },
+ "blockedCount": 21,
+ "blockedTitlesBothPass": 6,
+ "blockedChannels": {
+  "动漫": 9,
+  "短剧": 5,
+  "电影": 10,
+  "游戏": 2
+ },
+ "errCount": 0
+}
