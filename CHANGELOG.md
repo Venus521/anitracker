@@ -80,7 +80,7 @@ queryBases+latinBases+cnBases/IQ_*` 原样 slice 出来 eval，打的是同一�
 ### 五、门禁
 
 - 新增 `tests/iq-source-check.js`（**41 项**：cnBases 中文正名 CN1-CN9 / 爱奇艺判据 IQ1-IQ15 /
-  结构接线 K1-K10 / 退避账清一次 R1-R7），负测 `tests/iq-source-negative.js`（**16 项**：
+  结构接线 K1-K10 / 退避账清一次 R1-R7），负测 `tests/iq-source-negative.js`（**17 项**：
   对照组「副本==真身」+ N1-N13 逐条回退，含「改动前那份成排红且不崩」）。
 - 服务端白名单 `tests/iq_relay_rules_check.py` 从 21 项加到 **25 项**（放行 3 条真图床、
   拦 11 条冒充的：后缀伪装 / userinfo / 路径回溯 / 非 http 协议），本轮新加 R5-R8 钉住截断这类 bug：
@@ -127,6 +127,7 @@ queryBases+latinBases+cnBases/IQ_*` 原样 slice 出来 eval，打的是同一�
 切完不重编号、statuses/epT 不平移、不备份、不记构建号、不写回执、0b 接线拆掉），断言红的那条正是被回退的那条；
 对照组必须绿且报告里的 `page` 得是复制品本身；另把整段功能当场摘出来一份复制品去跑（须红 ≥10 条，不再依赖任何改动前落盘的旧底本）。
 这一版负测自己吃过一次量具亏：C2c 原本断言「摘干净 = 复制品里连 `bootSeasonReslice` 这个名字都不许出现」，于是**真红了一次**——那颗调用点在 `bootHeal` 里、本就在被摘的块外。判据改成「两个函数定义都不在」（定义没了才算功能缺失，调用点留着照旧会红在 C3/C4 那两条上）。
+同一晚这套账又被**提交**自己推翻一次：`season-scope-negative` 与 `iq-source-negative` 的「改动前那份」是拿 `git show HEAD:index.html` 当底本的——本轮改动一进了 HEAD，底本就等于真身，两条判据当场报「红 0 条」（跑全套时 RC12/RC14 各红一次）。底本改成钉死的旧提交 `851a6cc`（v2.47.0：那页里 queryBases / seasonRowsFor / iqCoverFor 一个都没有，可用 `AT_BASE_REF` 覆盖），并各加一条**底本自证**（M8a / N9a：那份里要是已经有新函数，就说明底本不是「改动前」，红永远不会来）。口径：这是量具坏，不是页面坏——页面那两条门禁 56／41 仍全绿。
 两条已登记进 `运行回归测试.bat`（RC17/RC18，全套现为 19 条）。
 补一条现场查出来的：片单行上那个「N 集」读的是 `s.total`，**不是** `eps.length`——
 光切表不改它，界面上照旧写 34（等于白切）。所以两动手的分支都跟着收 `s.total`，
@@ -198,7 +199,7 @@ M12 是把这两行拆掉 ⇒ R12/R14 红、R13 仍绿）。
 
 **门禁**
 - 新增 `tests/season-scope-check.js`（**56 项**：剥壳 Q1-Q13 / 拉丁段 L1-L13 / 季级集数 E1-E6 / 卫兵 G1-G11 / 接线 S1-S11）
-  与 `tests/season-scope-negative.js`（**15 项**：对照组 + M1-M12 逐条回退 + 改动前那份成排红且不崩 + 跑完指回真身）。
+  与 `tests/season-scope-negative.js`（**16 项**：对照组 + M1-M12 逐条回退 + 改动前那份成排红且不崩 + 跑完指回真身）。
 - 负测当场抓出一条**假绿**：L9 原本只断言「不产出 Fourth Stage」，把 `LATIN_STOP` 整道闸拆掉仍然全绿——
   真身按空格分词，那条标题实际摘出来的是 `Stage`，断言根本没压在它身上。改成「一条候选都不许产出」，拆闸才真的红。
 - 三道纯逻辑门禁（`_syntax` / `season-scope` / `season-scope-negative`）登记进 `运行回归测试.bat`（该表原先没跑语法闸，一并补上）。

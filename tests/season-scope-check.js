@@ -3,7 +3,7 @@
    浏览器门禁掐着网络跑不到，人工点又得等限流——所以按 ctxmenu-logic.js 的路子，
    把函数从 index.html 里 slice 出来 eval 进隔离作用域，直接喂实测数据断言。
    数据全来自 2026-10-09 本机逐个打 TVMaze 的真实返回（见 index.html 里的注释），
-   负测：AT_PAGE 指到改动前那份（git show HEAD:index.html），必须红。 */
+   负测：AT_PAGE 指到改动前那份（git show 851a6cc:index.html，底本钉住旧提交而不是 HEAD），必须红。 */
 const fs = require('fs');
 const path = require('path');
 

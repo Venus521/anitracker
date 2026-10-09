@@ -136,14 +136,21 @@ cases.forEach(function (k) {
     'rc=' + r.rc + ' 红的=[' + ids.join(',') + '] 该红没红=[' + missing.join(',') + '] page=' + String(r.rep.page));
 });
 
-/* ---------- 旧版真身（改动前那份）：必须整批红，且不许崩 ---------- */
+/* ---------- 旧版真身（改动前那份）：必须整批红，且不许崩 ----------
+   底本钉在具体旧提交上，不用 HEAD：本轮改动一进了 HEAD，「HEAD 那份」就等于真身，
+   这一项会 0 条红＝假绿（10-09 那次提交完当场撞到，红的就是这条判据自己）。 */
+const BASE_REF = process.env.AT_BASE_REF || '851a6cc';   /* v2.47.0 前缀指认：那页里 queryBases / seasonRowsFor 都还没进 */
 let before = null;
 try {
-  const g = cp.spawnSync('git', ['-C', ROOT, 'show', 'HEAD:index.html'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  if (g.status === 0 && g.stdout && g.stdout.length > 10000) before = write('nsc_before_head.html', g.stdout);
-  else console.log('NOTE 拿不到 HEAD 那份 index.html（' + String(g.stderr || '').slice(0, 120) + '），这一项跳过');
+  const g = cp.spawnSync('git', ['-C', ROOT, 'show', BASE_REF + ':index.html'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (g.status === 0 && g.stdout && g.stdout.length > 10000) before = write('nsc_before_base.html', g.stdout);
+  else console.log('NOTE 拿不到 ' + BASE_REF + ' 那份 index.html（' + String(g.stderr || '').slice(0, 120) + '），这一项跳过');
 } catch (e) { console.log('NOTE git show 失败：' + e.message); }
 if (before) {
+  /* 底本自证：它要是已经含新函数，就不是「改动前」，下面那条红永远不会来 */
+  const bSrc = fs.readFileSync(before, 'utf8');
+  check('M8a', '底本自证：' + BASE_REF + ' 那份里确实还没有 queryBases / seasonRowsFor',
+    bSrc.indexOf('function queryBases(') < 0 && bSrc.indexOf('function seasonRowsFor(') < 0);
   const r = runGate(before);
   const ids = redIds(r.rep);
   check('M8', '改动前那份：新判据成排红（≥8 条），且是判红不是崩（无 CRASH）',
