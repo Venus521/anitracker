@@ -23,8 +23,8 @@ def check(cid, desc, cond, extra=""):
         ok += 1
         print("PASS " + cid + " " + desc)
     else:
-        bad.append(cid + " " + desc + ("  :: " + extra if extra else ""))
-        print("FAIL " + cid + " " + desc + ("  :: " + extra if extra else ""))
+        bad.append(cid + " " + desc + ("  :: " + str(extra) if extra else ""))
+        print("FAIL " + cid + " " + desc + ("  :: " + str(extra) if extra else ""))
 
 
 ALLOW = [
@@ -64,7 +64,16 @@ check("U3", "超长剧名截到 80 字以内（防把整段简介当查询递出
 srv = io.open(os.environ.get("AT_SRV") or os.path.join(ROOT, "服务器-空闲自退.py"), encoding="utf-8").read()
 check("R1", "服务端确实引用了这份规则（判据不落第二处）", "iq_relay_rules" in srv)
 check("R2", "/iq-img 走 pic_url_ok 闸门（不过就 403，不抓）", "pic_url_ok" in srv)
-IQRELAY = srv[srv.find("def _iq_relay"):srv.find("def _iq_img")]
+def _handler_span(src, head):
+    """从某个 handler 的 def 起到下一个同级 def 为止。边界不能再写死「下一个叫谁」——
+    v2.50.0 往 _iq_img 之后插了 _db_info，旧边界把人家段里的 if cut: 也算进 R8（量具假红）。"""
+    i0 = src.find(head)
+    if i0 < 0:
+        return ""
+    nxt = src.find(chr(10) + "    def ", i0 + 4)
+    return src[i0:(nxt if nxt > 0 else len(src))]
+IQRELAY = _handler_span(srv, "def _iq_relay")
+IMG = _handler_span(srv, "def _iq_img")
 check("R3", "/iq-relay 这一段里只取 q 参数、地址一律由 search_url 生成（没有 url 参数这条路；注意判据只看这一节，别的中转本来就接 url）",
       "IQ.search_url(name)" in IQRELAY and ("get(" + chr(39) + "q" + chr(39) + ")") in IQRELAY and
       ("get(" + chr(39) + "url" + chr(39) + ")") not in IQRELAY)
@@ -96,7 +105,6 @@ check("R5", "1.1MB 的搜索 JSON 一次读到底（热片不再被截成坏 JSO
 got2, cut2 = read_all(_Fake(b"Z" * 100000), 50000)
 check("R6", "超过上限时 cut=True 明确可查（截断不许静默递给页面）",
       cut2 is True and len(got2) == 50000, str(len(got2)) + " " + str(cut2))
-IMG = srv[srv.find("def _iq_img"):srv.find("def do_GET")]
 check("R7", "两个爱奇艺端点都只经 read_all 读体，不再出现固定字节数的 r.read(N)",
       "read_all(r," in IQRELAY and "read_all(r," in IMG and not _re.search(r"r\.read\(\d", IQRELAY + IMG),
       "IQ=" + str("read_all(r," in IQRELAY) + " IMG=" + str("read_all(r," in IMG))

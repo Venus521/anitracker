@@ -44,8 +44,17 @@ node tests\reslice-check.js
 set RC17=%ERRORLEVEL%
 node tests\reslice-negative.js
 set RC18=%ERRORLEVEL%
+rem v2.50.0：时长同源这条链（页面 dbInfo 端点顺序/降级/缓存 + 本机 /db-info 的判决与服务契约），各档都配负测
+node tests\dbinfo-transport-check.js
+set RC19=%ERRORLEVEL%
+node tests\dbinfo-transport-negative.js
+set RC20=%ERRORLEVEL%
+python -X utf8 tests\db_info_rules_check.py
+set RC21=%ERRORLEVEL%
+python -X utf8 tests\db_info_rules_negative.py
+set RC22=%ERRORLEVEL%
 echo.
-echo EXIT CODE: cred=%RC0% regression=%RC1% douban-sync=%RC2% douban-push=%RC3% desk-tier=%RC4% phone-canon=%RC5% name-refresh=%RC6% phone-use=%RC7% phone-look=%RC8% ep-duration=%RC9% syntax=%RC10% season-scope=%RC11% season-scope-neg=%RC12% iq-source=%RC13% iq-source-neg=%RC14% iq-rules=%RC15% iq-rules-neg=%RC16% reslice=%RC17% reslice-neg=%RC18%
+echo EXIT CODE: cred=%RC0% regression=%RC1% douban-sync=%RC2% douban-push=%RC3% desk-tier=%RC4% phone-canon=%RC5% name-refresh=%RC6% phone-use=%RC7% phone-look=%RC8% ep-duration=%RC9% syntax=%RC10% season-scope=%RC11% season-scope-neg=%RC12% iq-source=%RC13% iq-source-neg=%RC14% iq-rules=%RC15% iq-rules-neg=%RC16% reslice=%RC17% reslice-neg=%RC18% dbinfo-transport=%RC19% dbinfo-transport-neg=%RC20% db-rules=%RC21% db-rules-neg=%RC22%
 if not "%RC0%"=="0" exit /b 1
 if not "%RC1%"=="0" exit /b 2
 if not "%RC2%"=="0" exit /b 3
@@ -65,4 +74,8 @@ if not "%RC15%"=="0" exit /b 16
 if not "%RC16%"=="0" exit /b 17
 if not "%RC17%"=="0" exit /b 18
 if not "%RC18%"=="0" exit /b 19
+if not "%RC19%"=="0" exit /b 20
+if not "%RC20%"=="0" exit /b 21
+if not "%RC21%"=="0" exit /b 22
+if not "%RC22%"=="0" exit /b 23
 pause

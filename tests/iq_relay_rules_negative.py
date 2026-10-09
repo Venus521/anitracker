@@ -43,8 +43,8 @@ def check(cid, desc, cond, extra=""):
         ok += 1
         print("PASS " + cid + " " + desc)
     else:
-        bad.append(cid + " " + desc + ("  :: " + extra if extra else ""))
-        print("FAIL " + cid + " " + desc + ("  :: " + extra if extra else ""))
+        bad.append(cid + " " + desc + ("  :: " + str(extra) if extra else ""))
+        print("FAIL " + cid + " " + desc + ("  :: " + str(extra) if extra else ""))
 
 
 # ---------- 对照组：什么都没改的那份副本，必须全绿，且与真身同结论 ----------
