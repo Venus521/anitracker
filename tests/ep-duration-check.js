@@ -26,6 +26,12 @@ const { spawn } = require('child_process');
 const puppeteer = require('puppeteer-core');
 
 const ROOT = path.resolve(__dirname, '..');
+/* v2.50.1：/db-info 现在由服务器替页面问云端（见 db_info_rules 里的 _base）。门禁一律不许真出网：
+   这台家宽出口 IP 被豆瓣挡在联想之外时服务端会回 503，页面照 v2.46.2 立刻停下整轮封面补齐——
+   那样红的是豆瓣的心情，不是本页的逻辑。把出站的头摘到 :9（没人听=秒拒、不写任何账），
+   这一条单独跑（不经过 运行回归测试.bat）时也一样离线。 */
+const OFFLINE_ENV = Object.assign({}, process.env, { AT_DB_SUGGEST_BASE: 'http://127.0.0.1:9/db-off',
+  AT_DB_RELAY_BASE: 'http://127.0.0.1:9/db-off' });
 const CHROME = process.env.AT_CHROME || String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const OUT = path.join(ROOT, 'tests', '_artifacts', 'epdur');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -69,7 +75,7 @@ const FX = [
   const PORT = 8171;
   const PY = process.env.AT_PY || 'python';
   const srv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', String(PORT),
-    '--host', '127.0.0.1', '--dir', ROOT, '--idle', '300'], { stdio: 'ignore' });
+    '--host', '127.0.0.1', '--dir', ROOT, '--idle', '300'], { stdio: 'ignore', env: OFFLINE_ENV });
   let up = false;
   for (let i = 0; i < 40; i++) { if (await probePort(PORT)) { up = true; break; } await sleep(500); }
   if (!up) { srv.kill(); console.error('FAIL 本机服务没起来（:' + PORT + '）'); process.exit(1); }

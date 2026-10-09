@@ -15,11 +15,19 @@ NL = chr(10)
 
 txt = io.open(BAT, encoding="utf-8").read().replace(CR, "")
 cmds = []
+# bat 顶部登记的 set 就是这套门禁的环境（v2.50.1：AT_DB_*_BASE 把服务端出站的头摘到 :9，
+# 整套一律不许真出网）。runner 必须照抄，否则「跑的就是登记那份真身」这句话是假的。
+gate_env = dict(os.environ)
 for line in txt.split(NL):
     l = line.strip()
     if l.startswith("node ") or l.startswith("python "):
         cmds.append(l)
+    elif l.lower().startswith("set ") and "=" in l and "ERRORLEVEL" not in l.upper():
+        k, v = l[4:].split("=", 1)
+        gate_env[k.strip()] = v.strip()
 print("从 bat 解析出 %d 条门禁命令" % len(cmds))
+_atdb = ", ".join(sorted(k for k in gate_env if k.startswith("AT_DB_")))
+print("bat 登记的环境覆盖：" + (_atdb or "（无）——门禁会在服务端真出网，红可能是豆瓣的心情"))
 
 bad = []
 ART = os.path.join(HERE, "tests", "_artifacts")
@@ -30,7 +38,7 @@ for c in cmds:
     else:
         argv = [sys.executable] + parts[1:]
     t0 = time.time()
-    p = subprocess.run(argv, cwd=HERE, capture_output=True)
+    p = subprocess.run(argv, cwd=HERE, capture_output=True, env=gate_env)
     dt = time.time() - t0
     name = parts[-1]
     so = p.stdout.decode("utf-8", "replace")

@@ -23,6 +23,12 @@ function check(id, name, ok, detail) {
   console.log((ok ? 'PASS' : 'FAIL') + ' T' + id + ' ' + name + (ok ? '' : ' :: ' + String(detail).slice(0, 220)));
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* v2.50.1：/db-info 现在由服务器替页面问云端（见 db_info_rules 里的 _base）。门禁一律不许真出网：
+   这台家宽出口 IP 被豆瓣挡在联想之外时服务端会回 503，页面照 v2.46.2 立刻停下整轮封面补齐——
+   那样红的是豆瓣的心情，不是本页的逻辑。把出站的头摘到 :9（没人听=秒拒、不写任何账），
+   这一条单独跑（不经过 运行回归测试.bat）时也一样离线。 */
+const OFFLINE_ENV = Object.assign({}, process.env, { AT_DB_SUGGEST_BASE: 'http://127.0.0.1:9/db-off',
+  AT_DB_RELAY_BASE: 'http://127.0.0.1:9/db-off' });
 const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ host: '127.0.0.1', port: 8093, path: p, method: 'POST', headers: { 'Content-Type': 'application/json' } }, x => { let b = ''; x.on('data', c => b += c); x.on('end', () => res(b)); }); r.on('error', rej); r.end(JSON.stringify(obj || {})); });
 
 (async () => {
@@ -50,7 +56,7 @@ const post = (p, obj) => new Promise((res, rej) => { const r = http.request({ ho
     }
   })();
   const NODE = process.env.AT_NODE || process.execPath;
-  const pySrv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore' });
+  const pySrv = spawn(PY, [path.join(ROOT, '服务器-空闲自退.py'), '--port', '8094', '--host', '127.0.0.1', '--dir', ROOT, '--idle', '900'], { stdio: 'ignore', env: OFFLINE_ENV });
   const mock = spawn(NODE, [path.join(__dirname, 'mock-tvmaze-api.js')], { stdio: 'ignore' });
   const waitPort = async (port, pathName, tries) => {
     for (let i = 0; i < (tries || 30); i++) {

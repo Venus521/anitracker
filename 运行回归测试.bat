@@ -1,6 +1,12 @@
 @echo off
 title AniTracker regression tests
 cd /d %~dp0
+rem v2.50.1：整套门禁一律不许真的出网。/db-info 现在由服务器替页面问云端（db_info_rules 里
+rem _base 那条开关），这台家宽出口 IP 正被豆瓣挡在联想之外（实测回 403）——不摘掉的话
+rem 服务端会给出 503，页面照 v2.46.2 立刻停下整轮封面补齐，门禁红的是豆瓣的心情不是本页。
+rem 覆盖只认 http(s) 前缀（见 D15），指向 :9 这个没人听的端口=一问就拒、秒回、不写任何账。
+set AT_DB_SUGGEST_BASE=http://127.0.0.1:9/db-off
+set AT_DB_RELAY_BASE=http://127.0.0.1:9/db-off
 rem 门禁必须串行：两个 Chrome 门禁并发会撞端口。
 rem v2.35.0 起加 phone-canon-check（漫改恢复+漫改进度行）与 name-refresh-e2e（不经过 AI 刷名）。
 node tests\cred-crypto-check.js
