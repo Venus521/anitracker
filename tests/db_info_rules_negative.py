@@ -177,10 +177,26 @@ MUT = [
     ("R8", "少递一个字段（year）", "build_info",
      lambda s: drop_line(s, "'year': str(detail.get(", "R8", "build_info"),
      set(["D10"]), "页面 applyDbInfo 认的九键缺一条"),
-    ("R9", "剧名不再编码", "suggest_url",
-     lambda s: sub_line(s, "q=' + quote(", "return 'https://movie.douban.com/j/subject_suggest?q='"
-                        " + str(name or '').strip()", "R9", "suggest_url"),
-     set(["D01", "D02"]), "带空格/&/?的剧名把查询串拆开"),
+    ("R9", "剧名不再编码（换头之后这条更容易写错：前缀在常量里，尾巴上的 quote 才是编码）", "suggest_url",
+     lambda s: sub_line(s, "'?q=' + quote(", "return _base('AT_DB_SUGGEST_BASE', SUGGEST_BASE) + "
+                        "'?q=' + str(name or '').strip()", "R9", "suggest_url"),
+     set(["D01", "D02", "D15"]), "带空格/&/?的剧名把查询串拆开（换头开关也跟着露馅）"),
+    ("R10", "兜底那条腿的 URL 现拼（丢掉 mode=info、剧名不编码）", "relay_url",
+     lambda s: sub_line(s, "'?mode=info&q=' + quote(", "return _base('AT_DB_RELAY_BASE', RELAY_BASE) + "
+                        "'?q=' + str(name or '').strip()", "R10", "relay_url"),
+     set(["D12", "D15"]), "端点/编码一松，兜底这一跳就问到别处去"),
+    ("R11", "from_relay 不再核标题全等（云端给谁就收谁）", "from_relay",
+     lambda s: sub_line(s, "if not t or norm_name(", "if False:", "R11", "from_relay"),
+     set(["D14"]), "张冠李戴的时长从云端一路搬进账"),
+    ("R12", "from_relay 把云端的 limited 当成「这部没有」", "from_relay",
+     lambda s: sub_line(s, "if j.get('limited'):", "if False:", "R12", "from_relay"),
+     set(["D13"]), "冷却被记成负账，这部 10 分钟内不再问"),
+    ("R13", "id_ok 不再校验词条号", "id_ok",
+     lambda s: sub_line(s, "return s if re.match(", "return s", "R13", "id_ok"),
+     set(["D14"]), "任意串写进 dbSubId，封面那条腿按它去拼 URL"),
+    ("R14", "换头开关不看协议（file:// 与 ../ 也照收）", "_base",
+     lambda s: sub_line(s, "if v.startswith(", "if v:", "R14", "_base"),
+     set(["D15"]), "环境变量就能把出口换成读盘或任意主机，且覆盖能吞掉剧名"),
 ]
 
 for cid, desc, fn, mk, expect, why in MUT:
@@ -206,11 +222,22 @@ S_MUT = [
      set(["S01"])),
     ("SR2", "rows=0 也写负缓存（一次限流判成这部永远没有）",
      lambda s: ins_before(s, "if not rows:", "_DB_NEG[name] = time.time()  # noqa"),
-     set(["S07"])),
+     set(["S06", "S07", "S13"])),
     ("SR3", "503 限流那条也写负缓存（45 秒冷却被拧成 10 分钟死账）",
      lambda s: ins_before(s, "_fail(503, '403 need_login (suggest)'",
                           "_DB_NEG[name] = time.time()  # noqa"),
-     set(["S06", "S07"])),
+     set(["S06", "S13"])),
+    ("SR4", "兜底那一跳不走 rules、自己现拼 URL（这条端点立刻能被打到任意地址）",
+     lambda s: sub_line(s, "raw, err = _get(DB.relay_url(name)",
+                        "raw, err = _get('https://x.example/d?mode=info&q=' + name, '', relay_dl)", "SR4"),
+     set(["S11"])),
+    ("SR5", "顺序倒了：不问豆瓣也先撞云端（本机那条快腿白丢）",
+     lambda s: sub_line(s, "if kind != 'ok':", "if True:  # noqa", "SR5"),
+     set(["S12"])),
+    ("SR6", "软限流(rows=0 且兜底也没答上)也写负缓存：一次敷衍判成这部没有",
+     lambda s: ins_before(s, "_fail(502, 'suggest empty (soft limit)')",
+                          "_DB_NEG[name] = time.time()  # noqa"),
+     set(["S13"])),
 ]
 
 for cid, desc, mk, expect in S_MUT:
@@ -272,7 +299,7 @@ else:
           "/db-info" not in B_SRC and "def do_GET(self):" in B_SRC)
     try:
         ids, _ = run_gate(R_SRC, B_SRC, "base")
-        exp = set(["S00", "S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "C01", "C02", "C03"])
+        exp = set(["S00", "S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "S11", "S12", "S13", "S14", "C01", "C02", "C03"])
         check("B0b", "基线：契约组整条红且不含崩（闸门认得出「整段都没有」，不把自己打死）",
               ids == exp, "实际红 " + " ".join(sorted(ids)))
         check("B0c", "基线：判决组（D/P）不受服务端影响，仍全绿",

@@ -138,8 +138,13 @@ const FOUND = { found: true, title: NAME, id: '3619080', type: 'tv', dur: 50, ep
     flat.indexOf('mode=info&q=' + Q + '+encodeURIComponent(title)') >= 0,
     '缺编码：' + flat.slice(flat.indexOf('/db-info'), flat.indexOf('/db-info') + 60));
 
-  check('T16', '每一发都带 9000ms 中止：一条端点挂住不许拖死开机那串逐部校正',
-    /setTimeout\(function\(\)\{[^}]*ctl\.abort\(\)/.test(DBINFO) && DBINFO.indexOf(',9000)') >= 0, '没有逐发中止');
+  var EPSLINE = DBINFO.split(String.fromCharCode(10)).filter(function (l) { return l.indexOf('var eps=') >= 0; })[0] || '';
+  check('T16', '每一发都带中止（AbortController+setTimeout），而且时长取自这一发自己（eps[i][1]）——写死一个数就把带兜底那一跳的本机发砍在半路',
+    /setTimeout\(function\(\)\{[^}]*ctl\.abort\(\)/.test(DBINFO) && DBINFO.indexOf(',eps[i][1]);') >= 0, '没有逐发中止');
+  check('T20', '本机那一发的预算是 16000ms（这一条端点现在跑两跳：豆瓣 + 服务器替页面问云端），云端那一发仍 9000ms',
+    EPSLINE.indexOf(',16000]') >= 0 && EPSLINE.indexOf(',9000]') >= 0, EPSLINE.slice(0, 150));
+  check('T21', '非本机模式仍然只有云端一条道、只有 9000ms（不许把同源那条 16 秒预算带过去，也不许瞎撞不存在的端点）',
+    EPSLINE.lastIndexOf(':[[cloud,9000]]') >= 0 && EPSLINE.indexOf('16000]') < EPSLINE.lastIndexOf(':[[cloud'), EPSLINE.slice(-90));
 
   const HEAL = sliceFn('async function healDurFor(', 'var _durAutoSeen=') || '';
   check('T17', '修时长那条链没被换掉：durNeedsFix → dbInfo → applyDbInfo 三段还在',

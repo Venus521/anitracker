@@ -54,7 +54,7 @@ check('C0b', '对照组自证：报告里的 page 就是这份复制品（不是
   String(r.rep.page) === ctrl, 'page=' + r.rep.page);
 check('C0c', '真身跑出来也必须是绿的（负测的基准线）', runGate(REAL).rc === 0);
 
-const EPS = "var eps=isLocalServer()?['/db-info?q='+encodeURIComponent(title),cloud]:[cloud];";
+const EPS = "var eps=isLocalServer()?[['/db-info?q='+encodeURIComponent(title),16000],[cloud,9000]]:[[cloud,9000]];";
 check('C0d', '锚点自证：真身里那条 eps 写法确实是这一行（锚点漂了下面全是假红）',
   src.indexOf(EPS) >= 0, '找不到 eps 那一行');
 
@@ -72,16 +72,16 @@ function redOf(name, text, expectRed, expectGreen) {
 }
 
 /* M1 回到「只问云端」——就是 2026-10-09 那台机器上一条时长都收不回来的写法 */
-redOf('ndt_m1_cloud_only.html', sub(src, EPS, 'var eps=[cloud];', 'M1'),
-  ['T01', 'T02', 'T03', 'T04', 'T06', 'T15'], ['T10', 'T11', 'T08', 'T09']);
+redOf('ndt_m1_cloud_only.html', sub(src, EPS, 'var eps=[[cloud,9000]];', 'M1'),
+  ['T01', 'T02', 'T03', 'T04', 'T06', 'T15', 'T20', 'T21'], ['T10', 'T11', 'T08', 'T09']);
 /* M2 顺序颠倒：先问云端（本机照样被 CORS 拦，等于本机模式白等一发） */
 redOf('ndt_m2_order.html', sub(src, EPS,
-  "var eps=isLocalServer()?[cloud,'/db-info?q='+encodeURIComponent(title)]:[cloud];", 'M2'),
+  "var eps=isLocalServer()?[[cloud,9000],['/db-info?q='+encodeURIComponent(title),16000]]:[[cloud,9000]];", 'M2'),
   ['T01', 'T04'], ['T10']);
 /* M5 不分模式都走同源：发布站点/手机上会去打一个不存在的端点 */
 redOf('ndt_m5_always_local.html', sub(src, EPS,
-  "var eps=['/db-info?q='+encodeURIComponent(title),cloud];", 'M5'),
-  ['T10'], ['T01']);
+  "var eps=[['/db-info?q='+encodeURIComponent(title),16000],[cloud,9000]];", 'M5'),
+  ['T10', 'T21'], ['T01']);
 /* M3 本机答不上就落负缓存：一次限流判成这部永远没有（v2.46.2 那次的同一条锁） */
 redOf('ndt_m3_cache_miss.html', sub(src, "      if(!r.ok) continue;               /* 这条端点没答上",
   "      if(!r.ok){ _dbInfoCache[title]=null; continue; }               /* 这条端点没答上", 'M3'),
@@ -96,9 +96,22 @@ redOf('ndt_m6_gate_in_transport.html', sub(src, '      if(j&&j.found){ _dbInfoCa
   ['T14'], ['T02']);
 /* M7 摘掉逐发中止：一条端点挂住会把开机那串逐部校正一起拖死 */
 redOf('ndt_m7_no_abort.html', sub(src,
-  'var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },9000);',
+  'var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },eps[i][1]);',
   'var ctl=new AbortController(); var tm=0;', 'M7'),
-  ['T16'], ['T01']);
+  ['T16'], ['T20', 'T21', 'T01']);
+/* M9 中止时长写死一个数：本机这一发现在要跑两跳（豆瓣 + 服务器替页面问云端），
+   写死 9000 就把兜底那一跳砍在半路——症状正是「修了还是没数据」 */
+redOf('ndt_m9_fixed_timeout.html', sub(src,
+  'catch(e){} },eps[i][1]);', 'catch(e){} },9000);', 'M9'),
+  ['T16'], ['T20', 'T21']);
+/* M8 本机那一发的预算退回 9000：两跳不够用（服务器自己 13 秒才收口） */
+redOf('ndt_m8_local_budget.html', sub(src,
+  "['/db-info?q='+encodeURIComponent(title),16000]", "['/db-info?q='+encodeURIComponent(title),9000]", 'M8'),
+  ['T20'], ['T16', 'T21', 'T04']);
+/* M10 非本机模式那条写成裸 [cloud]：那一发没有自己的预算（undefined 立刻中止），
+     发布站点/手机上就是「每条端点都没答上」 */
+redOf('ndt_m10_cloud_bare.html', sub(src, ']]:[[cloud,9000]];', ']]:[cloud];', 'M10'),
+  ['T21'], ['T16', 'T20']);
 
 /* ---------- 改动前那份：底本钉死旧提交，不用 HEAD（HEAD 会被我自己的提交推平=假绿） ---------- */
 const BASE_REF = process.env.AT_BASE_REF || '851a6cc';   /* v2.47.0：那会儿时长只有云端一条道，正是这次撞墙的那条 */

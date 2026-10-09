@@ -25,6 +25,10 @@ _spec = importlib.util.spec_from_file_location("db_info_rules_under_test", RULES
 DB = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(DB)
 
+# 整套门禁一律不许真出网（见 db_info_rules 里 _base 那段注）：这两个覆盖是给测试进程用的，
+# 本闸门判的是生产地址，所以进来先摘掉，D15 自己临时设、用完还原。
+os.environ.pop("AT_DB_SUGGEST_BASE", None)
+os.environ.pop("AT_DB_RELAY_BASE", None)
 SRV = os.environ.get("AT_SRV") or os.path.join(ROOT, "服务器-空闲自退.py")
 srv = io.open(SRV, encoding="utf-8").read()
 
@@ -86,6 +90,54 @@ check("D11", "genres 截前 8 条（递给页面的串要短，页面只按它�
       DB.build_info("甲", {"id": "1"}, {"title": "甲", "genres": ["g%d" % i for i in range(20)]})[0]["genres"] ==
       ["g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7"])
 
+# v2.50.1 云端兜底这一跳的判决（本机这一层再核一遍，不轻信云端）
+_RELAY_OK = {"found": True, "title": "爱情宝典", "id": "3619080", "type": "tv", "dur": 50,
+             "eps": 26, "genres": ["爱情"], "year": "2002", "cover": "x"}
+check("D12", "云端兜底那条腿的 URL 也只有一个出口：域名与 mode=info 钉死在 rules、剧名编码（与页面那条同一个端点）",
+      DB.relay_url("爱情宝典") ==
+      "https://cloud1-d7gsn5t0w6407b963.service.tcloudbase.com/douban-relay"
+      + "?mode=info&q=%E7%88%B1%E6%83%85%E5%AE%9D%E5%85%B8" and
+      DB.relay_url("The Office").endswith("The%20Office") and DB.relay_url("a&b").endswith("a%26b"),
+      DB.relay_url("爱情宝典"))
+check("D13", "from_relay 四档分得清且九键齐全：found+全等=ok(dur 真搬得到)、云端说 limited=limited（绝不是「没有」）、"
+             "found:false 非 limited=neg、不是对象=bad",
+      DB.from_relay(_RELAY_OK, "爱情宝典")[1] == "ok" and
+      set(DB.from_relay(_RELAY_OK, "爱情宝典")[0].keys()) ==
+      {"found", "title", "id", "type", "dur", "eps", "genres", "year", "cover"} and
+      DB.from_relay(_RELAY_OK, "爱情宝典")[0]["dur"] == 50 and
+      DB.from_relay({"found": False, "limited": True, "reason": "cooling down"}, "甲")[1] == "limited" and
+      DB.from_relay({"found": False, "reason": "no subject for 甲"}, "甲")[1] == "neg" and
+      DB.from_relay("not an object", "甲")[1] == "bad",
+      str(DB.from_relay(_RELAY_OK, "爱情宝典")))
+check("D14", "云端回来的字节本机再核一遍（不轻信云端）：标题不全等就拒、id 非 5~9 位数字清成空串、"
+             "分钟数越界归 0、genres 仍截 8 —— 云端坏一档也松不了本机这层",
+      DB.from_relay({"found": True, "title": "别的剧", "id": "3619080"}, "爱情宝典")[1] == "neg" and
+      DB.from_relay({"found": True, "title": "爱情宝典", "id": "../x"}, "爱情宝典")[0]["id"] == "" and
+      DB.from_relay({"found": True, "title": "爱情宝典", "dur": 700}, "爱情宝典")[0]["dur"] == 0 and
+      len(DB.from_relay({"found": True, "title": "爱情宝典", "genres": ["g%d" % i for i in range(20)]},
+                        "爱情宝典")[0]["genres"]) == 8)
+
+# v2.50.1：换头开关（_base）的边界。判的是「覆盖只能换协议+域名+路径这一段」：?q= 与
+# mode=info&q= 照旧带上编码后的剧名，非 http(s) 的覆盖值一律当没给——松了这条，环境变量
+# 就能把剧名整段丢掉（判决失联），或者换成 file:// 去读盘。
+os.environ["AT_DB_SUGGEST_BASE"] = "http://127.0.0.1:9/db-off"
+os.environ["AT_DB_RELAY_BASE"] = "http://127.0.0.1:9/db-off"
+_seam_s = DB.suggest_url("爱情宝典")
+_seam_r = DB.relay_url("The Office")
+os.environ["AT_DB_SUGGEST_BASE"] = "../evil"
+os.environ["AT_DB_RELAY_BASE"] = "file:///C:/windows/win.ini"
+_seam_bad = DB.suggest_url("爱情宝典")
+_seam_bad2 = DB.relay_url("爱情宝典")
+os.environ.pop("AT_DB_SUGGEST_BASE", None)
+os.environ.pop("AT_DB_RELAY_BASE", None)
+check("D15", "换头开关只换头：覆盖生效时 ?q= 与 mode=info&q= 照旧带上编码后的剧名；"
+             "非 http(s) 的覆盖（../ 与 file://）一律退回生产地址（环境变量不是第二条出口）",
+      _seam_s == "http://127.0.0.1:9/db-off?q=%E7%88%B1%E6%83%85%E5%AE%9D%E5%85%B8" and
+      _seam_r == "http://127.0.0.1:9/db-off?mode=info&q=The%20Office" and
+      _seam_bad == DB.SUGGEST_BASE + "?q=%E7%88%B1%E6%83%85%E5%AE%9D%E5%85%B8" and
+      _seam_bad2 == DB.RELAY_BASE + "?mode=info&q=%E7%88%B1%E6%83%85%E5%AE%9D%E5%85%B8",
+      _seam_s + " | " + _seam_bad)
+
 print("--- ② 服务端契约（读源码文本，不起服务、不联网）---")
 # 底本可能整段都没有 _db_info（负测的基线档就是旧版服务）。整段缺失时 S02~S10
 # 的 seg.index() 会把闸门自己打死——那是量具坏了、红是假的；改成显式全红。
@@ -132,6 +184,24 @@ check("S09", "缓存三件套齐：进程内 INFO/NEG + 锁，且 NEG 只 10 分
 check("S10", "detail 两路(tv/movie)都问、坏 JSON 与 404 换下一路，但不嵌套重试（外呼次数有上界）",
       (not _srv_missing) and
       seg.count("for du in DB.detail_urls(") == 1 and seg.count("for _ in range(") == 0)
+check("S11", "兜底那一跳的 URL 也只有一个出口：整段里 DB.relay_url( 恰一处，且建 Request 的地方仍只有一处"
+             "（_get 是唯一出口，所以这条端点不可能退化成任意 URL 代理）",
+      (not _srv_missing) and seg.count("DB.relay_url(") == 1 and
+      seg.count("urllib.request.Request(") == 1)
+check("S12", "顺序钉死：先本机 _local()，只有它没出数才进 if kind != 'ok' 再 _relay()（本机那条是快腿，"
+             "无条件先撞云端等于把同源白丢掉）",
+      (not _srv_missing) and seg.count("info, kind, reason = _local()") == 1 and
+      seg.count("rinfo, rkind, rreason = _relay()") == 1 and
+      seg.find("info, kind, reason = _local()") < seg.find("if kind != 'ok':") <
+      seg.find("rinfo, rkind, rreason = _relay()"))
+check("S13", "负缓存整段只在一处写，且位置就是 'neg' 那一档（'empty'/'err'/兜底不通都不许记账）",
+      (not _srv_missing) and seg.count("_DB_NEG[name] =") == 1 and
+      seg.find("if kind == 'neg':") < seg.find("_DB_NEG[name] =") < seg.find("if kind == 'empty':"))
+check("S14", "云端那份不许直接递给页面：必须过 DB.from_relay（恰一处）在本机再核一遍，"
+             "且兜底的 limited/neg 两档分开写（合成就等于把云端冷却记成这部没有）",
+      (not _srv_missing) and seg.count("DB.from_relay(") == 1 and
+      "rkind == 'neg'" in seg and "rkind == 'limited'" in seg)
+
 
 print("--- ③ 与云端那份函数的字段/门槛对齐（读源码文本）---")
 cld = io.open(os.path.join(ROOT, "cloud-functions", "douban-relay-node", "index.js"), encoding="utf-8").read()
