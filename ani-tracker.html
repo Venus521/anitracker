@@ -1502,7 +1502,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.50.0', AT_BUILD='20261009e';
+var AT_VERSION='2.50.1', AT_BUILD='20261009f';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -4831,11 +4831,16 @@ async function dbInfo(title){
      10 部 0 部拿到时长，页面上每一张卡都落回「没标类型，按最低档估 24 分/集」。
      封面早就没这毛病，正是因为 doubanRelayCover 走的是本机 /cover-relay——这条把时长也变同源。 */
   var cloud=DOUBAN_RELAY_CLOUD+'?mode=info&q='+encodeURIComponent(title);
-  var eps=isLocalServer()?['/db-info?q='+encodeURIComponent(title),cloud]:[cloud];
+  /* v2.50.1：每条端点自己带中止预算（本机那条现在含服务器兜底的一跳，给 16 秒；
+     云端那条照旧 9 秒）。为什么不能一律 9 秒：2026-10-09 实测这台机器问豆瓣联想
+     117 次全部 rows=0（一次都没联想出来），要服务器再替这一页问一次云端才答得出
+     （同一分钟云端：爱情宝典 50 分 / 康熙王朝 45 分）——9 秒会把这一发砍在半路，
+     看着就像「修了还是没数据」。服务器自己 13 秒收口，页面绝不等过一发。 */
+  var eps=isLocalServer()?[['/db-info?q='+encodeURIComponent(title),16000],[cloud,9000]]:[[cloud,9000]];
   for(var i=0;i<eps.length;i++){
     try{
-      var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },9000);
-      var r=await fetch(eps[i],{signal:ctl.signal});
+      var ctl=new AbortController(); var tm=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },eps[i][1]);
+      var r=await fetch(eps[i][0],{signal:ctl.signal});
       clearTimeout(tm);
       if(r.status===503){
         try{ var cj=await r.json(); dbCoolNote((cj&&cj.coolMs)||45000); }catch(e){ dbCoolNote(45000); }

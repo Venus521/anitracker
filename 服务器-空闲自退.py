@@ -269,11 +269,12 @@ class H(SimpleHTTPRequestHandler):
     #      为什么本机也要一条（2026-10-09 实测）：页面里 dbInfo 只问云端函数，而 CloudBase 网关
     #      对 loopback 来源回的响应头是 access-control-allow-origin: http://127.0.0.1:8089,*
     #      （还带 allow-credentials: true）—— 一个头里塞两个值按规范非法，Chrome 判 CORS 直接拦。
-    #      同一时刻用 python 直问同一端点：爱情宝典 50 分 / 康熙王朝 45 分 / 北平无战事 45 分 全都有；
-    #      在浏览器里跑同一段代码：10 部 0 部拿到时长，全落回「没标类型，按最低档估 24 分/集」。
     #      封面没这毛病，正是因为 doubanRelayCover 走本机 /cover-relay（同源）。
-    #      规矩：只接受 ?q= 剧名，URL 一律由 db_info_rules 现拼，绝不接任意 URL；
-    #      判决（名字全等、越界分钟数不冒充实测）与云端 doubanInfo 逐条同，一个字不松。
+    #      v2.50.1 再加一跳：本机这条腿只问豆瓣，而这台机器（家宽出口 IP）被豆瓣挡在
+    #      subject_suggest 之外——现场日志 19 点档 117 问全部 rows=0，一次都没联想出来；
+    #      同一分钟云端函数答得出 爱情宝典 50 分 / 康熙王朝 45 分。被 CORS 拦的是浏览器，
+    #      不是服务器，所以由这里替页面去问云端（判决仍在 rules 里再核一遍，见 from_relay）。
+    #      规矩：只接受 ?q= 剧名，URL 一律由 db_info_rules 现拼（豆瓣两条 + 云端一条），绝不接任意 URL。
     def _db_info(self):
         import json, threading, urllib.error, urllib.request
         from urllib.parse import parse_qs, urlparse
@@ -285,8 +286,9 @@ class H(SimpleHTTPRequestHandler):
             self.end_headers(); self.wfile.write('{"error":"need q"}'.encode('utf-8')); return
 
         # 缓存与负缓存：命中直接回，避免把豆瓣的匿名额度烧在反复问同一部片上。
-        # 负缓存只存「确认没有」（no subject / no detail / title mismatch）10 分钟；
-        # 限流(403)绝不是「没有」，走 503 + coolMs 让页面稍后再问（v2.46.2 那条锁在这里同样成立）。
+        # 分档五态（v2.50.1 收到一处判）：'ok' 出数 / 'limited' 被限流 / 'empty' 联想空（软限流）
+        # / 'err' 压根没答上 / 'neg' 确认没有 —— 五态里只有 'neg' 许写 10 分钟负缓存：
+        # 限流绝不是「没有」（v2.46.2 那条锁在这里同样成立），兜底那一跳失败更不是。
         now = time.time()
         with _DB_LOCK:
             hit = _DB_INFO.get(name)
@@ -302,15 +304,18 @@ class H(SimpleHTTPRequestHandler):
 
         ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
         ref = 'https://movie.douban.com/'
-        deadline = now + 14.0
+        local_dl = now + 6.0      # 豆瓣这一跳的上限（原来给到 14s：页面那只 AbortController 只等 9s，白跑）
+        relay_dl = now + 13.0     # 加上兜底那一跳的总上限；页面给本机这条端点 16s，留 3s 富余
 
-        def _get(url, referer):
+        def _get(url, referer, until):
             try:
-                left = deadline - time.time()
+                left = until - time.time()
                 if left <= 0.5:
                     return None, 'budget'
-                req = urllib.request.Request(url, headers={'User-Agent': ua, 'Referer': referer,
-                                                           'Accept': 'application/json, text/plain, */*'})
+                h = {'User-Agent': ua, 'Accept': 'application/json, text/plain, */*'}
+                if referer:
+                    h['Referer'] = referer
+                req = urllib.request.Request(url, headers=h)
                 with urllib.request.urlopen(req, timeout=min(12.0, left)) as r:
                     data, cut = read_all(r, 2000000)
                 if cut:
@@ -332,70 +337,104 @@ class H(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
 
-        raw, err = _get(DB.suggest_url(name), ref)
-        if err == 'http 403':
+        def _local():
+            """第一跳：本机直问豆瓣。回（info|None, 档位, 原因），档位见上面那段注。"""
+            raw, err = _get(DB.suggest_url(name), ref, local_dl)
+            if err == 'http 403':
+                return None, 'limited', '403 need_login (suggest)'
+            if err:
+                log('db-info suggest fail %s: %s' % (name[:40], err))
+                return None, 'err', 'suggest ' + str(err)
+            try:
+                rows = DB.clean_suggest(json.loads(raw.decode('utf-8', 'replace')))
+            except Exception:
+                return None, 'err', 'suggest json fail'
+            picked = DB.pick_suggest(rows, name)
+            if not picked:
+                log('db-info no subject %s rows=%d sug=%s'
+                    % (name[:40], len(rows), '/'.join([x['title'] for x in rows[:3]])))
+                if not rows:
+                    # 一条联想都没有 = 豆瓣在敷衍这台机器（软限流），不是「这片没有时长」。
+                    # 2026-10-09 实测：北平无战事/大明王朝1566 几分钟前才各带回 45/42 分。
+                    return None, 'empty', 'suggest empty (soft limit)'
+                return None, 'neg', 'no subject for ' + name
+            detail = None
+            for du in DB.detail_urls(picked['id']):
+                draw, derr = _get(du, 'https://m.douban.com/', local_dl)
+                if derr:
+                    continue
+                try:
+                    j = json.loads(draw.decode('utf-8', 'replace'))
+                except Exception:
+                    continue
+                if j and (j.get('id') or j.get('title')):
+                    detail = j
+                    break
+            if not detail:
+                log('db-info no detail %s id=%s' % (name[:40], picked['id']))
+                return None, 'neg', 'no detail for ' + name
+            info, reason = DB.build_info(name, picked, detail)
+            if not info:
+                log('db-info rejected %s: %s' % (name[:40], reason))
+                return None, 'neg', reason
+            return info, 'ok', ''
+
+        def _relay():
+            """第二跳：服务器替页面问云端（服务端之间没有 CORS 那一关）。
+            判决不在这里：DB.from_relay 会拿本机同一把尺再核一遍全等/id/分钟数，
+            云端那一档坏掉也松不了本机这一层——所以这一跳只搬字节，不改口径。"""
+            raw, err = _get(DB.relay_url(name), '', relay_dl)
+            if err:
+                log('db-info relay fail %s: %s' % (name[:40], err))
+                return None, 'bad', 'relay ' + str(err)
+            try:
+                j = json.loads(raw.decode('utf-8', 'replace'))
+            except Exception:
+                log('db-info relay json fail %s' % name[:40])
+                return None, 'bad', 'relay json fail'
+            info, kind, reason = DB.from_relay(j, name)
+            log('db-info relay %s %s dur=%s %s'
+                % (kind, name[:40], (info or {}).get('dur', ''), str(reason)[:60]))
+            return info, kind, reason
+
+        info, kind, reason = _local()
+        if kind != 'ok':
+            rinfo, rkind, rreason = _relay()
+            if rkind == 'ok':
+                info, kind, reason = rinfo, 'ok', ''
+            elif rkind == 'limited':
+                info, kind, reason = None, 'limited', rreason
+            elif rkind == 'neg':
+                info, kind, reason = None, 'neg', rreason
+            # rkind == 'bad'（云端不通/坏 JSON）：沿用本机那一档。兜底这一跳自己失败，
+            # 永远不构成「这部剧没有时长」的结论——那笔账只能由确认没有的那一头来记。
+        if kind == 'ok':
+            with _DB_LOCK:
+                _DB_INFO[name] = (time.time(), info)
+                if len(_DB_INFO) > _DB_INFO_MAX:
+                    _DB_INFO.pop(next(iter(_DB_INFO)), None)
+                _DB_NEG.pop(name, None)
+            log('db-info ok %s dur=%s eps=%s type=%s' % (name[:40], info['dur'], info['eps'], info['type']))
+            payload = json.dumps(info, ensure_ascii=False).encode('utf-8')
+            self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'public, max-age=600')
+            self.end_headers(); self.wfile.write(payload); return
+        if kind == 'limited':
             # 限流：503 + coolMs，页面那条 dbCoolNote 会记账，且两侧都不落负缓存
             log('db-info limited %s' % name[:40])
             _fail(503, '403 need_login (suggest)', {'limited': True, 'coolMs': 45000})
             return
-        if err:
-            log('db-info suggest fail %s: %s' % (name[:40], err))
-            _fail(502, 'suggest ' + str(err))
-            return
-        try:
-            rows = DB.clean_suggest(json.loads(raw.decode('utf-8', 'replace')))
-        except Exception:
-            _fail(502, 'suggest json fail')
-            return
-        picked = DB.pick_suggest(rows, name)
-        if not picked:
-            log('db-info no subject %s rows=%d sug=%s'
-                % (name[:40], len(rows), '/'.join([r['title'] for r in rows[:3]])))
-            if not rows:
-                # 一条联想都没有 = 豆瓣在敷衍这台机器（软限流），不是「这片没有时长」。
-                # 2026-10-09 实测：北平无战事/大明王朝1566 几分钟前才各带回 45/42 分，
-                # 这一轮 rows=0 —— 把它记成 10 分钟负缓存，等于把一次限流判成这部永远没有。
-                _fail(502, 'suggest empty (soft limit)')
-                return
+        if kind == 'neg':
             with _DB_LOCK:
                 _DB_NEG[name] = time.time()
-            _fail(404, 'no subject for ' + name)
-            return
-        detail = None
-        for du in DB.detail_urls(picked['id']):
-            draw, derr = _get(du, 'https://m.douban.com/')
-            if derr:
-                continue
-            try:
-                j = json.loads(draw.decode('utf-8', 'replace'))
-            except Exception:
-                continue
-            if j and (j.get('id') or j.get('title')):
-                detail = j
-                break
-        if not detail:
-            with _DB_LOCK:
-                _DB_NEG[name] = time.time()
-            log('db-info no detail %s id=%s' % (name[:40], picked['id']))
-            _fail(404, 'no detail for ' + name)
-            return
-        info, reason = DB.build_info(name, picked, detail)
-        if not info:
-            with _DB_LOCK:
-                _DB_NEG[name] = time.time()
-            log('db-info rejected %s: %s' % (name[:40], reason))
             _fail(404, reason)
             return
-        with _DB_LOCK:
-            _DB_INFO[name] = (time.time(), info)
-            if len(_DB_INFO) > _DB_INFO_MAX:
-                _DB_INFO.pop(next(iter(_DB_INFO)), None)
-            _DB_NEG.pop(name, None)
-        log('db-info ok %s dur=%s eps=%s type=%s' % (name[:40], info['dur'], info['eps'], info['type']))
-        payload = json.dumps(info, ensure_ascii=False).encode('utf-8')
-        self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8')
-        self.send_header('Cache-Control', 'public, max-age=600')
-        self.end_headers(); self.wfile.write(payload)
+        if kind == 'empty':
+            # 两跳都没联想出来 = 这台机器正在被豆瓣敷衍，回 502 让页面稍后再问（不写负账）
+            log('db-info soft limit %s (relay 也没答上)' % name[:40])
+            _fail(502, 'suggest empty (soft limit)')
+            return
+        _fail(502, reason)
 
     def do_GET(self):
         last[0] = time.time()
