@@ -1,10 +1,10 @@
 {
- "at": "2026-10-09T12:20:10.973Z",
+ "at": "2026-10-09T12:07:50.467Z",
  "port": 8099,
  "n": 12,
  "cover": 12,
- "dur": 8,
- "kind": 8,
+ "dur": 7,
+ "kind": 7,
  "cloudBlocked": 12,
  "rows": [
   {
@@ -28,7 +28,7 @@
    "dTotal": 1300,
    "known": true,
    "dbId": "3619080",
-   "tCover": 4511,
+   "tCover": 4930,
    "tDur": 0,
    "local": {
     "status": 200,
@@ -63,7 +63,7 @@
    "dTotal": 2400,
    "known": true,
    "dbId": "3901388",
-   "tCover": 3833,
+   "tCover": 4539,
    "tDur": 0,
    "local": {
     "status": 200,
@@ -98,7 +98,7 @@
    "dTotal": 2070,
    "known": true,
    "dbId": "1830590",
-   "tCover": 3550,
+   "tCover": 2744,
    "tDur": 0,
    "local": {
     "status": 200,
@@ -133,7 +133,7 @@
    "dTotal": 1564,
    "known": true,
    "dbId": "2158486",
-   "tCover": 2204,
+   "tCover": 2113,
    "tDur": 0,
    "local": {
     "status": 200,
@@ -168,7 +168,7 @@
    "dTotal": 1225,
    "known": true,
    "dbId": "2154390",
-   "tCover": 2468,
+   "tCover": 2503,
    "tDur": 0,
    "local": {
     "status": 200,
@@ -203,8 +203,8 @@
    "dTotal": 1932,
    "known": true,
    "dbId": "2210001",
-   "tCover": 2496,
-   "tDur": 0,
+   "tCover": 1856,
+   "tDur": 331,
    "local": {
     "status": 200,
     "found": true,
@@ -238,7 +238,7 @@
    "dTotal": 2385,
    "known": true,
    "dbId": "24695611",
-   "tCover": 3129,
+   "tCover": 3164,
    "tDur": 0,
    "local": {
     "status": 200,
@@ -273,8 +273,8 @@
    "dTotal": 1104,
    "known": false,
    "dbId": "",
-   "tCover": 4534,
-   "tDur": 243,
+   "tCover": 3094,
+   "tDur": 92,
    "local": {
     "status": 404,
     "found": false,
@@ -307,8 +307,8 @@
    "dTotal": 4680,
    "known": false,
    "dbId": "",
-   "tCover": 2149,
-   "tDur": 7329,
+   "tCover": 1887,
+   "tDur": 7502,
    "local": {
     "status": 503,
     "found": false,
@@ -341,8 +341,8 @@
    "dTotal": 552,
    "known": false,
    "dbId": "",
-   "tCover": 698,
-   "tDur": 4180,
+   "tCover": 844,
+   "tDur": 4259,
    "local": {
     "status": 503,
     "found": false,
@@ -375,14 +375,13 @@
    "dTotal": 1416,
    "known": false,
    "dbId": "",
-   "tCover": 548,
-   "tDur": 1389,
+   "tCover": 380,
+   "tDur": 609,
    "local": {
-    "status": 200,
-    "found": true,
-    "dur": 0,
-    "reason": "",
-    "limited": false
+    "status": 503,
+    "found": false,
+    "reason": "403 need_login (suggest)",
+    "limited": true
    },
    "cloud": {
     "status": 0,
@@ -401,23 +400,22 @@
    "covOk": true,
    "coverIsData": true,
    "img": null,
-   "durOk": true,
-   "kind": "电视剧",
-   "kindFrom": "db",
-   "epDur": 45,
-   "est": "按真人剧估 45 分/集",
-   "line": "单集 45 分钟 · 全剧共 40 小时 30 分 · 已看 0 分钟 · 还剩 40 小时 30 分 · ✎ 改时长",
-   "dTotal": 2430,
-   "known": true,
-   "dbId": "25754848",
-   "tCover": 4292,
-   "tDur": 2589,
+   "durOk": false,
+   "kind": "",
+   "kindFrom": "",
+   "epDur": 0,
+   "est": "没标类型，按最低档估 24 分/集",
+   "line": "单集 约 24 分钟 · 全剧共 21 小时 36 分 · 已看 0 分钟 · 还剩 21 小时 36 分 · 没有时长数据 · 没标类型，按最低档估 24 分/集 · ✎ 改时长",
+   "dTotal": 1296,
+   "known": false,
+   "dbId": "",
+   "tCover": 2176,
+   "tDur": 591,
    "local": {
-    "status": 200,
-    "found": true,
-    "dur": 45,
-    "reason": "",
-    "limited": false
+    "status": 503,
+    "found": false,
+    "reason": "403 need_login (suggest)",
+    "limited": true
    },
    "cloud": {
     "status": 0,
