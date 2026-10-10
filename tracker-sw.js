@@ -7,7 +7,7 @@
    名字里带 build 号，门禁就能拿 index.html 的 AT_BUILD 对账——忘了改立刻红，不靠人记「这批该升到 v 几」。 */
 /* v2.29.2 版本单一源：此处 'anitracker-v29-20261003b' 与 tracker-version.json 的 build 必须一字不差。
    发版流水线（发版.py）已加 assert；运行期 index.html 的 _atVersionCheck 也会触发对账警告。 */
-var CACHE='anitracker-v50-20261009f';
+var CACHE='anitracker-v51-20261011a';
 var PRECACHE=['./index.html','./tracker-manifest.webmanifest','./ani-tracker-lib.json','./vendor/cloudbase.full.js','./tracker-filler-data.js','./favicon.ico'];
 /* 需要「永远尽量新」的资源：命中即走网络 */
 var NETWORK_FIRST=/(^|\/)(index\.html|ani-tracker\.html|tracker-version\.json)$/;
@@ -16,7 +16,12 @@ var SWR=/(\.json|\.js|\.png|\.ico|\.webmanifest)$/;
 
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){
-    return Promise.all(PRECACHE.map(function(u){ return c.add(u).catch(function(){}); }));
+    /* 2026-10-11 审计：预缓存失败原来静默吞掉——离线预缓存可能整体失效而无感知。
+       收集失败项打到实例日志（SW 里没有 localStorage，console 在 DevTools Application 面板可见），
+       且只要首页预缓存成功就不阻塞激活，其余失败下一轮 SWR 会自己补。 */
+    return Promise.all(PRECACHE.map(function(u){
+      return c.add(u).catch(function(err){ console.warn('[SW] precache fail:', u, err && err.message); });
+    }));
   }).then(function(){ return self.skipWaiting(); }));
 });
 self.addEventListener('activate',function(e){

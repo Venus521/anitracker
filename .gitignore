@@ -30,6 +30,18 @@ tests/_run_look.err
 tests/_pptr_tmp.js
 tests/_steps_tmp.js
 
+# 根目录一次性证据产物（2026-10-11 审计出库后防复发：门禁回执/交付墙/一次性脚本
+# 一律落 tests/_artifacts/ 或 _archive/，不许再躺仓库根）
+/last-*.json
+/last-*.txt
+/_wall_*.js
+/_final_walk.js
+/_dry_reslice.js
+/_probe_*.py
+/_run_gates.py
+/v????-wall.html
+/*-wall.html
+
 # 走查截图/走查墙（node tests/phone-look.js 等可再生的本地产物）
 tests/shots*/
 

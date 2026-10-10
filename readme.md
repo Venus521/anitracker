@@ -1,321 +1,88 @@
-# AniTracker 追迹 - 完整交付报告
+# AniTracker 追迹
 
-## 一、项目概述
+追番进度 PWA：单文件应用（index.html ≈9100 行，唯一源）+ 手机 APK 壳 + 云端热更三路发布。
+版本史与事故复盘全在 [CHANGELOG.md](CHANGELOG.md)（最新版本段在**文件顶部**，v2.51.0=2026-10-11 审计修复轮）。
 
-AniTracker（追迹）是一个基于 Web 的番剧追剧管理工具，具备以下核心功能：
-- 番剧列表管理
-- 集数进度标记
-- 灌水/半原创集识别
-- 类型自动分类（漫改/TV原创/半原创）
-- 全网搜索 / 添加（TVMaze 索引，动画+真人剧同一个库；**v2.17.0 起不再拉取 Bangumi**）
-- 灌水池校准（Anime Filler List 数据集 + AI 结果导入）
-- 全网搜不到的片：固定格式问 AI → 粘贴离线建档 / 增量补新集（v2.18.0，整条回路零出网）
-- 装机不再撞云端「页面访问提示」墙：APK 以**文件**交接（剪贴板 → 微信/QQ 粘贴），网页版那条「下载 APK」走 `fetch` 落地（v2.19.0）
-- 账号云同步（腾讯云开发 CloudBase，可选登录/注册；WebDAV 已于 v2.10.0 移除）
+> 本文件 2026-10-11 随审计修复轮重写。旧版（v2.1 交付报告，2026-08-29）已严重过时，
+> 被 `_backup_审计修复_20261011/readme.md` 留档。
 
-## 二、本次交付内容
+## 一、代码结构（谁是真的）
 
-### 2.1 已实现功能
+| 文件 | 角色 |
+|---|---|
+| `index.html` | 唯一源。内联 CSS+JS（主块 + at270 块），版本号在 `var AT_VERSION` / `AT_BUILD` |
+| `ani-tracker.html` | index.html 的字节级同步副本（旧单文件分发场景）。`同步双入口.py` 校验，pre-commit 钩子自动同步 |
+| `ani-tracker-lib.json` | 内置 302 部收藏库（v2.13.0 起外置懒加载，约 649KB） |
+| `tracker-filler-data.js` | 动画归档/漫改数据（212+ 部） |
+| `tracker-sw.js` / `tracker-manifest.webmanifest` / `tracker-*.png` | PWA 三件套：SW 分层缓存（缓存名钉 build 号）、manifest、图标 |
+| `cloudbase-sync.js` | 账号云同步前端模块（登录注册/整包上传下载合并/5 秒防抖/凭据 PBKDF2+AES-GCM） |
+| `vendor/cloudbase.full.js` | CloudBase JS SDK 全量包（v3.7.0） |
+| `服务器-空闲自退.py` | 本机 :8089 静态托管 + 同源中转端点（`/cb-relay` `/cover-relay` `/iq-relay` `/iq-img` `/db-info`），空闲自退。LAN 暴露模式只服务 APK 与页面白名单，中转端点同源校验（v2.51.0） |
+| `db_info_rules.py` / `iq_relay_rules.py` | 豆瓣/爱奇艺的出站 URL 拼装与判决规则（五档 ok/limited/empty/err/neg，只有 neg 许写负缓存） |
+| `cloud-functions/douban-relay-node/` | 云函数（Nodejs20.19，HTTP /douban-relay）：封面+详情，14s 预算制、负缓存、403 全局冷却、CORS 来源白名单、每 IP 限流（v2.51.0） |
+| `mobile-shell/` | Android 壳：`build-apk.py` 打包、`发布到云端.py` 三路上云、`手机安装入口.py` 壳号+LAN 直链 |
+| `发版.py` | 版本六处同步一条命令（原子化写盘，失败自动回滚） |
+| `tests/` | 门禁全套（见下）+ 截图走查墙；一次性产物进 `tests/_artifacts/`（不入库） |
+| `_archive/` / `DELIVERY/` | 本地备份与交付快照（gitignore 排除） |
 
-#### 核心功能
-- [x] 番剧列表增删改查
-- [x] 集数标记（已看/未看/回看）
-- [x] 灌水标记（Filler/Mixed Canon/Canon）
-- [x] 类型自动分类
-- [x] TVMaze 全网搜索集成（v2.17.0 起；Bangumi 拉取通道已按用户指令整体删除）
-- [x] Anime Filler Guide 集成
-- [x] WebDAV 云同步
+## 二、跑起来
 
-#### 增强功能（本次新增）
-- [x] 删减信息标注（`CENSOR_INFO`）
-- [x] 自动类型推断（`addShow` 中）
-- [x] 类型顺序优化（全部→漫改→TV原创→半原创）
-- [x] 灌水池信息缓存
+- 电脑端：`DeskBox\启动方式\追迹.lnk`（拉起 8089 本机服务器 + 页面）。
+- 手机浏览器：固定入口 `https://cloud1-d7gsn5t0w6407b963-1460816419.tcloudbaseapp.com/`（薄页运行时查最新内容包，记这一个网址永远最新）。
+- 手机 App：APK 壳（剪贴板/微信传输安装），App 内「账号 → 安装包 → 检查更新」换壳，「内容更新」热更界面。
+- 双击 `index.html`（file://）也能用：云同步走不通（网关 CORS 名单），其余功能完整，豆瓣封面/联想走云函数。
 
-### 2.2 权威网站信息
-
-已整理以下权威数据来源：
-
-| 网站 | 链接 | 用途 | 状态 |
-|------|------|------|------|
-| TVMaze | https://api.tvmaze.com | 全网条目索引（动画+真人剧，免费无密钥） | ✅ 唯一在线源（v2.17.0 起） |
-| Bangumi | https://api.bgm.tv | 旧主数据库（只收动画） | 🚫 已退役（真人剧查不到，v2.17.0 删净） |
-| Anime Filler Guide | https://www.animefillerguide.com | 灌水池 | ✅ 已集成 |
-| MAL | https://myanimelist.net | 辅助数据库 | ⚠️ 可选 |
-| AniList | https://anilist.co | 备选方案 | ⚠️ 可选 |
-
-详细报告见：[research/authority-sources.md](research/authority-sources.md)
-
-## 三、BUG 修复清单
-
-### 3.1 已修复问题
-
-| 问题 | 修复方案 | 状态 |
-|------|----------|------|
-| 名侦探柯南未分类 | 修复 `sTypeOf` 函数，正确处理 `type:"长篇"` | ✅ |
-| 类型筛选顺序错误 | 添加 `typeOrder` 数组自定义排序 | ✅ |
-| 添加时类型未保存 | `addShow` 中自动调用 `fgType` | ✅ |
-| 删减信息缺失 | 添加 `CENSOR_INFO` 和 `getCensorship` | ✅ |
-
-### 3.2 已知限制
-
-| 限制 | 说明 |
-|------|------|
-| MAL API 需要认证 | 需要用户注册获取 Client ID |
-| 灌水池数据有限 | 仅覆盖主流番剧 |
-| 删减信息需手动维护 | 预定义数据需手动更新 |
-
-## 四、性能优化
-
-### 4.1 已实施优化
-
-- 图片懒加载和缓存
-- 本地存储优化
-- 函数去抖处理
-- 事件委托
-
-### 4.2 优化指标
-
-| 指标 | 优化前 | 优化后 |
-|------|--------|--------|
-| 文件大小 | 515 KB | 516 KB |
-| 加载时间 | ~2s | ~2s |
-| 内存占用 | 正常 | 正常 |
-
-## 五、使用说明
-
-### 5.1 基本操作
-
-1. **添加番剧**：点击右上角 ＋ → 输入番名（中文俗称也行，如「老友记」）搜索 → 选择结果
-2. **标记进度**：点击集数按钮切换状态
-3. **筛选类型**：点击筛选按钮按类型过滤
-4. **来源分类**：无需操作——角标默认常显，开机自动按本地 AFG 快照校准（v2.17.0 起手动入口已删）
-
-### 5.2 高级功能
-
-- **云同步**：账号面板登录/注册（邮箱+密码，密码可显示、忘了可自助重设），上传/合并走 CloudBase
-- **数据备份**：账号面板底部一行「导出 · 导入」（凭证类 key 一律不进导出，也不上云）
-- ~~Bangumi 同步~~、~~WebDAV~~：均已下线（前者 v2.10.0 停进度同步、v2.17.0 连拉取通道一起删净）
-- **问 AI 加片 / 让 AI 补新集（v2.18.0，固定格式粘贴）**：全网索引按英文条目名建，中文老剧与冷门片常常**查无此条**——
-  这条路不联网、不要模型 key，AI 用你自己那侧的任意聊天 App。添加视图「✧ 问 AI 加片」→ 一键复制提问模板
-  （模板末尾就是要求 AI 照写的行格式：`名称:` / `原文:` / `年份:` / `类型:` / `总集数:` +
-  逐集 `S01E01 中文标题 | Original Title` + 动画再补 `原创:` / `半原创:` / `其余:` 区间段）→
-  贴给 AI → **回答原样贴回来**，粘贴即自动预览：缺的字段虚线标出、集数与分季、来源分类一次说清 →
-  点入库即整条建档（分季条、双语集名、来源角标全套现成）。详情页「✧ 让 AI 补新集」是**增量**的：
-  只追加库里没有的集、只填空缺集名，**已看进度一个字节都不动**，人工核对过的来源不被覆盖，写入前先出预告清单。
-  同一标题已在片单里会先问「并进它？」而不是建重复条目；贴进去的草稿自动存本地，面板关了不丢。
-
-### 5.3 手机版（独立 APK）
-
-APK 里**自带一整套追迹网页**，装好后 App 自己在手机里跑一个只监听 `127.0.0.1` 的小服务器来加载它——
-**电脑关机、人在外面都能用**，片单进度靠登录同一账号从云端同步。
-
-- **装机走「传文件」，不走浏览器（v2.19.0，用户「每次都这样太麻烦了」）**：点
-  `C:\Users\Venus\DeskBox\启动方式\AniTracker 手机版APK.lnk` → **弹窗一开，`dist/AniTracker.apk` 这个文件本身就已经在剪贴板里**
-  （`CF_HDROP`，并且用 `DragQueryFileW` 读回核对过那条路径真的在，才算"放好了"）→ 切到微信/QQ 的「文件传输助手」
-  **Ctrl+V 就是发文件** → 手机上点开即装。为什么走这条：腾讯云测试域名那堵「页面访问提示」按**文档请求**拦，
-  每换一条 `.apk` 直链都要重过一次验证码页（实测同一条 `fetch` 请求永远 200、字节一个不少，墙只拦"跳转"）——
-  传文件既没有墙，也不用连同一个 WiFi，电脑关不关机都无所谓。弹窗读 `dist/AniTracker.apk.meta` 说明货架上这份是哪个版本。
-- **两条备用地址仍在弹窗里**（都写明「要走浏览器，可能弹云端验证页」）：局域网直链（按需起 8089、
-  **现查本机 WLAN IP**，路由器会换所以绝不写死；命令行复现 `python mobile-shell/手机安装入口.py --print`）与
-  公网直链 `https://…tcloudbaseapp.com/app/AniTracker-<code>.apk`（读 `dist/app/version.json`）。
-  两条各带一句实时状态：绿字「此刻能下载（HTTP 200 · 633 KB）」/ 红字带失败原因，看不见颜色就等于没验证过。
-  为什么这个入口是 Python 而不是 PowerShell：本机 PS 冷启动实测 13~20 秒、`Get-NetTCPConnection` 走 CIM 要 ~48 秒，
-  弹窗还没出来就被当成卡死；`pythonw + tkinter` 导入只要 1.9 秒。
-- **「USB 一线直装」已按用户指令整体删除**（「我不要传到USB」，从此不再作为交付路）：`usb_install()` 与那颗按钮都不在了。
-- **网页版自己也有一条不撞墙的装机路（v2.19.0）**：手机浏览器打开固定入口、**没有壳**时，账号面板多一行
-  「手机版 App · 下载 APK」→ 现取 `app/version.json` → **只认 `versionCode` 那串纯数字自己拼路径**（清单里的 `url` 一概不信，
-  和固定入口同一套规矩）→ `fetch` 拿 blob → 交给浏览器下载。全程没有文档导航，墙拦不到；`account-e2e` 13/14/15 三条盯着它。
-- **「访问不了」的头号原因是服务器自退，不是网络**：`服务器-空闲自退.py` 空闲就 exit，地址当场变死链
-  （2026-09-26 实测：14:50 起服 → 15:06 `idle 937s > 900s, exiting` → 15:22 手机打不开）。
-  现在这个入口自己起服时给 `--idle 3600`，并且**弹窗开着期间每 2 分钟向手机要用的那个网卡地址发一次 HEAD**
-  （既重置空闲计时，也把结果摊在界面上）。语义就是「窗口还开着 ⇒ 地址一定打得开」；
-  关掉窗口后最多再活 1 小时，要下载重新点一次入口即可——而云端那条直链任何时候都有效。
-- **App 内一键更新（v1.3 起）**：账号面板多一行「安装包：检查更新」（只在壳里有，`window.AndroidShell` 在才画）。
-  App 从公网取 `…/app/version.json` → `UpdateInfo` 校验清单（版本、大小、sha256、地址必须落在
-  `https://` + 发布域名 + `/app/*.apk`）→ 比 versionCode 有新版才弹确认 → 下到 `getExternalFilesDir/update`
-  并**边下边算 sha256**，与清单不符直接丢弃 → 交系统安装器。全程和家里电脑无关。
-  首屏画完后静默查一次；说过「以后再说」的那个 versionCode 不再拦路。
-  API 26+ 第一次会一键跳到「安装未知应用」开关。为什么递给安装器要走 `content://`：Android 7 起 `file://`
-  会被 `FileUriExposedException` 直接拒掉，而这个壳不走 Gradle、拿不到 androidx 的 FileProvider，
-  所以手搭了一个只认 `apk/AniTracker-<数字>.apk` 的 `UpdateProvider`。
-- **网页内容热更（v1.4 起，换界面不用重装 APK）**：账号面板多一行「网页内容：检查更新」，与「安装包」并排、
-  各走各的清单。App 取 `…/app/web.json`（`code` / `notes` / `files`，files 是「完整地址|sha256前8位|字节数」用 `;`
-  串起来的一行）→ `WebInfo` 逐条判地址必须落在 `https://` + 发布域名 + `/app/web/<本次 code>/` →
-  `WebUpdater` 把整套下载进 `getExternalFilesDir/content/<code>/`，**先写暂存目录，全部字节与校验都对上才改名转正**，
-  中途任何一个文件不对就整包作废、继续用原来那份（`index.html` 和它引用的 js 绝不可能来自两个版本——那正是白屏的配方）。
-  换成功才把指针 `web_code` 写进 SharedPreferences，并清掉其他 code 的旧目录。首屏画完后 4 秒静默查一次（比安装包晚 2 秒，两条别同时抢带宽）。
-  取页现在是**三层**：上游（家里电脑，最新代码）→ 热更层（手机上这份云端内容）→ APK 内置兜底；
-  下拉重载时才切换热更层（`applyWebRoot`），正在加载的页面不会被中途抽换。
-  **APK 一升级，旧热更自动作废**（指针还记着当年那代的 versionCode，对不上就清掉退回内置）——
-  否则人刚装上新版 App，页面反倒被上一次下载的老内容盖着。
-- **发布规矩（用户 2026-09-27 定：「以后都直接给 APK」）**：每批都**递增 `build-apk.py` 的 VERSION_NAME/VERSION_CODE → `python mobile-shell/build-apk.py` → `python mobile-shell/test-server.py`（60 项）→ `python mobile-shell/发布到云端.py "更新说明"`（不带 `--web-only`，壳和内容一起发）**，发完用「传文件」那条路把包交出去（点入口弹窗 → 微信/QQ 粘贴），**汇报里不再贴 `.apk` 直链**——每点一次那条直链就要重过一次云端「页面访问提示」墙。`发布到云端.py` 开头有「壳对账」挡着：包里烘的界面必须就是这批出货页、`dist/AniTracker.apk.meta` 必须对得上 `build-apk.py` 声明的版本号，两者任一不符直接 FAIL——就是为了不再出现"热更发了 5 版、壳里还烘着旧界面"那种事。
-  前者产出 APK，后者发**三条**：`/app/version.json` + `/app/AniTracker-<code>.apk`（换壳）、
-  `/app/web.json` + `/app/web/<code>/…`（换界面，code 独立计数在 `dist/app/web-code.txt`，因为它比 APK 版本勤得多）、
-  以及 `/index.html`（**固定入口**，见下）。
-  文件名都带代号且内容永不改变，所以 CDN 缓存骗不了人；两份清单是唯一可变文件，取它们时打时间戳。
-  发布前用**出货那两份 `UpdateInfo.java` / `WebInfo.java`** 把本地清单读一遍，发布后再从公网把云端清单和
-  **每一个内容文件**逐个拉回核对大小与校验，任何一步不对就不算发出去。走 CloudBase 静态托管，零费用。
-  只改了界面时加 `--web-only`（几分钟，手机下次开 App 自动换）；只改了壳时加 `--apk-only`；
-  只补固定入口时加 `--root-only`（`--root-only` 之后 `--web-only` 每次也会顺带复核它一次）。
-  内容文件是**一个一个上传**的：整目录一把传时 tcb 的批量一致性校验会把 10 个文件全报 missing 并非零退出。
-- **固定入口（给浏览器用的那一个网址）**：内容包按 code 分目录，地址每发一版就变，人和书签都记不住；
-  于是托管根目录放 `mobile-shell/hosting-root.html`（部署为 `/index.html`）——它**自身永不改动**，
-  运行时现查同源的 `app/web.json` 拿最新 code，再 `location.replace` 到 `/app/web/<code>/index.html`。
-  所以 `https://<发布域名>/` 这一个地址可以一直用下去；App 完全不经过它（壳读 version.json、界面读 web.json 下到本地）。
-  清单里的 code 必须过 `/^\d{1,6}$/` 才拼进 URL，被人改坏的清单跳不到别处去。本地端到端验证：`node tests/cloud-entry-check.js`
-  （临时拼一棵与托管根同构的目录树，手机模拟断言：正常跳转 / 落地页面真是 2.16.0 且手机样式命中 / 清单取不到时停在有「重试」的一屏 / code 非法时拒绝跳转 / 零页面级错误）。
-  **一条必须知道的限制**：CloudBase 的默认域名是**测试域名**，浏览器（document 请求）第一次打开任何路径都会被
-  腾讯云插一页「风险提醒」，等 3 秒倒计时后点「确定访问」才放行——放行靠 cookie `cloudbase_confirm_domain_access`，
-  **每个浏览器只需过一次**，之后新开标签页直接进。程序化取用（App 的 HttpURLConnection、发布脚本的公网回核）看不到这页。
-  官方去法是绑定已备案的自定义域名（要花钱买域名），本项目按「只接受免费方案」不去碰，因此这条路留给
-  「偶尔用手机浏览器看一眼」，日常仍以 App 为准。
-- **内容热更发砸了怎么办**（三道闸，从轻到重）：① 删掉云端 `/app/web.json`（`tcb hosting delete -e <env> /app/web.json`）
-  ——手机立刻查不到内容更新，停在当前这份，不再往后发；② 用**旧文件**铺一个**更大 code** 的包重发
-  （code 只增不减，所以「退回上一个 code」是不存在的，只能往前发一份旧的）；③ 发一版新 APK——换代那条规则会把
-  旧热更指针清掉，手机回到 APK 内置那份。手机上没有「卸载热更」这种操作，也不需要：内容目录整包可弃。
-- **为什么非要本机服务器而不直接读 APK 里的文件**：CloudBase 网关的跨域白名单只放行
-  `localhost`/`127.0.0.1` 这类源（实测任意端口都认），`file://` 与 `appassets.androidplatform.net` 都是 403，
-  登录会废。跑在 `127.0.0.1` 上就等于把电脑上那套环境原样搬进手机。
-- **页面代码的更新**：家里电脑开着且在同一 WiFi 时，App 会经本机服务器**代理取最新版**（电脑不在就用内置那份）；
-  壳本身（Native 那层）改动则要靠上面那条 App 内更新，代理换不了 dex。
-  IP 被路由器改了也不用管——App 在**原来那段 /24** 里自动找 8089 上的追迹服务器并记住新地址。
-- **签名**：keystore 常驻 `mobile-shell/keystore/debug.keystore`，**别删**——换钥匙会导致新版被判签名冲突而拒装。
-  只要它还在，新版一律**覆盖安装**即可（当前 **v1.6 / versionCode 7**，与 v1.1 同一把钥匙，2026-09-27 按「以后都直接给 APK」把内置界面追到 v2.19.0——换界面本身仍不必重装，走内容热更）。
-- **版本号只写在 `build-apk.py`**：清单里再写 `android:versionCode` 会静默盖掉构建参数，
-  打出「换了内容没换版本」的包，手机装了也不更新；构建脚本末尾已按 `aapt2 dump badging` 断言，
-  并且额外钉了更新链路的两颗钉子：manifest 里必须有 `UpdateProvider`、dex 里必须真有那 8 个类
-  （`MainActivity`/`LocalServer`/`UpdateInfo`/`UpdateProvider`/`Updater`/`WebInfo`/`WebUpdater`/`Net`）。
-- **改壳必跑桌面测试**：`python mobile-shell/test-server.py`（60 项）——用桌面 stub 顶替 `Context`/`AssetManager`，
-  把**出货用的同一份 `LocalServer.java`** 真跑起来发请求（19 项，含三层取页的优先级，
-  白屏那次「绑定端口却没人 accept」光看代码是漏不掉的）；
-  同一套源码里再跑 `UpdateInfo` 的 22 项（APK 清单解析/下载白名单）与 `WebInfo`+`WebUpdater` 的 17 项
-  （内容清单解析、地址闸、整包下载落盘、换代作废）断言，以及手机侧 8 个类对着 `android.jar` 的编译检查。
-- **改界面必跑手机走查**：`node tests/phone-look.js`——393×851、DPR 2.75、Android WebView UA，
-  桩掉 `window.AndroidShell` 让账号面板那两行更新入口按壳里的样子渲染，逐屏 393×851 截图进 `tests/shots-phone/`
-  并逐屏量：横向溢出、可点区 <34px、正文 <11px、安全区 top/bottom，任一退化即非零退出。
-  **必须走 CDP 显式声明 `hover:none`/`pointer:coarse`**：puppeteer 的 `hasTouch` 不改媒体特性，
-  不声明的话桌面 Chrome 一直按 `(hover:hover)` 渲染，手机端那整批样式根本不命中——改了也看不出效果。
-- **走查的结果必须肉眼可见**：只吐 PNG 等于没走查（没人天天去翻一个装图的文件夹）。所以同一次跑还会生成
-  `tests/shots-phone/手机预览.html`——走查墙：上半是逐屏真机尺寸截图 + 每屏各自的「出界 / 触点<34px / 小字<11px」
-  + 门禁 PASS/FAIL，点图看原图；下半自动并入 `phone-use` 那份**行为**结论（12 个任务的 bad/mid/note 逐条 + 19 张过程截图，
-  并按 mtime 标出「这批结果是否已比 `index.html` 旧」）。日常入口是 `启动方式\AniTracker 手机预览.lnk`
-  （→ `pythonw 手机预览入口.py`：开墙 + 按 mtime 提醒这批图是否已比页面旧，可一键重跑「重新走查（版式）」或
-  「用起来走查（行为）」，也可开 `node tests/phone-live.js` 那个**能真点**的手机窗口）。
-  手机窗口有三条硬规矩（都是实测撞出来的）：`--app` 必须给真实地址（给 `about:blank` 会退化成带标签栏+地址栏的普通窗口）；
-  **不能传 `--no-sandbox`**（会钉一条「不受支持的命令行标记」横幅，摘 `--enable-automation` 只换掉另一条）；
-  要带 `--hide-scrollbars`（经典滚动条吃掉 15px，「看完」那一档就被挤出屏外，看着像回归其实不是）。
-  这台屏可用高仅 720，851 高的窗口会被 Windows 直接塞成最小化，所以高度按屏幕夹住并如实打印——宽度 393 是真的。
-- **改交互必跑手机「用起来」走查**：`node tests/phone-use.js`——`phone-look` 只量版式（像素），这一份量**行为**：
-  拿 12 个真人任务过一遍（冷启动空状态 → 搜加一部片 → 双击某集=已看到这里 → 返回看进度 → 片单内搜索+切筛选 →
-  长按菜单 → 改主题/视图后杀掉重开记不记得 → 键盘弹起压不压输入框 → 深滚后主操作够不够得着 →
-  危险操作尺寸与确认 → 系统返回落到哪 → 后台播报会不会顶掉用户反馈 → 1100 集超长番翻页与跨页标记）。
-  在线的一步全部用请求拦截喂成本地假数据（`tcb-api` 仍旧掐死，避免把演示数据写进真库），
-  否则测的是网络而不是交互。结论分 bad/mid/note 三档并落 `tests/shots-phone/use/use-findings.json`，bad 非零退出。
-  两条踩过的坑：**点任何元素前必须先 `scrollIntoView` 再重新量**——`tap(x,y)` 用的是视口坐标，
-  元素在 851 之外时点到的是空气（第一版就是这么把好的「双击标记」误报成 BAD 的）；
-  **探针选 aria-label 要避开隐藏元素**——悬浮添加钮一开始复用了「添加番剧」这个标签，
-  `querySelector` 永远命中 `pointer-events:none` 的那颗，一串步骤全点空。
-  还有两条同一类的：**验反馈不许用固定 `sleep` 采 toast**——它只活 2.2 秒，等久了采到「刚消失」、
-  等短了采到「还没出现」，同一处误报纠过两遍；改成轮询并记下「点完第几毫秒冒出来的」，
-  顺带就成了响应速度度量（基准文案必须在**点击之前**取，同步完成的操作事后取基准取到的就是新那条）。
-  **主路径上不许有网络**：内置库添加原先 `await cacheCover()` 完才落库，实测点下去 2200ms 屏幕毫无变化，
-  用户只会以为没点上再点一次；现在落库+回执立刻走、封面后台转存写回，门禁断言 `>1200ms` 即判 mid。
-- **构建**：`python mobile-shell/build-apk.py`（工具链便携装在 `D:\dev\android-build`，
-  不走 Gradle：同步网页资源进 assets → aapt2 → javac → d8 → zipalign → apksigner）。
-  图标由 `python mobile-shell/make-icon.py` 生成（改完记得重跑构建）。
-- **已知未验证**：App 内更新的完整回路（下载→校验→拉起系统安装器→未知来源授权跳转）、
-  导出/导入/外链三条 Native 通道与全面屏效果均**未在真机上跑过**。手机走查能覆盖的是版式与可点区，
-  **覆盖不到**的是系统 WebView 的内核版本差异（minSdk 21，老机器内核可能比桌面 Chrome 旧）、
-  `env(safe-area-inset-*)` 在真刘海上的实际值、以及触屏手势手感。
-
-## 六、技术架构
-
-### 6.1 前端架构
-
-- 单文件 HTML 应用
-- 原生 JavaScript（无框架依赖）
-- LocalStorage 数据持久化
-- Service Worker 缓存支持
-
-### 6.2 API 集成
+## 三、发布流水线（顺序不可换）
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   用户界面       │────▶│   AniTracker    │────▶│  TVMaze API     │
-│   (HTML/JS)     │◀────│   (本文件)      │◀────│ (api.tvmaze.com)│
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                              │
-                              ▼
-                        ┌─────────────────┐
-                        │ Anime Filler    │
-                        │   Guide API     │
-                        │ (animefillerguide│
-                        │    .com)        │
-                        └─────────────────┘
+1. 改 index.html（唯一源；ani-tracker.html 由钩子/同步脚本跟上）
+2. python 发版.py X.Y.Z --note "…"        # 六处一次改齐：页面版本号/SW缓存名/tracker-version.json/package.json/APK壳号/双入口
+3. node tests/phone-look.js               # 15 屏版式走查 + 走查墙重生成
+4. node tests/run-regression.js           # 34 项页面回归（或直接跑 运行回归测试.bat 全套 26 条）
+5. python mobile-shell/build-apk.py       # 打 APK（必须先于发布：check_shell_fresh 强制对账）
+6. python mobile-shell/发布到云端.py "说明"  # 三路一次发：APK+清单 / 内容包 code 自增 / 固定入口
+7. 收口 commit（中文消息用 UTF-8 文件 + git commit -F，别用 -m）
+8. push（直连不稳，失败走本机 7897 代理；节奏由用户主导）
 ```
 
-## 七、交付文件清单
+发版失败自动回滚六处；发布公网验证失败自动回传旧清单。改云函数后部署：
+`cmd /c tcb fn deploy douban-relay-node --force --httpFn --path /douban-relay --dir cloud-functions\douban-relay-node --runtime Nodejs20.19 -e cloud1-d7gsn5t0w6407b963`
+（末尾报 Path '/douban-relay' is used 无害，代码已传；验证直接 curl 三模式。）
 
-| 文件 | 路径 | 说明 |
-|------|------|------|
-| 主程序 | `index.html`（`ani-tracker.html` 为同步副本） | 完整可运行的追剧应用 |
-| 增强补丁 | `ani-tracker-enhanced.js` | 可选增强功能参考 |
-| 权威网站报告 | `research/authority-sources.md` | 数据来源说明 |
-| 本说明 | `README.md` | 交付报告 |
+## 四、门禁（运行回归测试.bat = 唯一真相源，26 条串行）
 
-## 八、验证结果
+门禁一律不出网（`AT_DB_SUGGEST_BASE`/`AT_DB_RELAY_BASE` 摘到 :9）。npm scripts 是 bat 的机器映射（`npm run test:regression` 等），一致性由 `npm run test:parity` 把关。核心几条：
 
-### 8.1 功能验证
+| 门禁 | 管什么 |
+|---|---|
+| run-regression | 34 项页面回归（真无头 Chrome + mock API；`AT_CHROME`/`AT_PY` 环境变量可换机） |
+| phone-look / phone-use | 393×851 十五屏版式走查（出界/34px 触点/11px 字地板）+ 12 个真人任务行为走查 |
+| catch-audit | 空 catch 常驻门禁：数据关键链路 19 函数必须接线 atErr，总量不回潮 |
+| gates-parity | bat 与 npm 门禁清单对账 |
+| a11y / contrast / csp / syntax | 静态断言（可访问性 7 项 / 浅深对比度 16 组合 / CSP / 语法） |
+| douban-sync-e2e / douban-push-e2e / name-refresh-e2e / ep-duration / phone-canon / desktop-tier | 豆瓣同步/推送/刷名/时长账/漫改/桌面档 e2e |
+| *_negative.py / *-negative.js | 各判据的负测（变异真身确认量具会咬人） |
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| 番剧添加 | ✅ | 通过 TVMaze 全网索引（中文俗称命中并回显） |
-| 类型分类 | ✅ | 自动推断并保存 |
-| 集数标记 | ✅ | 支持三种状态 |
-| 灌水识别 | ✅ | Filler Guide 校准 |
-| 删减标注 | ✅ | 预定义数据 |
-| 云同步 | ✅ | CloudBase 账号（WebDAV 已于 v2.10.0 移除） |
-| 数据备份 | ✅ | 导出/导入 JSON |
+走查墙按 PNG mtime vs index.html 判「过期」：改了页面就必须重跑 phone-look。
 
-### 8.2 兼容性验证
+## 五、工程规矩（踩过的坑的沉淀）
 
-| 浏览器 | 状态 | 说明 |
-|--------|------|------|
-| Chrome | ✅ | 最新版本 |
-| Firefox | ✅ | 最新版本 |
-| Safari | ✅ | iOS/Mac |
-| Edge | ✅ | 最新版本 |
-| 移动端 | ✅ | iOS/Android 浏览器 |
+1. **改 index.html 前先 `git status` + grep `AT_VERSION`**——工作区不干净且版本号不是自己发的就是有并发会话，停手汇报（历史上撞过三次）。
+2. **cmd 会话 `git commit -m "中文"` 会存成 GBK 乱码**——Write UTF-8 消息文件 + `git commit -F`，消息文件放仓库外。
+3. **带写入语义的凭据端点（POST /hub/api/db/cookie）绝不发测试请求**——假 Cookie 也会覆盖真凭据（2026-10-06 事故）。调试只打 GET status。
+4. **剧名铁律**：外语剧=中文+原文、中文剧=中文名、**已在片单的条目永不改名**；现名含 CJK 一律不动（TVMaze 对中文剧 name 是外文原名，akas 才有中文名）。
+5. **只认「确认没有」写负缓存**——限流绝不是「这部剧没有」（五档里只有 neg 许写 10 分钟负账）。
+6. 手机详情页「重拉封面/本地封面/AI 导入」工具条固定在「标记下一集」正下方一屏可见，不许沉底（v2.28.0 用户令）。
+7. mock 外网必须带 CORS 头 + 处理 OPTIONS，否则页面判「网络不可用」污染走查。
+8. 回归页 shows 会跨用例累积——批量计数断言一律用 `≥` 别用 `===`。
+9. 发布凭据=本机 tcb CLI 登录态；keystore 留 mobile-shell/keystore/（换签名=手机拒装），gitignore 排除。
 
-## 九、后续扩展建议
+## 六、已知边界（不是 bug，是现实）
 
-1. **MAL 完整集成**：注册 API Key，实现双数据库搜索
-2. **用户贡献系统**：允许用户上传灌水池数据
-3. **更智能推断**：基于作品元数据自动分类
-4. **移动端 App**：封装为 PWA 或原生应用
-5. **分享功能**：生成可分享的追剧链接
-
-## 十、许可证
-
-本项目基于原 AniTracker 项目修改，保持原有许可证。
-
----
-
-**交付日期**: 2026-08-29
-**版本**: v2.1
-**状态**: ✅ 完成交付
-
----
-
-## 版本史
-
-完整版本记录（v2.3 ~ v2.12）见 [CHANGELOG.md](CHANGELOG.md)。发版时新条目请直接追加到该文件。
-
-### 最近三版简述
-
-- **v2.16.0（2026-09-27）** 手机端「用起来」走查五处修正（走内容热更 **code 103** 上线，APK 未动）：新增行为门禁 `tests/phone-use.js`——12 个真人任务过一遍（冷启动空状态/搜索加片/双击某集/返回看进度/片单内搜索+切筛选/长按菜单/杀页重开/键盘压输入框/深滚够不够得着/危险操作确认/系统返回落点/后台播报会不会顶掉用户反馈/1100 集超长番），在线的一步全用请求拦截喂本地假数据。据此改五处：① `toast(m,'bg')` 让位——后台自动校准此前会抢走「已看到第 N 集」这条回执；② 右下角悬浮 `#fabAdd`（54px，吃 safe-area，滚过 240px 淡入）补上深滚后够不着的主操作；③ 全页最不可逆的「从片单移除」由 43px 抬到 44；④ 触屏下 `#vDetail` 走 flex `order` 把 5 颗低频工具钮与来源覆盖条折到剧集列表之后，「标记下一集」从 top≈700 提到 409（首屏内，DOM 一行不动、桌面照旧）；⑤ 内置库添加此前 `await cacheCover()` 完才落库，实测点下去 **2200ms 屏幕毫无变化**，改为落库+回执立刻走、封面后台转 dataURL 写回（门禁加断言：点完 >1200ms 才反应判 mid）。走查墙 `tests/shots-phone/手机预览.html` 合成一面（上半九屏版式 + 下半行为结论），入口弹窗多一颗「用起来走查」。工程面：SW 缓存名改钉 build（`anitracker-v15-20260927b`，V04 拿 `AT_BUILD` 对账，忘换缓存名立刻红）；`tests/register-e2e.js` 整套重写 18 条（注册已是单屏换页，旧用例还在找双 Tab；CloudBase 认证走 `tcloudbasegateway.com/auth/v1/`，CORS 预检 OPTIONS 必须应答否则那条 POST 根本不发）；`.gitignore` 收掉 `mobile-shell/keystore/`；V90 端口预算 15s→60s。全绿：phone-use 无问题 · phone-look PASS · 回归 23/23 · v2140 30/30 · v2130 26/26 · ctxmenu 37/37+19/19 · register 55/55+18/18 · 双入口一致。
-- **v2.17.0（2026-09-27）** 搜索换全网索引 + 手机上三件「繁琐」收口（走内容热更 **code 104** 上线，APK 未动、不必重装）：① 在线源从 Bangumi 换成 **TVMaze**（免费无密钥、CORS 开放，动画+真人剧同一个索引）——「老友记搜不出来」的根因就是 Bangumi 只收动画、真人剧压根没条目；中文俗称走 `SEARCH_ALIAS_GROUPS`（16 组）改写命中并回显，片内搜索也连 `aliases` 一起匹配；Bangumi 拉取通道 11 处标识源码清零，回归 V02 长期断言不许复活。② 多季作品：TVMaze 一次给全套单集，`ensureSeasons` 派生季度分册，详情页出季度条、默认只渲第 1 季，**切季零网络**（实测 356ms/0 请求），进度按整部连号记不互扰。③ 来源角标默认常显（开关按钮删除）+ 开机 1200ms 静默自动校准（只读本地 AFG 快照、零网络、不弹 toast、不推时钟），「原创/漫改」轴只对动画适用，真人剧不挂「待核」。④ 默认浅色主题。⑤ **全面屏返回手势走「上一层」**：页面开始 `pushState` 分层（详情/添加/任意弹层），回退只关最上面那层；弹层用 MutationObserver 统一接管，自己点 × 关掉的层补掉那格历史。踩过的真雷：`back()` 异步，任何自记的计数都会和 `pushState` 交错漂移，一漂移我们主动发的 back 就退回**上一个文档**——手机上正是「返回键把 App 弹回桌面」；改成**深度对账**（历史 state 带当时的栈深，`popstate` 以现场为准收口），`phone-use` 第 10 项钉住。⑥ 登录：密码可显示、规则放宽到只剩长度 6–32 位（可纯数字或纯字母）、「忘了密码？重设」并联云端 `resetPasswordForEmail` 自助回路；账号屏底部链接 22×15px→≥56×36（`phone-look` 这轮才抓到：拇指按不中等于功能不存在）。工程面：`phone-use`/`run-regression`/`run-v270-tests` 里依赖 Bangumi 假接口的用例整体改喂 TVMaze（新增 `tests/mock-tvmaze-api.js`），台账/修改历史两条过期断言改成防复活断言，`cloud-entry-check` 去掉写死的 `103`/`2.16.0` 改现场对账；SW 缓存 `anitracker-v16-20260927c`。全绿：phone-use 无问题 · phone-look 九屏 PASS · 回归 28/28 · v2140 30/30 · v2130 26/26 · v270 31/31 · register 59/59+20/20 · account-e2e 13/13 · ctxmenu 38/38+19/19 · ai-import 12/12 · cloud-entry 5/5 · 双入口一致。**真机仍未验证**（全部为 393×851 无头模拟）。
-- **v2.18.0（2026-09-27）** 固定格式「问 AI → 粘贴建档」（走内容热更 **code 105** 上线，APK 未动、不必重装）：TVMaze 只治好了「有英文条目名的片」，中文老剧/冷门片仍查无此条 ⇒ 按用户「给我固定的格式，让用户去AI问，然后粘贴进来，以后可以自动更新」加两个入口：**✧ 问 AI 加片**（添加视图 `#btnAiAdd`）一键复制提问模板，回答原样贴回即**离线建整条条目**（中/英名、年份、类型、总集数、分季条、双语集名、来源角标，全程零出网、不要模型 key）；**✧ 让 AI 补新集**（详情页 `#btnAiUpd`）是增量的：只追加库里没有的 `SxxExx`、只填空缺集名、`total` 只往上调，`statuses` **一行不写**，人工核对过的来源不被 AI 覆盖（只覆盖 `srcNote` 以「AI 导入」开头的集），写入前先出 dry 预告「新增 X · 补名 Y · 已有跳过 Z」，同名命中先问「并进它？」而不是建重复条目。解析器按 AI 真实吐出的样子容错：`S01E01`/`第1集`/`1.` 三种集号、全角空格与 BOM、行首 `[S01E01]` 方括号、列表符号、`**加粗**`/反引号、全角括号开头的客套行整行跳过；来源分类段先把 `SxxExx` 换算成整部连号再喂 v2.10 那套现成 `aiParse`，两类都命中过就把「其余」补成漫改。**格式即契约**：页面模板 `AI_STD_FMT` 与 `tests/ai-add-fixture.js` 的 `ASK_FMT` 逐字节相同，改一处门禁立刻红（B3b 还断言补集提问带上「我已经收录了 N 集，最后一集是 SxxExx」的现场上下文）。新增门禁 `tests/ai-add-e2e.js` **15 项**（离线用 Chrome `--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1` 做 DNS 级断网，不用 `setRequestInterception`——Service Worker 服务的封面请求会抛 `Request Interception is not enabled!`）；`phone-look` 走查加两屏（`5b-问AI建档` / `5c-让AI补新集`）变 **11 屏**。修两处自查出的坑：dry 预演曾把 `s.eps=[]` 写进原对象（预演不该改数据）、建档成功后没 `wrap.remove()`（门禁 B6 抓到，改为直接落在详情页）。版本三件套：`AT_VERSION` 2.18.0 / `AT_BUILD` 20260927d / SW 缓存 `anitracker-v17-20260927d`；发布后 `/app/version.json` 的 notes 单独刷新（`--web-only` 不重写那份清单）。全绿（串行）：ai-add 15/15 · run-regression 28/28 · v2140 30/30 · v2130 26/26 · v270 31/31 · ctxmenu 38/38+19/19 · register 59/59+20/20 · account 13/13 · ai-import 12/12 · test-server 60/60 · cloud-entry 5/5 · phone-look PASS · phone-use 没发现影响使用的问题 · 双入口字节一致 `ad9d8851c71a7a09`。**真机仍未验证**（「复制到聊天 App 再贴回来」这条回路只在 393×851 无头里模拟过）。**同日补记**：查出壳 APK 里烘的内置界面还停在 **v2.14.0**（落后 5 版 ⇒ 新装机或首次启动不联网看到的是旧界面），已把 `build-apk.py` 的 VERSION_NAME/CODE 升到 **v1.5 / versionCode 6** 重打并发布 （`assets/web` 由 `sync_assets()` 自动镜像当前页面，同一把 keystore ⇒ 覆盖安装不拒装）；公网 `AniTracker-6.apk` 与本地包 sha256 逐字节一致（`9b3243ae…`），改壳门禁 `test-server.py` 60/60，内容包仍是 code 105 未动。
-- **v2.19.0（2026-09-27）** 装机路绕开云端「页面访问提示」墙（**壳 v1.6 / versionCode 7** + **内容包 code 106** 一起上线）：用户贴来一张又被拦的截图 + 「每次都这样太麻烦了」⇒ 先用探针量清语义（新开文档请求被拦成 404、同 profile 过一次后别的直链放行、页内 `fetch` 永远 200 且字节完整），确认拦的是"跳转"，于是两条交付路都不再让人跳转：**① 电脑入口改为「传文件」**——弹窗一开就用 `CF_HDROP` 把 `dist/AniTracker.apk` 放进剪贴板并 `DragQueryFileW` 读回核对路径，微信/QQ 里 Ctrl+V 即发文件（不碰浏览器、不用同 WiFi、不要求电脑开机），局域网/云端两条网址降为"备用"并写明要走浏览器，`usb_install()` 与那颗按钮按旧令「我不要传到USB」整体删除；**② 网页版（无壳）账号面板新增「手机版 App · 下载 APK」**——取清单后**只用 `versionCode` 那串纯数字拼路径**（清单里的 `url` 一概不信），`fetch` → blob → 交给浏览器。附带修一处窗口尺寸实测坑：`tkinter` 长句不折行会把弹窗撑到 1314px > 屏宽 1280，「关闭」跑到屏外 ⇒ 统一 `wraplength` + 几何同时夹宽高（三态 843×381 / 843×292 全在屏内）。门禁扩：`account-e2e` 13 → **16 项**（浏览器模式有这一行且壳内那两行不在、只请求清单与拼出的数字直链且清单那条 `url` 一次没碰、`versionCode` 不合法就当场作罢），为此**从源头掐掉 SW 注册**——SW 的 fetch 在自己的上下文里发，CDP 请求拦截看不见（实测假清单被透传给真服务器一律 404），而 `Network.setBypassServiceWorker` 会连带弄坏认证域请求的拦截；`phone-look` 11 → **12 屏**（补 `6b-账号面板-浏览器`：壳内/浏览器两模式互斥，不补这屏那行新按钮就没被量过可点区）。版本三件套 `AT_VERSION` 2.19.0 / `AT_BUILD` 20260927e / SW 缓存 `anitracker-v18-20260927e`；发布 `check_shell_fresh()` 对账通过，公网 `AniTracker-7.apk` 与本地包、与清单三方逐字节一致（`648987` 字节 · `20760fd1ce0cf8ae…`）。全绿（串行）：ai-add 15/15 · run-regression 28/28 · v2140 30/30 · v2130 26/26 · v270 31/31 · ctxmenu 38/38+19/19 · register 59/59+20/20 · **account 16/16** · ai-import 12/12 · test-server 60/60 · cloud-entry 5/5 · phone-look PASS（12 屏）· phone-use 没发现影响使用的问题 · 双入口字节一致 `f8a738bb3e36925a`。**真机仍未验证**（微信/QQ 传过去的 `.apk` 在安卓上能否直接触发安装器、浏览器 blob 下载的同理）。
-
+- 豆瓣推送方向写不进（subject 页反爬+假成功，v2.31.0 定论，UI 置灰诚实报错）。
+- 豆瓣匿名搜索官方锁死（rexxar 403）：中文剧靠 suggest+爱奇艺补位+云端 IP+服务端中转四层绕。
+- CloudBase 网关对 loopback 回显非法多值 ACAO 头（官方行为改不掉）：浏览器直连云端那条腿永久不可用，全部走服务端中转。
+- CloudBase 测试域名首次访问有「页面访问提示」墙（免费方案不绑备案域名，过一次即可）。
+- 固定入口无 frame-ancestors（托管平台配不了响应头；本机服务器已配）。
+- 中文条目源头缺口约 60/77（内置库 302 部 + AniList 只覆盖番剧），「待指认层」在需求池（v2.49.0 §七）。
+- 忘了追迹密码=云端豆瓣 Cookie 解不开只能重粘（v2.32.0 刻意取舍）。

@@ -65,7 +65,7 @@
 <script src="cloudbase-sync.js?v=20261006a"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
-  window.addEventListener('load',function(){ navigator.serviceWorker.register('tracker-sw.js').catch(function(){}); try{ atVerCheck(); }catch(e){} });
+  window.addEventListener('load',function(){ navigator.serviceWorker.register('tracker-sw.js').catch(function(e){ atErr('sw-register',e); }); try{ atVerCheck(); }catch(e){} });
 }
 /* v2.24.0+：开机自检版本——页面落后于服务端（tracker-version.json）时，置顶一条可点刷新横幅。
    解决「软件更新怎么没同步」：SW 离线回退会喂旧缓存页，用户不知要刷新；横幅一键硬刷新即可。 */
@@ -80,8 +80,8 @@ function atVerCheck(){
       b.innerHTML='发现新版本 v'+esc(String(v.version))+'，点此刷新 ↻';
       document.body.appendChild(b);
       b.onclick=function(){ location.reload(true); };
-    }).catch(function(){});
-  }catch(e){}
+    }).catch(function(e){ atErr("atVerCheck.fetch", e); });
+  }catch(e){ atErr("atVerCheck.catch", e); }
 }
 </script>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('at_theme')==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
@@ -796,7 +796,7 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
 /* v2.13.0 数据集外置：302 部收藏库(649KB)改由 ani-tracker-lib.json 懒加载，
    HTML 从 928KB 降到约 280KB；SW 对该 JSON 走 stale-while-revalidate，离线二次访问照常可用。 */
 window.ANITRACKER_LIB=[];
-window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(a){ if(Array.isArray(a)) window.ANITRACKER_LIB=a; return a; }).catch(function(e){ try{ console.warn("[追迹] 内置库数据集加载失败：",e); }catch(x){} return null; });
+window.ANITRACKER_LIB_PROMISE=fetch("ani-tracker-lib.json").then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(a){ if(Array.isArray(a)) window.ANITRACKER_LIB=a; return a; }).catch(function(e){ try{ console.warn("[追迹] 内置库数据集加载失败：",e); }catch(x){ atErr("atVerCheck.catch", x); } return null; });
 </script></head>
 <body>
 <div class="wrap">
@@ -1283,9 +1283,9 @@ function doMergeDups(silent){
   shows=dedupeByTitle(shows||[],tomb,st);
   _dupCache={ at:0, groups:null };
   if(!st.deduped) return 0;
-  try{ localStorage.setItem('at_tomb',JSON.stringify(tomb)); }catch(e){}
+  try{ localStorage.setItem('at_tomb',JSON.stringify(tomb)); }catch(e){ atErr("doMergeDups.catch", e); }
   save(); renderList();
-  try{ logAdd('合并重复 '+st.deduped+' 条','片单整理：'+n0+' → '+shows.length+' 条，进度取并集', true); }catch(e){}
+  try{ logAdd('合并重复 '+st.deduped+' 条','片单整理：'+n0+' → '+shows.length+' 条，进度取并集', true); }catch(e){ atErr("doMergeDups.catch", e); }
   if(!silent) toast('已合并：'+n0+' 条 → '+shows.length+' 条（并掉 '+st.deduped+' 条，两边已看的集都留着）');
   return st.deduped;
 }
@@ -1339,8 +1339,8 @@ window.AT_MERGE={ mergeShows:mergeShowArrays, tombKey:TOMB_KEY,
   snapKeys:['tr_db_snap'],
   mergeSnap:function(localStr,remoteStr){
     var la=0,ra=0;
-    try{ var L=JSON.parse(localStr||'null'); la=(L&&L.at)||0; }catch(e){}
-    try{ var R=JSON.parse(remoteStr||'null'); ra=(R&&R.at)||0; }catch(e){}
+    try{ var L=JSON.parse(localStr||'null'); la=(L&&L.at)||0; }catch(e){ atErr("mergeShowArrays.catch", e); }
+    try{ var R=JSON.parse(remoteStr||'null'); ra=(R&&R.at)||0; }catch(e){ atErr("mergeShowArrays.catch", e); }
     if(!ra) return null;
     if(!la||ra>la) return remoteStr;
     return null;
@@ -1502,7 +1502,7 @@ function removeShowBySid(sid){
     toast('已移除《' + s.title + '》');
   });
 }
-var AT_VERSION='2.50.1', AT_BUILD='20261009f';
+var AT_VERSION='2.51.0', AT_BUILD='20261011a';
 /* v2.29.2 版本单一源契约：AT_VERSION/AT_BUILD 仍是两份硬编码,
    但启动期去 fetch tracker-version.json 自检一次,
    不一致记 at_errlog 并在账号面板版本行红字提示。
@@ -1573,8 +1573,8 @@ var shows=rd(LS.shows,[]);
 /* v2.14.0d 既有记录全清空（用户指令「已有的记录全清空」）：修改日志整库删除、搜索历史存量清空；
    写入端 logEdit 已停笔，「修改历史」展示区已退役，不会再长回来。 */
 (function purgeRecordStores(){
-  try{ localStorage.removeItem('at_edit_log'); }catch(e){}
-  try{ localStorage.removeItem('at_search_hist'); }catch(e){}
+  try{ localStorage.removeItem('at_edit_log'); }catch(e){ atErr("purgeRecordStores.catch", e); }
+  try{ localStorage.removeItem('at_search_hist'); }catch(e){ atErr("purgeRecordStores.catch", e); }
 })();
 /* v2.14.0e 片单与进度一次性大扫除（用户指令「把动漫记录删掉所有」→ 确认「片单和进度全清」）：
    只跑一次（标志位守门，之后正常积累）。顺序：备份→全 sid 立墓碑（防云端合并复活）→清空。
@@ -1590,13 +1590,13 @@ var shows=rd(LS.shows,[]);
     }catch(e){
       try{ localStorage.setItem('at_purge_backup', JSON.stringify({ at:new Date(t).toISOString(), shows:slim.map(function(s){ var c={}; for(var k in s){ if(k!=='eps') c[k]=s[k]; } return c; }) })); }catch(e2){}
     }
-    var tomb={}; try{ tomb=JSON.parse(localStorage.getItem('at_tomb')||'{}'); }catch(e){}
+    var tomb={}; try{ tomb=JSON.parse(localStorage.getItem('at_tomb')||'{}'); }catch(e){ atErr("purgeAllOnce.catch", e); }
     (shows||[]).forEach(function(s){ tomb[String(s.sid)]=t; });
-    try{ localStorage.setItem('at_tomb', JSON.stringify(tomb)); }catch(e){}
+    try{ localStorage.setItem('at_tomb', JSON.stringify(tomb)); }catch(e){ atErr("purgeAllOnce.catch", e); }
     shows=[]; wr(LS.shows,shows);
-    ['at_drafts','at_relations','at_series_cache','at_cover_try','at_errlog','at_sync_log','at_reg_pending','at_src_report','at_fg_cache'].forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+    ['at_drafts','at_relations','at_series_cache','at_cover_try','at_errlog','at_sync_log','at_reg_pending','at_src_report','at_fg_cache'].forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){ atErr("purgeAllOnce.catch", e); } });
     localStorage.setItem('at_purge_v2140e','1');
-  }catch(e){}
+  }catch(e){ atErr("purgeAllOnce.catch", e); }
 })();
 /* v2.19.1 同名去重一次性清理：存量片单里已经长出来的同名重复条目（两条海贼王）收成一条。
    只跑一次；落败 sid 立墓碑，云端那份同样的重复下次合并时会被墓碑挡掉，不会再长回来。 */
@@ -1604,16 +1604,16 @@ var shows=rd(LS.shows,[]);
   try{
     if(localStorage.getItem('at_dedup_v2191')) return;
     var n0=(shows||[]).length;
-    var tomb={}; try{ tomb=JSON.parse(localStorage.getItem('at_tomb')||'{}'); }catch(e){}
+    var tomb={}; try{ tomb=JSON.parse(localStorage.getItem('at_tomb')||'{}'); }catch(e){ atErr("dedupeShowsOnce.catch", e); }
     var st={deduped:0};
     shows=dedupeByTitle(shows||[],tomb,st);
     if(st.deduped){
       wr(LS.shows,shows);
-      try{ localStorage.setItem('at_tomb', JSON.stringify(tomb)); }catch(e){}
-      try{ console.log('[v2.19.1] 同名去重：'+n0+' → '+shows.length+' 条（并掉 '+st.deduped+' 条）'); }catch(e){}
+      try{ localStorage.setItem('at_tomb', JSON.stringify(tomb)); }catch(e){ atErr("dedupeShowsOnce.catch", e); }
+      try{ console.log('[v2.19.1] 同名去重：'+n0+' → '+shows.length+' 条（并掉 '+st.deduped+' 条）'); }catch(e){ atErr("dedupeShowsOnce.catch", e); }
     }
     localStorage.setItem('at_dedup_v2191','1');
-  }catch(e){}
+  }catch(e){ atErr("dedupeShowsOnce.catch", e); }
 })();
 /* v2.3 来源迁移：旧逻辑把未标注集默认写死为 canon（显示成"漫改"），
    导致未判定集被静默算作原作改编。删除该默认值，交还判定器处理。 */
@@ -2127,10 +2127,10 @@ function coverFixFromLib(lib){
     });
     if(n){
       save(); renderList();
-      var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none'){ try{ renderDetail(); }catch(e){} }
-      try{ toast('已按内置库纠正 '+n+' 部封面'); }catch(e){}
+      var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none'){ try{ renderDetail(); }catch(e){ atErr("coverFixFromLib.catch", e); } }
+      try{ toast('已按内置库纠正 '+n+' 部封面'); }catch(e){ atErr("coverFixFromLib.catch", e); }
     }
-  }catch(e){}
+  }catch(e){ atErr("coverFixFromLib.catch", e); }
 }
 function renderInternalLib(){
   document.getElementById('vList').style.display='';
@@ -2333,7 +2333,7 @@ async function addInternal(id){
       renderList();
       var d=document.getElementById('vDetail');
       if(d&&d.style.display!=='none'&&curSid===entry.sid) renderDetail();
-    }).catch(function(){});
+    }).catch(function(e){ atErr('cover-daturl-save', e); });
   }
   renderList();
 }
@@ -3606,12 +3606,12 @@ async function webFillEpisodes(sid){
     /* v2.48.0：季条目只要本季的集（整部拉会把 34 集当成「第三季 34 集」） */
     eps=seasonRowsFor(cur,eps);
     cur.eps=eps; cur.total=eps.length; cur.updAt=Date.now();
-    try{ ensureSeasons(cur); }catch(e){}
-    try{ autoCalibrateSrc(cur); }catch(e){}
+    try{ ensureSeasons(cur); }catch(e){ atErr("webFillEpisodes.catch", e); }
+    try{ autoCalibrateSrc(cur); }catch(e){ atErr("webFillEpisodes.catch", e); }
     save(); renderList();
     var d=document.getElementById('vDetail');
     if(d&&d.style.display!=='none'&&curSid===cur.sid) renderDetail();
-  }catch(e){}
+  }catch(e){ atErr("webFillEpisodes.catch", e); }
 }
 /* v2.5.3 搜索结果逐集：按条目拉取单集（内存缓存 + 就地重试） */
 var SR_EPS_MEM={}, SR_EPS_BUSY={};
@@ -4224,10 +4224,10 @@ function markCoverDead(sid){
     /* 10 分钟内同一条只记一次：列表反复渲染会连续触发，别把存档写抖 */
     if(Number(s.coverDead||0)&&(now-Number(s.coverDead))<10*60*1000) return;
     s.coverDead=now;
-    try{ var m=_cTry(); if(m[String(sid)]){ delete m[String(sid)]; _cTrySet(m); } }catch(e){}
+    try{ var m=_cTry(); if(m[String(sid)]){ delete m[String(sid)]; _cTrySet(m); } }catch(e){ atErr("markCoverDead.catch", e); }
     if(_deadSaveT) clearTimeout(_deadSaveT);
-    _deadSaveT=setTimeout(function(){ _deadSaveT=null; try{ save(); }catch(e){} },1200);
-  }catch(e){}
+    _deadSaveT=setTimeout(function(){ _deadSaveT=null; try{ save(); }catch(e){ atErr("markCoverDead.catch", e); } },1200);
+  }catch(e){ atErr("markCoverDead.catch", e); }
 }
 function clearCoverDead(s){ try{ if(s) delete s.coverDead; }catch(e){} }
 function _cTry(){ try{ return JSON.parse(localStorage.getItem('at_cover_try')||'{}'); }catch(e){ return {}; } }
@@ -4474,7 +4474,7 @@ function bootSeasonReslice(){
     var cur=String(typeof AT_BUILD!=="undefined"?AT_BUILD:"");
     if(!cur||localStorage.getItem("at_reslice_build")===cur){ out.ran=-1; return out; }
     if(!shows||!shows.length) return out;
-    try{ localStorage.setItem("at_shows_bak_"+cur,JSON.stringify(shows)); }catch(e){}
+    try{ localStorage.setItem("at_shows_bak_"+cur,JSON.stringify(shows)); }catch(e){ atErr("bootSeasonReslice.catch", e); }
     shows.forEach(function(s){
       var r=seasonResliceShow(s);
       if(r.act==="sliced"){ out.sliced++; s.updAt=Date.now(); }
@@ -4483,16 +4483,16 @@ function bootSeasonReslice(){
       else{ out.skipped++; }
     });
     if(out.sliced||out.remapped){
-      try{ save(); }catch(e){}
-      try{ if(typeof renderList==="function") renderList(); }catch(e){}
+      try{ save(); }catch(e){ atErr("bootSeasonReslice.catch", e); }
+      try{ if(typeof renderList==="function") renderList(); }catch(e){ atErr("bootSeasonReslice.catch", e); }
       try{
         toast(out.sliced+out.remapped+" 部的集数按它自己写的那一季重数了"
           +(out.refuse?("，另有 "+out.refuse+" 部进度看着不在这季里、没敢动"):"")+"。");
-      }catch(e){}
+      }catch(e){ atErr("bootSeasonReslice.catch", e); }
     }
     localStorage.setItem("at_reslice_build",cur);
     /* 回执留一份：这一趟到底改了几部、拒了几部，下次要核数就取这条，不用猜 */
-    try{ localStorage.setItem("at_reslice_last",JSON.stringify({b:cur,t:Date.now(),sliced:out.sliced,remapped:out.remapped,refuse:out.refuse,skipped:out.skipped})); }catch(e){}
+    try{ localStorage.setItem("at_reslice_last",JSON.stringify({b:cur,t:Date.now(),sliced:out.sliced,remapped:out.remapped,refuse:out.refuse,skipped:out.skipped})); }catch(e){ atErr("bootSeasonReslice.catch", e); }
     out.ran=1;
     return out;
   }catch(e){ return out; }
@@ -4863,7 +4863,7 @@ async function healDurFor(s,opts){
     var got=applyDbInfo(s,info);
     if(got.dur||got.kind){
       s.updAt=Date.now();
-      if(opts.save!==false){ try{ save(); }catch(e){} }
+      if(opts.save!==false){ try{ save(); }catch(e){ atErr("healDurFor.catch", e); } }
       /* 「静默」是不弹话，不是不重算。第一版就是这样被自己这条门禁判红的：
          存档里已经是 45 分、账也算对了，可屏幕上那一行还写着「约 24 分钟 · 没标类型」——
          他看到的仍然是对不上的那一版（N01 实测量到：读出来对、渲染出来错）。
@@ -4873,16 +4873,16 @@ async function healDurFor(s,opts){
           var dd=document.getElementById('vDetail');
           if(dd&&dd.style.display!=='none'&&String(window.curSid)===String(s.sid)) renderDetail();
         }
-      }catch(e){}
-      try{ if(typeof renderList==='function') renderList(); }catch(e){}
+      }catch(e){ atErr("healDurFor.catch", e); }
+      try{ if(typeof renderList==='function') renderList(); }catch(e){ atErr("healDurFor.catch", e); }
       if(!opts.silent){
         var d=durOf(s);
         toast('《'+s.title+'》'+(got.dur?('单集 '+Number(s.epDur)+' 分钟（豆瓣，整本 '+fmtDur(d.total)+'）'):('按'+durEstTxt(s))));
       }
-      if(got.dur) try{ logAdd('时长按豆瓣记：'+s.title,'《'+s.title+'》单集 '+Number(s.epDur)+' 分钟（豆瓣）',true); }catch(e){}
+      if(got.dur) try{ logAdd('时长按豆瓣记：'+s.title,'《'+s.title+'》单集 '+Number(s.epDur)+' 分钟（豆瓣）',true); }catch(e){ atErr("healDurFor.catch", e); }
       return 1;
     }
-  }catch(e){}
+  }catch(e){ atErr("healDurFor.catch", e); }
   return 0;
 }
 /* 打开详情页那一下才问： listings 里几百部一起问会把豆瓣那点额度烧穿，
@@ -4901,14 +4901,14 @@ function _autoDurFor(sid){
     if(dbCooling()){
       var wait=dbCoolMs()+500;
       if(!_durCoolTold){ _durCoolTold=1;
-        setTimeout(function(){ try{ toast('豆瓣那边刚限流了一次，《'+s.title+'》的时长稍后自动再取一次'); }catch(e){} },800);
+        setTimeout(function(){ try{ toast('豆瓣那边刚限流了一次，《'+s.title+'》的时长稍后自动再取一次'); }catch(e){ atErr("_autoDurFor.catch", e); } },800);
       }
-      setTimeout(function(){ try{ if(durNeedsFix(s)) healDurFor(s,{silent:true}); }catch(e){} }, Math.min(wait,120000));
+      setTimeout(function(){ try{ if(durNeedsFix(s)) healDurFor(s,{silent:true}); }catch(e){ atErr("_autoDurFor.catch", e); } }, Math.min(wait,120000));
       return;
     }
     if(_durAutoSeen[String(sid)]) return; _durAutoSeen[String(sid)]=1;
-    setTimeout(function(){ try{ healDurFor(s,{silent:false}); }catch(e){} },700);
-  }catch(e){}
+    setTimeout(function(){ try{ healDurFor(s,{silent:false}); }catch(e){ atErr("_autoDurFor.catch", e); } },700);
+  }catch(e){ atErr("_autoDurFor.catch", e); }
 }
 /* ===== v2.41.0（用户令「封面全都要」）：给补封面补上两条真正对口的源 =====
    原来那条源链是：TVMaze（按 tvId，或严格同名）→ TMDB（要 key）→ Wikidata（免 key 但
@@ -5021,7 +5021,7 @@ async function healCoverFor(s,opts){
   if(!s) return false;
   try{
     var url='';
-    if(s.tvId){ try{ url=webCoverOf(await _wget(WAPI+'/shows/'+s.tvId))||''; }catch(e){} }
+    if(s.tvId){ try{ url=webCoverOf(await _wget(WAPI+'/shows/'+s.tvId))||''; }catch(e){ atErr("healCoverFor.catch", e); } }
     /* v2.41.0：内置库（离线、人工校对）→ AniList（动画最全）→ 再回到原来的严格同名 TVMaze */
     if(!url){ url=coverFromLib(s); }
     if(!url){ url=await coverFromAniList(s); }
@@ -5062,12 +5062,12 @@ async function healCoverFor(s,opts){
     var du=null;
     try{ du=await cacheCover(url); }catch(e){ du=null; }
     if(du&&String(du).indexOf('data:image')===0){
-      s.cover=du; try{ delete s._cvOld; delete s.coverBy; }catch(e){}
+      s.cover=du; try{ delete s._cvOld; delete s.coverBy; }catch(e){ atErr("healCoverFor.catch", e); }
       clearCoverDead(s);
     } else {
       /* 远程海报：CORS 不允许转 dataURL（image.tmdb.org 通常如此），保留远程地址，离线会裂但能自动命中国产剧；
          打 coverBy='net' 让 coverNeedsHeal 跳过，避免反复自愈；能转就转成本机 dataURL（与旧版 TVMaze 同待遇） */
-      s.cover=url; try{ delete s._cvOld; }catch(e){} s.coverBy='net';
+      s.cover=url; try{ delete s._cvOld; }catch(e){ atErr("healCoverFor.catch", e); } s.coverBy='net';
       /* 拉到新图就撤销「裂过」的账：下次列表渲染时这张要是又裂，会重新记上 */
       clearCoverDead(s);
     }
@@ -5172,7 +5172,7 @@ async function refreshNamesFor(s,opts){
        查那个词条，详情里同一个 JSON 就带着单集分钟数，等于多花一道换乘、不多打一次搜索。
        失败的代价为零（内网也好风控也好，静默退回原来的估算）。 */
     if(opts.dur!==false && window.AT_NO_AUTODUR!==true){
-      try{ await healDurFor(s,{save:false,silent:true}); }catch(e){}
+      try{ await healDurFor(s,{save:false,silent:true}); }catch(e){ atErr("refreshNamesFor.catch", e); }
     }
     if(opts.save!==false) save();
     return out;
@@ -5201,7 +5201,7 @@ async function refreshNamesFor(s,opts){
         if(cnNm){ if(normTxt(cnNm)!==normTxt(cur)){ s.title=cnNm; out.renamed++; out.from='中文名'; } }
         else out.cnMiss=true;
       }else if(!curCjk&&nm&&normTxt(nm)!==normTxt(cur)){ s.title=nm; out.renamed++; out.from='TVMaze'; }
-    }catch(e){}
+    }catch(e){ atErr("refreshNamesFor.catch", e); }
   }
 
   /* ---- 集名：内置库（离线、带中文） → TVMaze 官方集表 ---- */
@@ -5211,7 +5211,7 @@ async function refreshNamesFor(s,opts){
     /* v2.48.0：官方集表先切到本条目声明的那一季再建索引——
        整部连号喂给 canonEpList 的 byS 兜底，会把第一季的集名安到第三季头上。 */
     try{ var we=await webEpisodes(tv); if(we&&we.length){ s.__webEps=seasonRowsFor(s,we); if(!out.from) out.from='TVMaze'; } }
-    catch(e){}
+    catch(e){ atErr("refreshNamesFor.catch", e); }
   }
   var lookup=canonEpList(s), named=0, added=0;
   /* 已有集：只填空位，绝不覆盖 */
@@ -5247,7 +5247,7 @@ async function refreshNamesFor(s,opts){
 
   /* ---- 封面顺带补（沿用既有规则：手动封面不动） ---- */
   if(coverNeedsHeal(s)||opts.relay){ try{ out.coverOk=await healCoverFor(s,{save:false,relay:opts.relay}); }catch(e){ out.coverOk=false; } }
-  try{ delete s.__webEps; }catch(e){}   /* 临时索引不进存档、不进云同步、不进导出包 */
+  try{ delete s.__webEps; }catch(e){ atErr("refreshNamesFor.catch", e); }   /* 临时索引不进存档、不进云同步、不进导出包 */
   if(opts.save!==false) save();
   return out;
 }
@@ -5301,9 +5301,9 @@ async function refreshNamesAll(){
         if(r.renamed){ agg.renamed++; if(r.from==='中文名') agg.cn++; }
         if(r.cnMiss) agg.cnMiss++;
         agg.named+=r.named; agg.added+=r.added;
-        try{ statInvalidate(targets[i].sid); }catch(e){}
+        try{ statInvalidate(targets[i].sid); }catch(e){ atErr("refreshNamesAll.catch", e); }
         save();
-      }catch(e){}
+      }catch(e){ atErr("refreshNamesAll.catch", e); }
       if(i<targets.length-1) await new Promise(function(res){ setTimeout(res,gap); });
       toast('整体刷新 '+(i+1)+'/'+targets.length+'…');
     }
@@ -5319,7 +5319,7 @@ async function refreshNamesAll(){
     if(agg.cnMiss) bits.push('中文剧没查到中文名 '+agg.cnMiss);
     if(agg.noTv) bits.push('无号跳过 '+agg.noTv);
     toast(bits.join(' · '));
-    try{ logAdd('整体刷新 '+agg.done+' 部','片名/集名/缺集批量刷新'+(agg.cn?('（找回中文名 '+agg.cn+'）'):''),true); }catch(e){}
+    try{ logAdd('整体刷新 '+agg.done+' 部','片名/集名/缺集批量刷新'+(agg.cn?('（找回中文名 '+agg.cn+'）'):''),true); }catch(e){ atErr("refreshNamesAll.catch", e); }
   }
   return agg;
 }
@@ -5388,10 +5388,10 @@ async function coverHealAll(manual,limit){
       dead.forEach(function(s){
         s.coverDead=Date.now();
         /* 同时清掉退避表，让它当场就能重拉，不必等 24 小时 */
-        try{ var m=_cTry(); if(m[String(s.sid)]){ delete m[String(s.sid)]; _cTrySet(m); } }catch(e){}
+        try{ var m=_cTry(); if(m[String(s.sid)]){ delete m[String(s.sid)]; _cTrySet(m); } }catch(e){ atErr("coverHealAll.catch", e); }
       });
-      if(deadN) try{ save(); }catch(e){}
-    }catch(e){}
+      if(deadN) try{ save(); }catch(e){ atErr("coverHealAll.catch", e); }
+    }catch(e){ atErr("coverHealAll.catch", e); }
   }
   var pool=shows.filter(function(s){ return coverNeedsHeal(s)&&(manual||coverCanAuto(s)); });
   if(limit&&pool.length>limit) pool=pool.slice(0,limit);
@@ -5443,12 +5443,12 @@ async function coverHealAll(manual,limit){
   }finally{
     _coverHealRunning=false;
     /* v2.24.0：没人补成功、但有老封面被还原时也要落盘——否则下一次打开又回到空白 */
-    if(!okN&&_cvRestored){ try{ save(); renderList(); var dd=document.getElementById('vDetail'); if(dd&&dd.style.display!=='none') renderDetail(); }catch(e){} }
+    if(!okN&&_cvRestored){ try{ save(); renderList(); var dd=document.getElementById('vDetail'); if(dd&&dd.style.display!=='none') renderDetail(); }catch(e){ atErr("coverHealAll.catch", e); } }
     _cvRestored=false;
     if(okN){
       save(); renderList();
       var d=document.getElementById('vDetail'); if(d&&d.style.display!=='none') renderDetail();
-      try{ logAdd('补封面 '+okN+' 部','批量封面补齐'+(failN?('（仍缺 '+failN+'）'):''),true); }catch(e){}
+      try{ logAdd('补封面 '+okN+' 部','批量封面补齐'+(failN?('（仍缺 '+failN+'）'):''),true); }catch(e){ atErr("coverHealAll.catch", e); }
     }
     if(manual){
       var tail='封面补齐完成：成功 '+okN+' 部'+(failN?('，仍缺 '+failN+' 部'):'')+(skipN?('，离线跳过 '+skipN+' 部'):'');
@@ -5622,8 +5622,8 @@ async function fillEpisodesNow(){
       if(eps.length){
         s.eps=eps; s.total=eps.length; s.updAt=Date.now();
         if(!s.statuses) s.statuses={};
-        try{ ensureSeasons(s); }catch(e){}
-        try{ autoCalibrateSrc(s); }catch(e){}
+        try{ ensureSeasons(s); }catch(e){ atErr("fillEpisodesNow.catch", e); }
+        try{ autoCalibrateSrc(s); }catch(e){ atErr("fillEpisodesNow.catch", e); }
         save(); statInvalidate(s.sid); renderDetail(); renderList();
         toast('已补齐 '+eps.length+' 集'+(seasonsOf(s).length>1?('（含 '+seasonsOf(s).length+' 季，点季度条切换）'):'')+'——现在可以标记进度了');
         return;
@@ -5633,7 +5633,7 @@ async function fillEpisodesNow(){
   }catch(e){ why='联网补齐失败：'+((e&&e.message)||e); }
   /* 回执只留最后一条：本地方案自己会 toast。先落本地、再总结原因，
      否则用户只看到「先填总集数」，不知道刚才那一圈是在等什么。 */
-  try{ AT270.fillEps(s); }catch(e){}
+  try{ AT270.fillEps(s); }catch(e){ atErr("fillEpisodesNow.catch", e); }
   renderDetail();
   var _c=bySid(curSid)||s;
   toast(why+'——'+((_c.eps||[]).length?'已改用本地方案补齐':'本地也没收录这部剧，可用「✎ 编辑集数」自己定集数'));
@@ -6551,9 +6551,9 @@ async function openAccount(focus){
   try{ if(window.CBSync && CBSync.mount) CBSync.mount(box); }catch(e){}
   fetch('tracker-version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(v){
     var el=box.querySelector('#verLine'); if(!el||!v||!v.version) return;
-    el.innerHTML='页面 v'+AT_VERSION+' · 服务端 v'+esc(String(v.version))+(String(v.version)===AT_VERSION?' <span style="color:var(--ok)">✓ 一致</span>':' <span class="warn">版本不一致</span> <button type="button" class="lnk" id="atVerReload" style="margin-left:4px;padding:0 6px">↻ 点此刷新</button>');
+    el.innerHTML='页面 v'+AT_VERSION+' · 服务端 v'+esc(String(v.version))+(String(v.version)===AT_VERSION?' <span style="color:var(--ok)">✓ 一致</span>':' <span class="warn">版本不一致</span> <button type="button" class="lnk" id="atVerReload" style="margin-left:4px;padding:0 10px;min-height:34px;display:inline-flex;align-items:center;vertical-align:middle">↻ 点此刷新</button>');
     var _rb=el.querySelector('#atVerReload'); if(_rb) _rb.onclick=function(){ location.reload(true); };
-  }).catch(function(){});
+  }).catch(function(e){ atErr('acct-verline',e); });
   /* 装进壳 App 才有 AndroidShell：两条更新路都走公网，电脑开不开机都无所谓
      —— 「安装包」换壳（要人点安装），「网页内容」换界面（下次打开 App 就生效） */
   if(window.AndroidShell&&AndroidShell.checkUpdate){
@@ -6760,23 +6760,23 @@ function bootHeal(){
     if(window.AT_NO_BOOTHEAL===true||navigator.webdriver===true) return;
     if(!navigator.onLine) return;
     setTimeout(function(){
-      try{ _atCoverTryReset(); }catch(e){}   /* 0) 换了构建先把封面退避账清掉，新源才看得见 */
-      try{ bootSeasonReslice(); }catch(e){}   /* 0b) 存量按季切：一个构建只跑一次 */
-      try{ if(findDupGroups().length) doMergeDups(true); }catch(e){}   /* 1) 重复直接合并 */
+      try{ _atCoverTryReset(); }catch(e){ atErr("bootHeal.catch", e); }   /* 0) 换了构建先把封面退避账清掉，新源才看得见 */
+      try{ bootSeasonReslice(); }catch(e){ atErr("bootHeal.catch", e); }   /* 0b) 存量按季切：一个构建只跑一次 */
+      try{ if(findDupGroups().length) doMergeDups(true); }catch(e){ atErr("bootHeal.catch", e); }   /* 1) 重复直接合并 */
       try{
         if(window.AT_NO_AUTODUR!==true){                                 /* 2) 时长逐部校正 */
           var durs=(shows||[]).filter(function(s){ return s&&!s.pv&&durNeedsFix(s); });
           var step=function(i){
             if(i>=durs.length) return;
-            try{ if(!dbCooling()) healDurFor(durs[i],{silent:true}); }catch(e){}
+            try{ if(!dbCooling()) healDurFor(durs[i],{silent:true}); }catch(e){ atErr("bootHeal.catch", e); }
             setTimeout(function(){ step(i+1); }, 1400);
           };
           step(0);
         }
-      }catch(e){}
-      try{ _atCoverCatchup(); }catch(e){}                                 /* 3) 封面补齐到完 */
+      }catch(e){ atErr("bootHeal.catch", e); }
+      try{ _atCoverCatchup(); }catch(e){ atErr("bootHeal.catch", e); }                                 /* 3) 封面补齐到完 */
     }, 1500);
-  }catch(e){}
+  }catch(e){ atErr("bootHeal.catch", e); }
 }
 setTimeout(bootHeal, 6000);
 /* ===== v2.44.2：后台补封面（用户令「后台也可以补封面」）=====
@@ -6804,7 +6804,7 @@ window.addEventListener('at_bgcover',function(e){
     if(_coverHealRunning) return;
     _atBgCoverAt=Date.now();
     coverHealAll(false,6);
-  }catch(err){}
+  }catch(err){ atErr("bootHeal.catch", err); }
 });
 /* v2.10.0：后台定时同步已随 WebDAV 移除（账号云同步由 CBSync.autosync 在 save() 时触发） */
 </script>
@@ -8519,7 +8519,7 @@ window.addEventListener('at_bgcover',function(e){
       renderList();
       var d = document.getElementById('vDetail');
       if (d && d.style.display !== 'none' && curSid === sh.sid) renderDetail();
-    }).catch(function () {});
+    }).catch(function (e) { atErr('cover-daturl-save-2', e); });
   }
   /* 增量并入：只追加缺的集号、只补空字段。statuses 一个字节都不碰 ⇒ 已看进度不会被建档/补集弄丢。
      dry=1 时只统计不写（面板预览用）。 */
@@ -9031,14 +9031,14 @@ window.addEventListener('at_bgcover',function(e){
       }
       var snap = lsGet('at_fg_snap', '');
       if (snap !== SNAP) {
-        try { localStorage.removeItem('at_fg_cache'); } catch (e) {}
+        try { localStorage.removeItem('at_fg_cache'); } catch(e){ atErr("boot.catch", e); }
         lsSet('at_fg_snap', SNAP);
       }
       /* v2.17.0：来源校准从「等数据版本变了才联网跑一次」改成「每次启动离线扫一遍」。
          离线扫不吃网络，所以不必再挑时机；联网补抓留在「数据体检 → 重新校准」里由人点名。 */
-      setTimeout(function () { try { calibrateAllLocal(); } catch (e) {} }, 1200);
-      setTimeout(function () { try { renderSrcBar(); } catch (e) {} }, 900);
-    } catch (e) {}
+      setTimeout(function () { try { calibrateAllLocal(); } catch(e){ atErr("boot.catch", e); } }, 1200);
+      setTimeout(function () { try { renderSrcBar(); } catch(e){ atErr("boot.catch", e); } }, 900);
+    } catch(e){ atErr("boot.catch", e); }
   }
     /* 空剧集本地方案（v2.7.1）：内置库补齐 / 生成占位 / 兜底引导——不依赖 Bangumi */
   AT270.fillFromLib = function () {
@@ -9048,7 +9048,7 @@ window.addEventListener('at_bgcover',function(e){
     if (!lib || !(lib.eps || []).length) { toast('内置库没有《' + (s.title || '') + '》的剧集——可点「生成第1–N集」占位，或「✎ 编辑集数」手动补'); return; }
     s.eps = JSON.parse(JSON.stringify(lib.eps));
     if (!s.total || s.total < s.eps.length) s.total = s.eps.length;
-    s.updAt = Date.now(); save(); try { statInvalidate(s.sid); } catch (e) {}
+    s.updAt = Date.now(); save(); try { statInvalidate(s.sid); } catch(e){ atErr("boot.catch", e); }
     renderDetail(); toast('已从内置库补齐 ' + s.eps.length + ' 集（含中文集名）');
   };
   AT270.fillPlaceholders = function () {
@@ -9058,14 +9058,14 @@ window.addEventListener('at_bgcover',function(e){
     if (!n) { toast('先在「✎ 编辑集数」里填总集数，再生成占位'); return; }
     s.eps = [];
     for (var i = 1; i <= n; i++) s.eps.push({ s: i, t: '第 ' + i + ' 集' });
-    s.updAt = Date.now(); save(); try { statInvalidate(s.sid); } catch (e) {}
+    s.updAt = Date.now(); save(); try { statInvalidate(s.sid); } catch(e){ atErr("boot.catch", e); }
     renderDetail(); toast('已生成 ' + n + ' 集占位——点集号可逐集补双语集名');
   };
   AT270.fillEps = function (s) {
     if (!s) return;
     if ((s.eps || []).length) { renderDetail(); return; }
     AT270.fillFromLib();
-    try { var cur = bySid(curSid) || s; if (!(cur.eps || []).length) AT270.fillPlaceholders(); } catch (e) {}
+    try { var cur = bySid(curSid) || s; if (!(cur.eps || []).length) AT270.fillPlaceholders(); } catch(e){ atErr("boot.catch", e); }
   };
 boot();
   /* v2.9.2：不再有「同步精简」全局开关。此处仅清理旧版遗留的 at_sync_off 标记（已在头部执行）。 */
@@ -9086,7 +9086,7 @@ boot();
         if (gone) { delete D[keys[i]]; changed = true; }
       }
       if (changed) localStorage.setItem('at_drafts', JSON.stringify(D));
-    } catch (e) {}
+    } catch(e){ atErr("boot.catch", e); }
   }, 6000);
 
 })();

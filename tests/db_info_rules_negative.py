@@ -218,7 +218,7 @@ for cid, desc, fn, mk, expect, why in MUT:
 # ---------- 契约一头：改坏服务端副本 ----------
 S_MUT = [
     ("SR1", "路由没挂上（页面那发永远 404）",
-     lambda s: sub_line(s, "self._db_info(); return", "self.send_error(404); return", "SR1"),
+     lambda s: sub_line(s, "'/db-info': self._db_info", "'/db-info': lambda: self.send_error(404)", "SR1"),
      set(["S01"])),
     ("SR2", "rows=0 也写负缓存（一次限流判成这部永远没有）",
      lambda s: ins_before(s, "if not rows:", "_DB_NEG[name] = time.time()  # noqa"),

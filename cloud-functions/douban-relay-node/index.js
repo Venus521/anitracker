@@ -356,14 +356,66 @@ async function doubanCover(name, deadline, id) {
 }
 
 const PORT = process.env.PORT || 9000;
+
+// ---- 2026-10-11 审计加固（B1）----
+// CORS 不再 `*`：端点 URL 公开写在前端规则里，`*` 等于任何网页都能白嫖这个函数烧配额、
+// 借道爬豆瓣，还把 403 冷却烧到正常用户头上。改为按来源白名单回显：自家页面会出现的
+// 全部来源（本机/局域网 :8089、file:// 的 null、GitHub Pages、CloudBase 托管域、APK 内
+// LocalServer 的 127.0.0.1）。白名单外不回 ACAO——浏览器自己拦；服务端间调用不看这个头。
+function corsHeaders(req) {
+  const o = String(req.headers.origin || '');
+  let allow = '';
+  if (o === 'null') {
+    allow = 'null';
+  } else if (o) {
+    try {
+      const u = new url.URL(o);
+      const h = u.hostname;
+      const lanPage = /^\d{1,3}(\.\d{1,3}){3}$/.test(h) && u.port === '8089';
+      if ((h === '127.0.0.1' || h === 'localhost' || lanPage ||
+           h.endsWith('.tcloudbaseapp.com') || o === 'https://venus521.github.io') &&
+          (u.protocol === 'https:' || u.protocol === 'http:')) {
+        allow = o;
+      }
+    } catch (e) { allow = ''; }
+  }
+  return allow
+    ? { 'Access-Control-Allow-Origin': allow, 'Access-Control-Allow-Methods': 'GET,OPTIONS', Vary: 'Origin' }
+    : { Vary: 'Origin' };
+}
+
+// 每 IP 轻量限流（实例级；SCF 多实例各管各的，够把无脑白嫖挡在外面，正常批量补封面
+// 有 1s 外呼节流排着队，远摸不到这条线）。240 次/分钟，超了 429 + Retry-After。
+const RPM = new Map();
+const RPM_MAX = 240;
+const RPM_WIN = 60000;
+function clientIp(req) {
+  const xf = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xf || req.socket.remoteAddress || '?';
+}
+function overRate(ip) {
+  const now = Date.now();
+  const v = RPM.get(ip) || { n: 0, t: now };
+  if (now - v.t > RPM_WIN) { v.n = 0; v.t = now; }
+  v.n++;
+  RPM.set(ip, v);
+  if (RPM.size > 5000) RPM.clear();
+  return v.n > RPM_MAX;
+}
+// 重复 query 参数会让 parse 出数组（审计 B5），只认第一个
+const one = (v) => (Array.isArray(v) ? String(v[0] || '') : String(v || ''));
+
 const server = http.createServer(async (req, res) => {
-  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' };
+  const cors = corsHeaders(req);
   if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
+  if (overRate(clientIp(req))) {
+    res.writeHead(429, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '30' }, cors));
+    return res.end(JSON.stringify({ error: 'rate limited' }));
+  }
   // 兜底：无论如何 19s 内必须给响应（部署 timeout 20s，别让网关代杀）
   const killer = setTimeout(() => { try { res.writeHead(502, cors); res.end('{"error":"hard deadline"}'); } catch (e) {} }, 19000);
   try {
-    const q = url.parse(req.url, true).query.q || '';
-    const name = decodeURIComponent(q).trim();
+    const name = decodeURIComponent(one(url.parse(req.url, true).query.q)).trim();
     if (!name) {
       clearTimeout(killer);
       res.writeHead(400, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
@@ -372,7 +424,7 @@ const server = http.createServer(async (req, res) => {
     // —— 联想模式（v2.29.0）：?q=剧名&mode=suggest → JSON 条目（title/img/episode/year/url）。
     //    给添加页搜索第四区「豆瓣联想」用：中文国产剧在英文库经常 0 结果，这里直接给豆瓣标准名。
     //    联想是锦上添花：任何失败都回 200 + 空列表，前端不等它。 ----
-    if (url.parse(req.url, true).query.mode === 'suggest') {
+    if (one(url.parse(req.url, true).query.mode) === 'suggest') {
       try {
         const arr = await suggestSubject(name, Date.now() + BUDGET_MS);
         res.writeHead(200, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=600' }, cors));
@@ -386,7 +438,7 @@ const server = http.createServer(async (req, res) => {
     //    这是「自动拉的时长不对」的正解：豆瓣的分钟数在详情层，不在搜索层（见 doubanInfo 注）。
     //    失败一律 200 + found:false：它不是网络错误，是「这部剧查不到 / 名字没对上」，
     //    前端拿到就静默退下一路源，不许把它当成 Promise 失败抛到界面上。 ----
-    if (url.parse(req.url, true).query.mode === 'info') {
+    if (one(url.parse(req.url, true).query.mode) === 'info') {
       try {
         const v = await doubanInfo(name, Date.now() + BUDGET_MS);
         clearTimeout(killer);
@@ -405,7 +457,11 @@ const server = http.createServer(async (req, res) => {
     }
     const q2 = url.parse(req.url, true).query;
     const deadline = Date.now() + BUDGET_MS;
-    const { bytes, ctype, hit } = await doubanCover(name, deadline, String(q2.id || '').trim());
+    // id 与本机 db_info_rules.id_ok 同一把尺（审计 B3）：^5~9位纯数字$，不合就当没给——
+    // 否则 `id=../../...` 能在同主机内做路径注入。
+    const rawId = one(q2.id).trim();
+    const coverId = /^[0-9]{5,9}$/.test(rawId) ? rawId : '';
+    const { bytes, ctype, hit } = await doubanCover(name, deadline, coverId);
     clearTimeout(killer);
     res.writeHead(200, Object.assign({
       'Content-Type': ctype,
@@ -429,7 +485,9 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ error: 'douban rate limited', coolMs: ms }));
     }
     res.writeHead(502, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, cors));
-    res.end(JSON.stringify({ error: 'douban fail: ' + e.message }));
+    // 细节只进实例日志，不外吐上游错误内幕（审计 B4）
+    console.log('douban fail:', (e && e.message) || e);
+    res.end(JSON.stringify({ error: 'douban upstream error' }));
   }
 });
 server.listen(PORT, '0.0.0.0', () => console.log('douban-relay v2 listening on ' + PORT));

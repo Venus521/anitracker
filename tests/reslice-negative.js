@@ -107,7 +107,7 @@ expectRed('nrs_m6', 'M6', 'epT 的键不平移 → 时间戳留在旧位序（R7
   ['R7', 'R11']);
 
 expectRed('nrs_m7', 'M7', '动手前不备份整份片单 → 出问题没法还原（B2 红，其余照旧）',
-  cut('try{ localStorage.setItem("at_shows_bak_"+cur,JSON.stringify(shows)); }catch(e){}', 'm7'),
+  cut('try{ localStorage.setItem("at_shows_bak_"+cur,JSON.stringify(shows)); }catch(e){ atErr("bootSeasonReslice.catch", e); }', 'm7'),
   ['B2']);
 
 expectRed('nrs_m8', 'M8', '「同构建不再跑」这道闸拆掉 → 每次开机都重划一遍（B6 红）',
@@ -120,7 +120,7 @@ expectRed('nrs_m9', 'M9', '跑完不记构建号 → 每次都当首跑重算（
   ['B3']);
 
 expectRed('nrs_m10', 'M10', '接线没接进开机流程（0b 那行拆掉）→ 存量永远不动（S2 红）',
-  swap('try{ bootSeasonReslice(); }catch(e){}', 'try{ void 0; }catch(e){}', 'm10'),
+  swap('try{ bootSeasonReslice(); }catch(e){ atErr("bootHeal.catch", e); }', 'try{ void 0; }catch(e){}', 'm10'),
   ['S2']);
 
 expectRed('nrs_m11', 'M11', '这一趟不写回执 → 下次核数只能靠猜（B10/B10b 红）',

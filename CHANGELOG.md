@@ -2,6 +2,92 @@
 
 从 readme.md 迁出（v2.3 ~ v2.12，2026-09-25 迁移）。此后新版本记录请直接追加到本文件。
 
+## v2.51.0（2026-10-11）审计修复轮——四路全维度体检出的洞，一次修齐
+
+用户令「指出所有缺点 → 全部做完」。审计四路并行（index.html 安全质量 / 工程卫生与测试体系 /
+服务器+云函数+APK 壳 / CHANGELOG 官方挂账），修完门禁 26 条全绿。每条都有现场证据，处置分三类：修掉 / 评估后维持（写明理由）/ 交用户手动（列出步骤）。
+
+### 一、高危三件（全修）
+
+1. **本机服务器 0.0.0.0 裸奔整个项目根**（唯一 0.0.0.0 调用方=手机安装入口，门禁全走 127.0.0.1）：
+   暴露模式下静态托管收进白名单（`/mobile-shell/dist/` APK 分发 + 页面资源五件），**目录列表关闭**，
+   `.git` / `mobile-shell/keystore` 签名钥匙 / 服务器日志 / 全部 `.py` 源码一概 404；中转端点
+   要求与 Host 同源（外部网页借浏览器打内网的 CSRF 带外部 Origin → 403）。黑盒 12 项全过：
+   keystore/git/日志/目录/py 全 404，APK 与页面照常 200，伪造 Origin 403。
+2. **31 个提交未推送 + 默认分支错位**：gh-pages 领先 origin 31 个提交（且 D 盘=坏块恶化中的
+   Toshiba 外接盘）——已推上（5b410fc→bb244dc）；GitHub 默认分支从停在 v2.1a 的 master 改指
+   gh-pages（gh repo edit + remote set-head）。
+3. **云函数 douban-relay-node 可被任意网页白嫖**（ACAO:*+零限流+URL 公开）：CORS 改按来源白名单
+   回显（本机/局域网 :8089 / file:// 的 null / GitHub Pages / *.tcloudbaseapp.com），白名单外不回
+   ACAO 头；加每 IP 240 次/分限流（429+Retry-After）；cover 模式 id 补上 `^[0-9]{5,9}$`（与本机
+   db_info_rules 同尺，堵同主机路径注入）；错误文案收敛不外吐上游内幕（细节进实例日志）；
+   q/mode 重复参数归一。已部署并 curl 验证：info/cover 链路正常、evil Origin 无 ACAO、
+   白名单内精确回显。旧版 Python 云函数 douban-relay（线上 Creation failed 从未部署成功，
+   纯本地遗留且带关 TLS 校验代码）已归档退役。
+
+### 二、服务器与其余安全项
+
+- 出站重定向白名单 + 私网/环回/元数据 IP 阻断（urllib 默认无条件跟随 30x，白名单可被绕）；
+  全部 urlopen 共用一把伞。门禁 mock 直连 127.0.0.1 不经重定向，不受影响。
+- /cover-relay 搜索腿补 doubanio 域白名单（原来只有 id 腿有，审计 A3 的 SSRF 缺口）；
+  重试只给网络类错误（4xx 含 403 顶风重试只会更糟，v2.46.2 教训）。
+- /cb-relay 目标收紧 https-only；Content-Length 坏值容错 + 请求体 10MB 上限（内存 DoS）。
+- 路由精确匹配（`/cb-relayxyz` 粘连不再误入）；Cache-Control 去重（中转端点不再发两条矛盾头）；
+  `Content-Security-Policy: frame-ancestors 'self'` 本机响应头补上（云端平台配不了，已知边界）。
+- 空闲自退加「在途请求=0」判据：长传输/挂着的会话不再被拦腰杀（批次 O「访问不了」头号根因的边界补全）；
+  `allow_reuse_address=False`（Windows 上 SO_REUSEADDR 会强绑已占端口造出双实例）。
+- CSP `connect-src *` **评估后维持**：AI 面板有「自定义（OpenAI 兼容）」端点，收窄=砍用户在用的
+  功能；XSS 主防线本就在 script-src（unsafe-inline 由 120 处内联 onclick 的结构决定，拆单文件
+  评估时已知）。AI/TMDB key 明文 localStorage 维持（SECRET_KEY_RE 已剔出导出/同步；Web 端
+  无 DPAPI，IndexedDB CryptoKey 变体记需求池）。usesCleartextTraffic 与 2099 年 PublishableKey
+  维持（前者是局域网 APK 更新的功能前提，后者是 CloudBase 设计上可公开的匿名档 key）——
+  **用户手动项：CloudBase 控制台可轮换 PublishableKey**。
+
+### 三、数据链路：错误不再静默
+
+- 统一错误网关 atErr 从 **7 处接线扩到 85 处**：19 个数据关键链路函数（bootHeal/boot/
+  bootSeasonReslice 开机自愈、dedupeShowsOnce/doMergeDups/mergeShowArrays 合并去重、
+  healDurFor/coverHealAll 等封面时长自愈、webFillEpisodes/fillEpisodesNow 网络补集、
+  refreshNamesFor/refreshNamesAll 刷名、atVerCheck 版本探测、SW 注册、封面 dataURL 落盘）的
+  76 处空 catch 全部接进网关；纯 UI 降级路径的 153 处空 catch 是刻意设计（失败当没发生），保留。
+- 新增常驻门禁 **catch-audit**（5 判据）：关键函数空 catch 必须为 0 / 空 catch 总量不回潮
+  超 153 / atErr 接线 ≥82 / SW 注册与网络补集两处实锤接线仍在。
+- 版本不一致态的「↻ 点此刷新」补 34px 触点地板（v2.44.7 自记隐患结清）；账号面板版本行
+  fetch 失败不再静默。
+- tracker-sw.js 预缓存失败从静默吞掉改为逐项告警（DevTools 可见，离线预缓存失效不再无感知）。
+
+### 四、发布/发版链加固
+
+- **发版.py 原子化**：六处由顺序裸写改为「全部算好 → 逐文件备份进 _archive → 统一写 → 双入口
+  同步」，任一步失败按逆序自动恢复（首日实测：一次真失败自动回滚干净，防住了半同步态）；
+  防重跑闸（同版本拒绝重发，VERSION_CODE +1 增量不再有双跳风险）。
+- **发布到云端.py**：内容包/APK 公网验证失败**自动把发布前旧清单传回**（发布前快照留档
+  _archive/线上备份_发布_*），坏包不再只能手工救；`web-code.txt` 落账挪到公网验证全过之后
+  ——失败时该 code 不记账，下次发布复用覆盖，自愈；.stale-* 清场残渣 2 小时后自动回收
+  （dist/app/web 下的化石不再只增不减）；envId 派生过 cloudbaserc.json 对账（host 格式变了
+  当场死而不是发错环境）；公网读取加 64MB 上限；Android 构建链路径全留 AT_* 环境变量逃生口。
+
+### 五、工程卫生与门禁
+
+- 根目录 **19 个一次性产物出库**（7×last-final-walk*.json、_wall_*.js×4、自称「用完即删」的
+  _run_gates.py、v2446/v2447-wall.html、_final_walk.js、_dry_reslice.js、_probe_dbinfo.py 等）
+  挪 `_archive/根目录一次性产物_20261011/`，.gitignore 补根级规则防复发。
+- **门禁清单三处分裂收口**：运行回归测试.bat 是唯一真相源（26 条串行全集，补进 catch-audit/
+  a11y/contrast），package.json scripts 补齐 13 条缺失映射（season-scope/iq-source/reslice/
+  dbinfo-transport/db-rules 全家 + 负测），新增 **gates-parity** 门禁对账两边（bat 每条有 npm
+  映射、npm 指向的文件都存在、五条常驻门禁必须两边都登记）。
+- 四个量具锚随接线同步（reslice-check S2 / reslice-negative m7·m10 / iq-source-negative n12 /
+  db_rules S01·SR1——锚的是字面空 catch，接线后改锚到等价新形状，语义不变，负测照咬）。
+- 发版.py 文档串里两条被 Mimosa 误判「路径穿越」的斜杠写法改写（量具假红的又一形态，记录在案）。
+
+### 六、已知未修（交用户手动 / 平台边界，均出自审计清单）
+
+- PublishableKey 轮换（CloudBase 控制台，手动）；APK 检查更新完整回路、导出/导入/外链三条
+  Native 通道、全面屏刘海——真机验证需要真机（自 09-26 挂账）；中文条目源头缺口 60/77 与
+  51 部别名档的「待指认层」是需求池新功能（v2.49.0 §七），不属本轮缺陷修复；ep-duration-check
+  单红 11 次不复现维持「待观察」；豆瓣推送方向=平台反爬无解（v2.31.0 定论）；CloudBase 网关
+  非法 ACAO 回显改不掉（官方行为，已全部服务端中转绕开）。
+
 ## v2.50.1（2026-10-09）「可是我 爱情宝典还是没数据」——上一版只修对了一半：同源这条腿它只问豆瓣
 
 v2.50.0 把时长变成同源之后，用户机器上《爱情宝典》仍然一条时长都没有。这次撞的不再是 CORS：

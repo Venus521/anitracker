@@ -1,6 +1,6 @@
 {
   "name": "anitracker",
-  "version": "2.50.1",
+  "version": "2.51.0",
   "description": "番剧追记 PWA",
   "homepage": "https://venus521.github.io/anitracker/",
   "private": true,
@@ -26,7 +26,21 @@
     "test:cred": "node tests/cred-crypto-check.js",
     "test:desktop-tier": "node tests/desktop-tier-check.js",
     "test:phone-canon": "node tests/phone-canon-check.js",
-    "test:name-refresh": "node tests/name-refresh-e2e.js"
+    "test:name-refresh": "node tests/name-refresh-e2e.js",
+    "test:season-scope": "node tests/season-scope-check.js",
+    "test:season-scope-neg": "node tests/season-scope-negative.js",
+    "test:iq-source": "node tests/iq-source-check.js",
+    "test:iq-source-neg": "node tests/iq-source-negative.js",
+    "test:iq-rules": "python -X utf8 tests/iq_relay_rules_check.py",
+    "test:iq-rules-neg": "python -X utf8 tests/iq_relay_rules_negative.py",
+    "test:reslice": "node tests/reslice-check.js",
+    "test:reslice-neg": "node tests/reslice-negative.js",
+    "test:dbinfo-transport": "node tests/dbinfo-transport-check.js",
+    "test:dbinfo-transport-neg": "node tests/dbinfo-transport-negative.js",
+    "test:db-rules": "python -X utf8 tests/db_info_rules_check.py",
+    "test:db-rules-neg": "python -X utf8 tests/db_info_rules_negative.py",
+    "test:catch-audit": "node tests/catch-audit.js",
+    "test:parity": "node tests/gates-parity.js"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"

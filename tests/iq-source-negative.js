@@ -113,7 +113,7 @@ const cases = [
   },
   {
     id: 'N12', desc: '开机治理里没接线这一步 → R7 必须红',
-    page: write('niq_n12_nowirereset.html', cut('try{ _atCoverTryReset(); }catch(e){}')),
+    page: write('niq_n12_nowirereset.html', cut('try{ _atCoverTryReset(); }catch(e){ atErr("bootHeal.catch", e); }')),
     expect: ['R7'],
   },
   {

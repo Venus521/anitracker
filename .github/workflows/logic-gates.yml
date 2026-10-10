@@ -1,0 +1,38 @@
+# 纯逻辑门禁 CI（2026-10-11 审计修复轮新增）
+# 背景：审计发现项目无任何 CI，门禁全靠本机 bat 人肉触发。
+# 这里跑与浏览器无关的 14 条文件级门禁（改文件/改正则就能红）；
+# Chrome 组（run-regression / phone-look / phone-use / e2e 系）依赖真浏览器与
+# 中文 Windows 环境，仍以本机 运行回归测试.bat 为准，不在 CI 里跑。
+name: logic-gates
+
+on:
+  push:
+    branches: [gh-pages]
+  workflow_dispatch:
+
+jobs:
+  logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Pure-logic gates
+        run: |
+          node tests/_syntax.js
+          node tests/catch-audit.js
+          node tests/gates-parity.js
+          node tests/a11y-check.js
+          node tests/contrast-check.js
+          node tests/cred-crypto-check.js
+          node tests/season-scope-check.js
+          node tests/season-scope-negative.js
+          node tests/iq-source-check.js
+          node tests/iq-source-negative.js
+          node tests/reslice-check.js
+          node tests/reslice-negative.js
+          node tests/cloud-entry-check.js
+          node tests/register-logic.js

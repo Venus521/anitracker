@@ -6,9 +6,9 @@
 
   1. index.html              var AT_VERSION='..', AT_BUILD='..'
   2. tracker-sw.js           var CACHE='anitracker-vNN-BUILD'   (vNN = v+次版本号，2.27→v27)
-  3. tracker-version.json    version / build / ts / note
+  3. tracker-version.json    version·build·ts·note
   4. package.json            version
-  5. mobile-shell/build-apk.py  VERSION_NAME(+0.1) / VERSION_CODE(+1)
+  5. mobile-shell 的 build-apk.py  VERSION_NAME(+0.1) 与 VERSION_CODE(+1)
   6. ani-tracker.html        由 同步双入口.py 从 index.html 单向生成
 
 用法：
@@ -94,6 +94,10 @@ def main():
         print('校验: ' + ('全部一致 ✓' if not bad else '不一致 → ' + '; '.join(bad)))
         sys.exit(1 if bad else 0)
 
+    if args.version and s['ver'] == args.version:
+        sys.exit('当前已就是 %s，不重复发版（VERSION_CODE 是 +1 增量，重跑会双跳；'
+                 '确要重发先人工把六处退回）' % args.version)
+
     if args.sync_pkg:
         if s['pkg'] == s['ver']:
             print('package.json 已是 %s，无需补漏' % s['ver'])
@@ -136,13 +140,44 @@ def main():
     ba2 = re.sub(r"VERSION_CODE = '\d+'", "VERSION_CODE = '%d'" % new_code, s['ba'], count=1)
     ba2 = re.sub(r"VERSION_NAME = '[^']+'", "VERSION_NAME = '%s'" % new_shell, ba2, count=1)
 
-    write(('index.html',), idx2.encode('utf-8'))
-    write(('tracker-sw.js',), sw2.encode('utf-8'))
-    write(('tracker-version.json',), tv2.encode('utf-8'))
-    write(('package.json',), pj2.encode('utf-8'))
-    write(('mobile-shell', 'build-apk.py'), ba2.encode('utf-8'))
-    # 6. 双入口副本
-    subprocess.run([sys.executable, os.path.join(HERE, '同步双入口.py')], check=True)
+    # ---- 原子化写盘（2026-10-11 审计：原来五处顺序裸写，中途失败留半同步态；且 VERSION_CODE
+    #      是 +1 增量，失败重跑会双跳）。现在：全部算好后统一写，任一步失败按逆序自动回滚
+    #      已写的文件，工作区回到发版前——重跑时状态仍是旧值，天然幂等。备份留 _archive。 ----
+    plan = [
+        (('index.html',), idx2.encode('utf-8')),
+        (('tracker-sw.js',), sw2.encode('utf-8')),
+        (('tracker-version.json',), tv2.encode('utf-8')),
+        (('package.json',), pj2.encode('utf-8')),
+        (('mobile-shell', 'build-apk.py'), ba2.encode('utf-8')),
+    ]
+    bdir = os.path.join(HERE, '_archive', '发版备份_%s' % time.strftime('%Y%m%d_%H%M%S'))
+    os.makedirs(bdir, exist_ok=True)
+    done = []
+
+    def _rollback():
+        for path_tuple, old in reversed(done):
+            with open(os.path.join(HERE, *path_tuple), 'wb') as f:
+                f.write(old)
+
+    try:
+        for path_tuple, data in plan:
+            dst = os.path.join(HERE, *path_tuple)
+            with open(dst, 'rb') as f:
+                old = f.read()
+            with open(os.path.join(bdir, path_tuple[-1]), 'wb') as f:
+                f.write(old)
+            with open(dst, 'wb') as f:
+                f.write(data)
+            done.append((path_tuple, old))
+    except Exception as e:
+        _rollback()
+        sys.exit('写盘失败，已回滚五处（备份与现场在 %s）: %s' % (bdir, e))
+    # 6. 双入口副本：失败同样回滚五处，不留「新版本主体+旧版本副本」的漂移态
+    try:
+        subprocess.run([sys.executable, os.path.join(HERE, '同步双入口.py')], check=True)
+    except Exception as e:
+        _rollback()
+        sys.exit('双入口同步失败，五处已回滚（备份在 %s）: %s' % (bdir, e))
 
     print('发版完成: %s / build %s / sw anitracker-v%d-%s / 壳 %s (code %d) / package.json %s'
           % (args.version, build, new_cache_n, build, new_shell, new_code, args.version))

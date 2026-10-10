@@ -13,14 +13,16 @@ import subprocess
 import sys
 import zipfile
 
-ROOT = r'D:\dev\android-build'
+# 2026-10-11 审计（C5）：路径全部留环境变量逃生口，写死值只是这台机器的现值——
+# 换机先设 AT_ANDROID_BUILD / AT_SHELL_SRC / AT_SHELL_BUILD，不必改脚本。
+ROOT = os.environ.get('AT_ANDROID_BUILD') or r'D:\dev\android-build'
 JDK = os.path.join(ROOT, 'jdk-17.0.20.1+1')
 BT = os.path.join(ROOT, r'sdk\build-tools\34.0.0')
 ANDROID_JAR = os.path.join(ROOT, r'sdk\platforms\android-34\android.jar')
 
-SRC = r'D:\项目\01_媒体娱乐\ani-tracker\mobile-shell'
+SRC = os.environ.get('AT_SHELL_SRC') or r'D:\项目\01_媒体娱乐\ani-tracker\mobile-shell'
 WEB = os.path.dirname(SRC)            # 项目根：这份追迹要整个打进 APK
-BUILD = r'D:\dev\at-shell-build'      # 纯 ASCII
+BUILD = os.environ.get('AT_SHELL_BUILD') or r'D:\dev\at-shell-build'      # 纯 ASCII
 DIST = os.path.join(SRC, 'dist')
 
 MIN_API = '21'
@@ -29,8 +31,8 @@ MIN_API = '21'
 # 2026-10-06 实测踩到的坑：dist 里的 APK 实际是 code 23 / v1.22（aapt2 dump badging 读出），
 # 而这个文件还停在 20 / 1.19 —— 下次直接打包会把版本号**倒退**发出去，
 # 手机上装到的就是「降级」，用户完全看不出问题。所以这里必须跟着 APK 实际值走。
-VERSION_CODE = '58'
-VERSION_NAME = '1.57'
+VERSION_CODE = '59'
+VERSION_NAME = '1.58'
 
 # 打进 assets/web 的文件：index.html 引用的全部同源资源，缺一个就白屏/缺库
 WEB_FILES = [

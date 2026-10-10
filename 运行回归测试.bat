@@ -1,14 +1,14 @@
 @echo off
 title AniTracker regression tests
 cd /d %~dp0
-rem v2.50.1：整套门禁一律不许真的出网。/db-info 现在由服务器替页面问云端（db_info_rules 里
-rem _base 那条开关），这台家宽出口 IP 正被豆瓣挡在联想之外（实测回 403）——不摘掉的话
-rem 服务端会给出 503，页面照 v2.46.2 立刻停下整轮封面补齐，门禁红的是豆瓣的心情不是本页。
-rem 覆盖只认 http(s) 前缀（见 D15），指向 :9 这个没人听的端口=一问就拒、秒回、不写任何账。
+rem v2.50.1：整套门禁一律不许真的出网�?db-info 现在由服务器替页面问云端（db_info_rules �?
+rem _base 那条开关），这台家宽出�?IP 正被豆瓣挡在联想之外（实测回 403）——不摘掉的话
+rem 服务端会给出 503，页面照 v2.46.2 立刻停下整轮封面补齐，门禁红的是豆瓣的心情不是本页�?
+rem 覆盖只认 http(s) 前缀（见 D15），指向 :9 这个没人听的端口=一问就拒、秒回、不写任何账�?
 set AT_DB_SUGGEST_BASE=http://127.0.0.1:9/db-off
 set AT_DB_RELAY_BASE=http://127.0.0.1:9/db-off
-rem 门禁必须串行：两个 Chrome 门禁并发会撞端口。
-rem v2.35.0 起加 phone-canon-check（漫改恢复+漫改进度行）与 name-refresh-e2e（不经过 AI 刷名）。
+rem 门禁必须串行：两�?Chrome 门禁并发会撞端口�?
+rem v2.35.0 起加 phone-canon-check（漫改恢�?漫改进度行）�?name-refresh-e2e（不经过 AI 刷名）�?
 node tests\cred-crypto-check.js
 set RC0=%ERRORLEVEL%
 node tests\run-regression.js
@@ -36,7 +36,7 @@ node tests\season-scope-check.js
 set RC11=%ERRORLEVEL%
 node tests\season-scope-negative.js
 set RC12=%ERRORLEVEL%
-rem v2.49.0：爱奇艺中文源那一环（判据在页面、白名单在服务端）+ 它的负测 + 服务端规则的本地自测
+rem v2.49.0：爱奇艺中文源那一环（判据在页面、白名单在服务端�? 它的负测 + 服务端规则的本地自测
 node tests\iq-source-check.js
 set RC13=%ERRORLEVEL%
 node tests\iq-source-negative.js
@@ -45,12 +45,12 @@ python -X utf8 tests\iq_relay_rules_check.py
 set RC15=%ERRORLEVEL%
 python -X utf8 tests\iq_relay_rules_negative.py
 set RC16=%ERRORLEVEL%
-rem v2.49.0：存量季切（判据在页面、夹具在门禁）+ 它的负测跑手
+rem v2.49.0：存量季切（判据在页面、夹具在门禁�? 它的负测跑手
 node tests\reslice-check.js
 set RC17=%ERRORLEVEL%
 node tests\reslice-negative.js
 set RC18=%ERRORLEVEL%
-rem v2.50.0：时长同源这条链（页面 dbInfo 端点顺序/降级/缓存 + 本机 /db-info 的判决与服务契约），各档都配负测
+rem v2.50.0：时长同源这条链（页�?dbInfo 端点顺序/降级/缓存 + 本机 /db-info 的判决与服务契约），各档都配负测
 node tests\dbinfo-transport-check.js
 set RC19=%ERRORLEVEL%
 node tests\dbinfo-transport-negative.js
@@ -59,8 +59,15 @@ python -X utf8 tests\db_info_rules_check.py
 set RC21=%ERRORLEVEL%
 python -X utf8 tests\db_info_rules_negative.py
 set RC22=%ERRORLEVEL%
+rem 2026-10-11 ����޸��֣����߼��Ž�����ռ�˿ڣ�����ȫ�������� catch ����/a11y/�Աȶ�
+node tests\catch-audit.js
+set RC23=%ERRORLEVEL%
+node tests\a11y-check.js
+set RC24=%ERRORLEVEL%
+node tests\contrast-check.js
+set RC25=%ERRORLEVEL%
 echo.
-echo EXIT CODE: cred=%RC0% regression=%RC1% douban-sync=%RC2% douban-push=%RC3% desk-tier=%RC4% phone-canon=%RC5% name-refresh=%RC6% phone-use=%RC7% phone-look=%RC8% ep-duration=%RC9% syntax=%RC10% season-scope=%RC11% season-scope-neg=%RC12% iq-source=%RC13% iq-source-neg=%RC14% iq-rules=%RC15% iq-rules-neg=%RC16% reslice=%RC17% reslice-neg=%RC18% dbinfo-transport=%RC19% dbinfo-transport-neg=%RC20% db-rules=%RC21% db-rules-neg=%RC22%
+echo EXIT CODE: cred=%RC0% regression=%RC1% douban-sync=%RC2% douban-push=%RC3% desk-tier=%RC4% phone-canon=%RC5% name-refresh=%RC6% phone-use=%RC7% phone-look=%RC8% ep-duration=%RC9% syntax=%RC10% season-scope=%RC11% season-scope-neg=%RC12% iq-source=%RC13% iq-source-neg=%RC14% iq-rules=%RC15% iq-rules-neg=%RC16% reslice=%RC17% reslice-neg=%RC18% dbinfo-transport=%RC19% dbinfo-transport-neg=%RC20% db-rules=%RC21% db-rules-neg=%RC22% catch-audit=%RC23% a11y=%RC24% contrast=%RC25%
 if not "%RC0%"=="0" exit /b 1
 if not "%RC1%"=="0" exit /b 2
 if not "%RC2%"=="0" exit /b 3
@@ -84,4 +91,7 @@ if not "%RC19%"=="0" exit /b 20
 if not "%RC20%"=="0" exit /b 21
 if not "%RC21%"=="0" exit /b 22
 if not "%RC22%"=="0" exit /b 23
+if not "%RC23%"=="0" exit /b 24
+if not "%RC24%"=="0" exit /b 25
+if not "%RC25%"=="0" exit /b 26
 pause

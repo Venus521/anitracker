@@ -165,12 +165,64 @@ def get(url, timeout=30, binary=False):
     req = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
     try:
         with OPENER.open(req, timeout=timeout) as r:
-            data = r.read()
+            # 64MB 读上限（审计 C8）：包体最大是 APK（<1MB）、页面 <2MB，正常流量够用；
+            # 上限只为 CDN 抽风回异常大响应的场景兜底。
+            data = r.read(64 * 1024 * 1024)
             # 别 dict(r.headers)：CDN 回的头是小写 content-type，转成 dict 就查不到了
             return r.status, (data if binary else data.decode('utf-8', 'replace')), r.headers
     except urllib.error.HTTPError as e:
-        data = e.read()
+        data = e.read(64 * 1024 * 1024)
         return e.code, (data if binary else data.decode('utf-8', 'replace')), e.headers
+
+
+# ---- 2026-10-11 审计加固（C1/C6/C7）----
+class PublishError(Exception):
+    """公网验证失败：调用方负责回滚清单后再 die。"""
+
+
+def clean_stale(parent):
+    """创建新 .stale-* 清场残渣前，把 2 小时前的旧残渣删掉（审计 C6：原来只改名不回收，
+    dist/app/web/ 下已经堆出 115.stale-1791250431 这类化石）。"""
+    now = time.time()
+    try:
+        names = os.listdir(parent)
+    except OSError:
+        return
+    for n in names:
+        if '.stale-' not in n:
+            continue
+        p = os.path.join(parent, n)
+        try:
+            if now - os.path.getmtime(p) > 7200:
+                shutil.rmtree(p, ignore_errors=True)
+        except OSError:
+            pass
+
+
+def snapshot_remote(host, path, name):
+    """发布前把线上旧清单拉回 _archive 留档。返回存档路径；线上还没有清单（首发）返回 None。
+    这是审计 C1 的回滚底：公网验证失败时用它把旧清单传回去，手机立刻回到发布前状态。"""
+    status, text, _ = get('https://%s%s?_=%d' % (host, path, int(time.time() * 1000)))
+    if status != 200:
+        return None
+    bdir = os.path.join(os.path.dirname(SHELL), '_archive', '线上备份_发布_%s' % time.strftime('%Y%m%d_%H%M%S'))
+    os.makedirs(bdir, exist_ok=True)
+    io.open(os.path.join(bdir, name), 'w', encoding='utf-8', newline='').write(text)
+    return os.path.join(bdir, name)
+
+
+def env_id_of(host):
+    """审计 C7：<envId>-<appId>.tcloudbaseapp.com 的字符串派生保留，但必须过 cloudbaserc.json
+    这道对账——host 格式一变派生就错，错的 envId 会把包发到别的环境去。"""
+    env = host.rsplit('-', 1)[0]
+    try:
+        with io.open(os.path.join(os.path.dirname(SHELL), 'cloudbaserc.json'), encoding='utf-8') as f:
+            want = (json.load(f).get('envId') or '').strip()
+        if want and env != want:
+            die('从 host 派生的 envId(%s) 与 cloudbaserc.json 的 envId(%s) 对不上，host 格式可能变了' % (env, want))
+    except (OSError, ValueError):
+        print('  （cloudbaserc.json 读不到，跳过 envId 对账）')
+    return env
 
 
 def java_check(manifest_path, cap='这份清单', entry='ParseFile'):
@@ -182,6 +234,7 @@ def java_check(manifest_path, cap='这份清单', entry='ParseFile'):
     if os.path.exists(work):
         # 本机 rmtree / 回收站 COM 都会被沙箱拦（SHFileOperationW rc=2），
         # 同盘改名是秒完成且不触发保护的唯一可行清场方式。
+        clean_stale(os.path.dirname(work))            # 顺手回收 2 小时前的旧残渣（审计 C6）
         stale = work + '.stale-%d' % int(time.time())
         os.rename(work, stale)
         print('  （清场：旧 %s 已挪到 %s）' % (work, os.path.basename(stale)))
@@ -246,6 +299,7 @@ def build_web_package(code, host, notes):
     root = os.path.join(DIST, 'app', 'web', str(code))
     if os.path.exists(root):
         # 同盘改名清场：本机 rmtree 会被沙箱拦（SHFileOperationW rc=2）
+        clean_stale(os.path.dirname(root))            # 顺手回收 2 小时前的旧残渣（审计 C6）
         os.rename(root, root + '.stale-%d' % int(time.time()))
     base = 'https://' + host + '/app/web/' + str(code) + '/'
     entries = []
@@ -268,6 +322,33 @@ def build_web_package(code, host, notes):
     return root, path, manifest, base
 
 
+def _verify_apk_remote(host, manifest):
+    """A4 公网验证体（审计 C1 抽出可回滚）。验证失败抛 PublishError，由 publish_apk 回滚清单。"""
+    murl = 'https://' + host + '/app/version.json'
+    status, text, _ = get(murl + '?_=' + str(int(time.time() * 1000)))
+    if status != 200:
+        raise PublishError('清单取回来是 HTTP %s，手机上也只会看到「检查更新失败」' % status)
+    try:
+        remote = json.loads(text)
+    except ValueError:
+        raise PublishError('清单不是合法 JSON：' + text[:200])
+    for k in ('versionCode', 'versionName', 'url', 'size', 'sha256'):
+        if remote.get(k) != manifest[k]:
+            raise PublishError('云端清单的 %s 和本地对不上：%r ≠ %r' % (k, remote.get(k), manifest[k]))
+    # 手机读的是云端这份字节，所以把云端那份原样过一遍解析器（临时目录，不往 dist 里丢验证件）
+    back = os.path.join(tempfile.gettempdir(), 'at-version-from-cloud.json')
+    io.open(back, 'w', encoding='utf-8', newline='').write(text)
+    java_check(back, '云端那份')
+    os.remove(back)
+    status, body, hdr = get(remote['url'], timeout=120, binary=True)
+    if status != 200:
+        raise PublishError('下载地址 HTTP %s（%s）' % (status, remote['url']))
+    got = hashlib.sha256(body).hexdigest()
+    if len(body) != manifest['size'] or got != manifest['sha256']:
+        raise PublishError('下载回来的包对不上清单：%d/%d 字节，sha256 %s…' % (len(body), manifest['size'], got[:16]))
+    return hdr
+
+
 def publish_apk(host, env_id, notes):
     if not os.path.exists(APK):
         die('没有 %s，先跑 python mobile-shell/build-apk.py' % APK)
@@ -276,6 +357,8 @@ def publish_apk(host, env_id, notes):
     digest = sha256(APK)
     cloud_apk = '/app/AniTracker-%d.apk' % code
     url = 'https://' + host + cloud_apk
+    # 审计 C1：发布前把线上旧清单存档，A4 失败时回滚
+    prev_ver = snapshot_remote(host, '/app/version.json', 'version.json')
 
     print('[A1/4] 生成清单 /app/version.json')
     manifest = {
@@ -303,30 +386,17 @@ def publish_apk(host, env_id, notes):
         'deploy version.json')
 
     print('[A4/4] 公网验证：App 会怎么走这条路')
-    murl = 'https://' + host + '/app/version.json'
-    status, text, _ = get(murl + '?_=' + str(int(time.time() * 1000)))
-    if status != 200:
-        die('清单取回来是 HTTP %s，手机上也只会看到「检查更新失败」' % status)
     try:
-        remote = json.loads(text)
-    except ValueError:
-        die('清单不是合法 JSON：' + text[:200])
-    for k in ('versionCode', 'versionName', 'url', 'size', 'sha256'):
-        if remote.get(k) != manifest[k]:
-            die('云端清单的 %s 和本地对不上：%r ≠ %r' % (k, remote.get(k), manifest[k]))
-    # 手机读的是云端这份字节，所以把云端那份原样过一遍解析器（临时目录，不往 dist 里丢验证件）
-    back = os.path.join(tempfile.gettempdir(), 'at-version-from-cloud.json')
-    io.open(back, 'w', encoding='utf-8', newline='').write(text)
-    java_check(back, '云端那份')
-    os.remove(back)
-    status, body, hdr = get(remote['url'], timeout=120, binary=True)
-    if status != 200:
-        die('下载地址 HTTP %s（%s）' % (status, remote['url']))
-    got = hashlib.sha256(body).hexdigest()
-    if len(body) != manifest['size'] or got != manifest['sha256']:
-        die('下载回来的包对不上清单：%d/%d 字节，sha256 %s…' % (len(body), manifest['size'], got[:16]))
+        hdr = _verify_apk_remote(host, manifest)
+    except PublishError as e:
+        if prev_ver:
+            tcb(['hosting', 'deploy', '-e', env_id, prev_ver.replace('\\', '/'),
+                 '/app/version.json', '--verify'], 'rollback version.json')
+            die('A4 验证失败：%s\n已把发布前的旧 version.json 传回（手机回到旧版清单）；坏 APK 留在云端，'
+                '下个版本号不会撞它' % e)
+        die('A4 验证失败：%s\n（线上原本没有清单，无从回滚，人工处理）' % e)
     ctype = [v for k, v in hdr.items() if k.lower() == 'content-type']
-    print('  包体完整（%d 字节，sha256 一致），Content-Type=%s' % (len(body), ctype[0] if ctype else '没有'))
+    print('  包体完整（%d 字节，sha256 一致），Content-Type=%s' % (manifest['size'], ctype[0] if ctype else '没有'))
     print('  APK 这条路 OK：手机点「账号 → 安装包 → 检查更新」可拿 v%s' % name)
     return name
 
@@ -369,8 +439,40 @@ def publish_root(host, env_id, expect_code=None):
     print('  固定入口 OK：https://%s/ → code %s（页面 v%s）' % (host, code, ver_m.group(1) if ver_m else '?'))
 
 
+def _verify_web_remote(host, manifest):
+    """W4 公网验证体（审计 C1 抽出可回滚）：手机 WebUpdater 会逐字节核对这份清单里的每一个文件。
+    验证失败抛 PublishError，由 publish_web 回滚清单。"""
+    murl = 'https://' + host + '/app/web.json'
+    status, text, _ = get(murl + '?_=' + str(int(time.time() * 1000)))
+    if status != 200:
+        raise PublishError('内容清单取回来是 HTTP %s，手机上只会看到「内容更新没成功」' % status)
+    try:
+        remote = json.loads(text)
+    except ValueError:
+        raise PublishError('内容清单不是合法 JSON：' + text[:200])
+    if remote.get('code') != manifest['code'] or remote.get('files') != manifest['files']:
+        raise PublishError('云端内容清单和本地对不上（code %s / %s）' % (remote.get('code'), manifest['code']))
+    back = os.path.join(tempfile.gettempdir(), 'at-web-from-cloud.json')
+    io.open(back, 'w', encoding='utf-8', newline='').write(text)
+    java_check(back, '云端那份', entry='ParseWeb')
+    os.remove(back)
+    n = 0
+    for entry in manifest['files'].split(';'):
+        url, digest, size = entry.split('|')
+        size = int(size)
+        status, body, _ = get(url, timeout=120, binary=True)
+        if status != 200:
+            raise PublishError('内容文件取回来 HTTP %s（%s）—— 手机会把整包作废' % (status, url))
+        if len(body) != size or hashlib.sha256(body).hexdigest()[:8] != digest:
+            raise PublishError('内容文件对不上清单：%s（%d/%d 字节）' % (url, len(body), size))
+        n += 1
+    return n
+
+
 def publish_web(host, env_id, notes):
     code = next_web_code()
+    # 审计 C1：发布前把线上旧清单存档——W4 验证失败时它是回滚底，手机立刻回到发布前状态
+    prev_web = snapshot_remote(host, '/app/web.json', 'web.json')
     print('[W1/4] 铺内容包 /app/web/%d/' % code)
     root, local_json, manifest, base = build_web_package(code, host, notes)
 
@@ -386,34 +488,21 @@ def publish_web(host, env_id, notes):
              '/app/web/%d/%s' % (code, rel), '--verify'], rel, quiet=True)
     tcb(['hosting', 'deploy', '-e', env_id, local_json.replace('\\', '/'), '/app/web.json', '--verify'],
         'deploy web.json')
-    io.open(CODE_FILE, 'w', encoding='utf-8', newline='').write(str(code) + '\n')
 
     print('[W4/4] 公网验证：手机 WebUpdater 会逐字节核对这份清单里的每一个文件')
-    murl = 'https://' + host + '/app/web.json'
-    status, text, _ = get(murl + '?_=' + str(int(time.time() * 1000)))
-    if status != 200:
-        die('内容清单取回来是 HTTP %s，手机上只会看到「内容更新没成功」' % status)
     try:
-        remote = json.loads(text)
-    except ValueError:
-        die('内容清单不是合法 JSON：' + text[:200])
-    if remote.get('code') != manifest['code'] or remote.get('files') != manifest['files']:
-        die('云端内容清单和本地对不上（code %s / %s）' % (remote.get('code'), manifest['code']))
-    back = os.path.join(tempfile.gettempdir(), 'at-web-from-cloud.json')
-    io.open(back, 'w', encoding='utf-8', newline='').write(text)
-    java_check(back, '云端那份', entry='ParseWeb')
-    os.remove(back)
-    n = 0
-    for entry in manifest['files'].split(';'):
-        url, digest, size = entry.split('|')
-        size = int(size)
-        status, body, _ = get(url, timeout=120, binary=True)
-        if status != 200:
-            die('内容文件取回来 HTTP %s（%s）—— 手机会把整包作废' % (status, url))
-        if len(body) != size or hashlib.sha256(body).hexdigest()[:8] != digest:
-            die('内容文件对不上清单：%s（%d/%d 字节）' % (url, len(body), size))
-        n += 1
+        n = _verify_web_remote(host, manifest)
+    except PublishError as e:
+        if prev_web:
+            tcb(['hosting', 'deploy', '-e', env_id, prev_web.replace('\\', '/'),
+                 '/app/web.json', '--verify'], 'rollback web.json')
+            die('W4 验证失败：%s\n已把发布前的旧 web.json 传回（手机回到旧包）；坏文件留在 /app/web/%d/，'
+                '下次发布复用这个 code 覆盖掉' % (e, code))
+        die('W4 验证失败：%s\n（线上原本没有清单，无从回滚，人工处理）' % e)
     print('  %d 个内容文件逐个从公网拉回、大小与校验全对上' % n)
+    # 审计 C1：落账挪到公网验证全部通过之后——验证失败时这个 code 不记账，
+    # 下次发布 next_web_code 复用它重新覆盖上传，坏包自愈。
+    io.open(CODE_FILE, 'w', encoding='utf-8', newline='').write(str(code) + '\n')
     print('  内容这条路 OK：手机上不用装任何东西，下次开 App 自动换到 code %d' % code)
     # 内容包换了 code，固定入口得跟着复核一遍（它自己运行时查清单，通常不用重传；
     # 但万一云端那份 /index.html 被人删了或改坏，这一步就会当场发现，而不是等用户扑空）。
@@ -491,7 +580,7 @@ def main():
     if len(flags) > 1:
         die('旗子只能挑一条路：--apk-only / --web-only / --root-only')
     host = publish_host()
-    env_id = host.rsplit('-', 1)[0]          # <envId>-<appId>.tcloudbaseapp.com
+    env_id = env_id_of(host)                 # <envId>-<appId>.tcloudbaseapp.com，过 cloudbaserc.json 对账
     if not os.path.isdir(os.path.join(DIST, 'app')):
         os.makedirs(os.path.join(DIST, 'app'))
     if flags == ['--root-only']:

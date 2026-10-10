@@ -149,9 +149,9 @@ else:
     seg0 = srv.index("def _db_info(self):")
     seg = srv[seg0:srv.index("def do_GET(self):")]
     check("S00", "服务端里有 _db_info 整段", True)
-check("S01", "路由挂上了：do_GET 里 /db-info 走 _db_info（没挂上=页面那发永远 404）",
+check("S01", "路由挂上了：do_GET 的分发表里 /db-info 指到 _db_info（没挂上=页面那发永远 404）",
       (not _srv_missing) and
-      re.search(r"startswith\('/db-info'\):\s*\n\s*self\._db_info\(\)", srv) is not None)
+      re.search(r"'/db-info':\s*self\._db_info", srv) is not None)
 check("S02", "只读 ?q=：整段里取参数的出处只有 parse_qs(...).get('q')，没有第二个入口",
       (not _srv_missing) and
       seg.count("parse_qs(urlparse(self.path).query)") == 1 and

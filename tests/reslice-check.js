@@ -207,9 +207,9 @@ function cnt(x) { return html.split(x).length - 1; }
 check('S1', '两个函数都在页里定义（各一处）',
   cnt('function seasonResliceShow(') === 1 && cnt('function bootSeasonReslice(') === 1);
 check('S2', '接线在 bootHeal 里紧跟退避账复位那一行，且只接一次',
-  cnt('try{ bootSeasonReslice(); }catch(e){}') === 1 &&
-  html.indexOf('try{ _atCoverTryReset(); }catch(e){}') < html.indexOf('try{ bootSeasonReslice(); }catch(e){}'),
-  'call=' + cnt('try{ bootSeasonReslice(); }catch(e){}'));
+  cnt('try{ bootSeasonReslice(); }catch(e){ atErr("bootHeal.catch", e); }') === 1 &&
+  html.indexOf('try{ _atCoverTryReset(); }catch(e){ atErr("bootHeal.catch", e); }') < html.indexOf('try{ bootSeasonReslice(); }catch(e){ atErr("bootHeal.catch", e); }'),
+  'call=' + cnt('try{ bootSeasonReslice(); }catch(e){ atErr("bootHeal.catch", e); }'));
 check('S3', '判据只看行身份（sn）与位序，没退回「最大标记数」那种启发式',
   has('var sn=Number((s.eps[i]||{}).sn)||1;') && !has('var hi=0;'),
   'hi=' + cnt('var hi=0;'));
