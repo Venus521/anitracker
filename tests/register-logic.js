@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = 'D:/项目/01_媒体娱乐/ani-tracker';
+const ROOT = path.join(__dirname, '..');   /* 2026-10-11 审计（C5）：写死本机绝对路径，CI/换机即碎 */
 const src = fs.readFileSync(path.join(ROOT, 'cloudbase-sync.js'), 'utf8');
 
 let pass = 0, fail = 0;
