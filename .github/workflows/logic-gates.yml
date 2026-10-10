@@ -34,5 +34,5 @@ jobs:
           node tests/iq-source-negative.js
           node tests/reslice-check.js
           node tests/reslice-negative.js
-          node tests/cloud-entry-check.js
           node tests/register-logic.js
+      # cloud-entry-check 依赖本机产物 mobile-shell/dist/（发布清单），CI checkout 里没有，只在本机跑
